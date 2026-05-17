@@ -12,6 +12,16 @@ export default defineNuxtConfig({
 
   css: ['~/assets/css/main.css'],
 
+  runtimeConfig: {
+    public: {
+      apiBase: 'http://localhost:3000'
+    }
+  },
+
+  devServer: {
+    port: 3001
+  },
+
   routeRules: {
     '/api/**': {
       cors: true

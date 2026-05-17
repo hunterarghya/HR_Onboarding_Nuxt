@@ -1,27 +1,49 @@
-# Nuxt dev/build outputs
-.output
-.data
-.nuxt
-.nitro
-.cache
-dist
-
-# Node dependencies
-node_modules
-
 # Logs
 logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# Misc
-.DS_Store
-.fleet
-.idea
+# Dependencies
+node_modules/
 
-# Local env files
+# Nuxt output directories
+.nuxt/
+.output/
+dist/
+
+# Environment variables
 .env
 .env.*
 !.env.example
 
-# VSC
-.history
+# IDE / Editor files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Cache and temporary files
+.eslintcache
+.npm
+.yarn
+.pnp.*
+.cache/
+*.tsbuildinfo
+.vercel/
+.vercel_build_output/
