@@ -23,8 +23,7 @@ const user = ref({
 const handleLogout = () => {
   token.value = null
   if (import.meta.client) {
-    const config = useRuntimeConfig()
-    window.location.href = `${config.public.apiBase}/auth/google`
+    window.location.href = `/api/auth/google`
   }
 }
 

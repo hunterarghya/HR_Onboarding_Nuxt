@@ -1,6 +1,4 @@
 <script setup lang="ts">
-const config = useRuntimeConfig()
-
 definePageMeta({
   layout: false // Don't use the dashboard layout for the login page
 })
@@ -12,7 +10,7 @@ const handleLogin = async () => {
   loading.value = true
   error.value = ''
   try {
-    const data = await $fetch<{ url: string }>(`${config.public.apiBase}/auth/google`)
+    const data = await $fetch<{ url: string }>(`/api/auth/google`)
     if (data && data.url) {
       window.location.href = data.url
     } else {

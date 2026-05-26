@@ -1,15 +1,73 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: hr-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-hr_onboarding}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:alpine
+    container_name: hr-redis
+    ports:
+      - "6379:6379"
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: hr-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: hr-qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
   dashboard:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: nuxt-dashboard
+    env_file: .env
+    shm_size: '1gb'
     ports:
       - "3001:3000"
+    volumes:
+      - whatsapp_auth:/app/whatsapp-auth
     environment:
       - PORT=3000
       - HOST=0.0.0.0
       - NODE_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      ollama:
+        condition: service_started
+      qdrant:
+        condition: service_started
     restart: unless-stopped
+
+volumes:
+  postgres_data:
+  ollama_data:
+  qdrant_data:
+  whatsapp_auth:

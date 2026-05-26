@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { addMonths, subMonths, format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday } from 'date-fns'
+import { addMonths, subMonths, format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, parseISO, isBefore, isAfter, startOfDay } from 'date-fns'
 import type { InterviewEvent, Job, Candidate, UnsentCount, EmailTemplate, PaginatedResponse } from '~/types'
 
 const { apiFetch, token } = useApi()
 const toast = useToast()
+
+// Calendar sync state
+const syncingCalendar = ref(false)
+const lastSyncTime = ref<string | null>(null)
 
 const jobs = ref<Job[]>([])
 const events = ref<InterviewEvent[]>([])
@@ -26,14 +30,25 @@ const createForm = reactive({
   venue_or_link: ''
 })
 
-// Expanded panels state
-const expandedEvents = ref<Record<number, boolean>>({})
+// Expanded event state (single expanded event like React ref)
+const expandedEvent = ref<number | null>(null)
+const eventCandidates = ref<Record<number, any[]>>({})
 
-// Candidates inside an event
-const assignedCandidates = ref<Record<number, Candidate[]>>({})
-const manualCandidates = ref<Record<number, Candidate[]>>({})
-const manualSearch = ref<Record<number, string>>({})
-const selectedManual = ref<Record<number, number[]>>({}) // event_id -> candidate_ids[]
+// Selection state (matches React InterviewScheduler)
+const selectionMode = ref<'manual' | 'auto' | null>(null)
+const editingEventId = ref<number | null>(null)
+const eligibleCandidates = ref<any[]>([])
+const selectedCandidateIds = ref<Set<number>>(new Set())
+const loadingCandidates = ref(false)
+
+// Selection details modal (for "selected" status)
+const selectionModal = reactive({
+  isOpen: false,
+  candidateId: null as number | null,
+  candidateName: '',
+  eventId: null as number | null,
+  form: { offered_role: '', offered_salary: '', offered_location: '', joining_date: '' }
+})
 
 // Modals
 const mailOpen = ref(false)
@@ -50,20 +65,15 @@ const fetchJobs = async () => {
 
 const fetchEvents = async () => {
   try {
-    events.value = await apiFetch<InterviewEvent[]>('/interviews')
+    events.value = await apiFetch<InterviewEvent[]>('/interviews/events')
     
     // Fetch unsent counts
-    const res = await apiFetch<UnsentCount[]>('/mail/unsent-counts')
-    const counts: Record<number, number> = {}
-    res.forEach(r => { counts[r.event_id] = r.unsent_count })
-    unsentCounts.value = counts
-    
-    // Initialize expanded states (none expanded by default)
-    events.value.forEach(e => {
-      if (expandedEvents.value[e.id] === undefined) {
-        expandedEvents.value[e.id] = false
-      }
-    })
+    try {
+      const res = await apiFetch<UnsentCount[]>('/mail/unsent-invites-count')
+      const counts: Record<number, number> = {}
+      res.forEach(r => { counts[r.event_id] = r.unsent_count })
+      unsentCounts.value = counts
+    } catch (e) { /* ignore if endpoint not available */ }
   } catch (err) {
     console.error('Error fetching events:', err)
   }
@@ -83,12 +93,11 @@ const handleCreateEvent = async () => {
     return
   }
   try {
-    await apiFetch('/interviews', {
+    await apiFetch('/interviews/events', {
       method: 'POST',
-      body: createForm
+      body: { ...createForm, sync_calendar: true }
     })
     toast.add({ title: 'Interview event created', color: 'success' })
-    // Reset form mostly
     createForm.venue_or_link = ''
     fetchEvents()
   } catch (err) {
@@ -97,11 +106,42 @@ const handleCreateEvent = async () => {
   }
 }
 
-const handleDeleteEvent = async (id: number) => {
-  if (!confirm('Are you sure you want to delete this event? Assigned candidates will revert to shortlisted status.')) return
+// Google Calendar Sync
+const handleSyncCalendar = async () => {
+  syncingCalendar.value = true
   try {
-    await apiFetch(`/interviews/${id}`, { method: 'DELETE' })
+    const res = await apiFetch<{ message: string, imported: number }>('/interviews/sync-calendar', {
+      method: 'POST'
+    })
+    lastSyncTime.value = new Date().toLocaleTimeString()
+    toast.add({
+      title: 'Google Calendar Synced',
+      description: `${res.imported} new event(s) imported`,
+      color: 'success'
+    })
+    await fetchEvents()
+  } catch (err: any) {
+    console.error('Calendar sync error:', err)
+    toast.add({
+      title: 'Calendar Sync Failed',
+      description: err.data?.details || err.data?.statusMessage || err.message || 'Could not sync with Google Calendar',
+      color: 'error'
+    })
+  } finally {
+    syncingCalendar.value = false
+  }
+}
+
+const handleDeleteEvent = async (id: number) => {
+  if (!confirm('Delete this interview event?')) return
+  try {
+    await apiFetch(`/interviews/events/${id}`, { method: 'DELETE' })
     toast.add({ title: 'Event deleted', color: 'success' })
+    if (expandedEvent.value === id) {
+      expandedEvent.value = null
+      selectionMode.value = null
+      editingEventId.value = null
+    }
     fetchEvents()
   } catch (err) {
     console.error('Error deleting event:', err)
@@ -109,103 +149,201 @@ const handleDeleteEvent = async (id: number) => {
   }
 }
 
-const toggleEventExpanded = async (eventId: number) => {
-  expandedEvents.value[eventId] = !expandedEvents.value[eventId]
-  if (expandedEvents.value[eventId] && !assignedCandidates.value[eventId]) {
-    await fetchAssignedCandidates(eventId)
-    // Initialize manual search
-    manualSearch.value[eventId] = ''
-    selectedManual.value[eventId] = []
+// Toggle expand (single event at a time, like React)
+const toggleEventExpand = async (eventId: number) => {
+  if (expandedEvent.value === eventId) {
+    expandedEvent.value = null
+    selectionMode.value = null
+    editingEventId.value = null
+    return
   }
+  expandedEvent.value = eventId
+  selectionMode.value = null
+  editingEventId.value = null
+  await fetchAssignedCandidates(eventId)
 }
 
 const fetchAssignedCandidates = async (eventId: number) => {
   try {
-    const data = await apiFetch<Candidate[]>(`/interviews/${eventId}/candidates`)
-    assignedCandidates.value[eventId] = data
+    const data = await apiFetch<any[]>(`/interviews/events/${eventId}/candidates`)
+    eventCandidates.value[eventId] = data
   } catch (err) {
     console.error('Error fetching assigned:', err)
   }
 }
 
-const handleAutoAssign = async (event: InterviewEvent) => {
+// Fetch eligible candidates for manual selection (uses dedicated endpoint)
+const fetchEligible = async (eventId: number) => {
   try {
-    const data = await apiFetch<{ message: string, assignedCount: number }>(`/interviews/${event.id}/assign-auto`, {
-      method: 'POST'
-    })
-    toast.add({ title: 'Auto-Assign Complete', description: `Assigned ${data.assignedCount} candidates`, color: 'success' })
-    fetchAssignedCandidates(event.id)
-    fetchEvents() // refresh unsent counts
+    const data = await apiFetch<any[]>(`/interviews/eligible-candidates/${eventId}`)
+    eligibleCandidates.value = data
+  } catch (err) {
+    console.error('Error fetching eligible:', err)
+  }
+}
+
+// Auto-assign top N candidates by score
+const handleAutoAssign = async (eventId: number) => {
+  selectionMode.value = 'auto'
+  try {
+    await apiFetch(`/interviews/events/${eventId}/candidates/auto`, { method: 'POST' })
+    await fetchAssignedCandidates(eventId)
+    await fetchEvents()
+    toast.add({ title: 'Auto-assign complete', color: 'success' })
   } catch (err: any) {
-    console.error('Auto assign error:', err)
-    toast.add({ title: 'Auto-assign failed', description: err.data?.error || err.message, color: 'error' })
+    console.error('Error auto-assigning:', err)
+    toast.add({ title: 'Auto-assign failed', color: 'error' })
   }
 }
 
-const searchManualCandidates = async (eventId: number, role: string) => {
+// Start manual candidate selection
+const startManualSelection = async (eventId: number) => {
+  selectionMode.value = 'manual'
+  editingEventId.value = null
+  loadingCandidates.value = true
+  await fetchEligible(eventId)
+  // Pre-check already assigned
+  const assigned = eventCandidates.value[eventId] || []
+  selectedCandidateIds.value = new Set(assigned.map((c: any) => c.id))
+  loadingCandidates.value = false
+}
+
+// Start editing existing selection
+const startEditSelection = async (eventId: number) => {
+  editingEventId.value = eventId
+  selectionMode.value = 'manual'
+  loadingCandidates.value = true
+  await fetchEligible(eventId)
+  const assigned = eventCandidates.value[eventId] || []
+  selectedCandidateIds.value = new Set(assigned.map((c: any) => c.id))
+  loadingCandidates.value = false
+}
+
+// Toggle a candidate in the selection set
+const toggleCandidateSelect = (id: number) => {
+  const next = new Set(selectedCandidateIds.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  selectedCandidateIds.value = next
+}
+
+// Toggle select all
+const toggleSelectAll = () => {
+  if (selectedCandidateIds.value.size === eligibleCandidates.value.length) {
+    selectedCandidateIds.value = new Set()
+  } else {
+    selectedCandidateIds.value = new Set(eligibleCandidates.value.map((c: any) => c.id))
+  }
+}
+
+// Save manual selection (POST for new, PATCH for edit)
+const saveManualSelection = async (eventId: number) => {
+  const ids = Array.from(selectedCandidateIds.value)
   try {
-    // Only fetch shortlisted unassigned candidates
-    const data = await apiFetch<PaginatedResponse<Candidate>>('/candidates', {
-      params: { role, status: 'shortlisted', name: manualSearch.value[eventId], limit: 20 }
+    const method = editingEventId.value ? 'PATCH' : 'POST'
+    await apiFetch(`/interviews/events/${eventId}/candidates/manual`, {
+      method,
+      body: { candidate_ids: ids }
     })
-    manualCandidates.value[eventId] = data.data
+    await fetchAssignedCandidates(eventId)
+    await fetchEvents()
+    selectionMode.value = null
+    editingEventId.value = null
+    toast.add({ title: editingEventId.value ? 'Selection updated' : 'Candidates assigned', color: 'success' })
   } catch (err) {
-    console.error('Search error:', err)
+    console.error('Error saving selection:', err)
+    toast.add({ title: 'Failed to save candidates', color: 'error' })
   }
 }
 
-const handleManualAssign = async (eventId: number) => {
-  const cids = selectedManual.value[eventId] || []
-  if (cids.length === 0) return
+// Handle status change for a candidate
+const handleStatusChange = async (candidateId: number, newStatus: string, eventId: number) => {
+  if (newStatus === 'marked') {
+    // Open selection details modal
+    let candidate = eligibleCandidates.value.find((c: any) => c.id === candidateId)
+    if (!candidate) {
+      const assigned = eventCandidates.value[eventId] || []
+      candidate = assigned.find((c: any) => c.id === candidateId)
+    }
+    selectionModal.isOpen = true
+    selectionModal.candidateId = candidateId
+    selectionModal.candidateName = candidate?.name || ''
+    selectionModal.eventId = eventId
+    selectionModal.form = {
+      offered_role: candidate?.role_applied || '',
+      offered_salary: '',
+      offered_location: candidate?.current_location || '',
+      joining_date: ''
+    }
+    return
+  }
+
   try {
-    await apiFetch(`/interviews/${eventId}/assign-manual`, {
-      method: 'POST',
-      body: { candidateIds: cids }
+    await apiFetch(`/candidates/${candidateId}/status`, {
+      method: 'PATCH',
+      body: { status: newStatus }
     })
-    toast.add({ title: 'Candidates assigned manually', color: 'success' })
-    selectedManual.value[eventId] = []
-    fetchAssignedCandidates(eventId)
-    fetchEvents() // refresh unsent counts
-    searchManualCandidates(eventId, events.value.find(e => e.id === eventId)?.role || '')
+    if (eventId) await fetchAssignedCandidates(eventId)
+    if (selectionMode.value === 'manual') await fetchEligible(eventId)
+    toast.add({ title: 'Status updated', color: 'success' })
   } catch (err) {
-    console.error('Manual assign error:', err)
-    toast.add({ title: 'Assignment failed', color: 'error' })
+    console.error('Error updating status:', err)
+    toast.add({ title: 'Status update failed', color: 'error' })
   }
 }
 
-const removeCandidateFromEvent = async (eventId: number, candidateId: number) => {
+// Submit the selection details modal
+const submitSelection = async () => {
+  const { offered_role, offered_salary, offered_location, joining_date } = selectionModal.form
+  if (!offered_role || !offered_salary || !offered_location || !joining_date) {
+    toast.add({ title: 'All fields are required to mark as Selected', color: 'warning' })
+    return
+  }
   try {
-    await apiFetch(`/interviews/${eventId}/candidates/${candidateId}`, { method: 'DELETE' })
-    toast.add({ title: 'Candidate removed from interview', color: 'success' })
-    fetchAssignedCandidates(eventId)
-    fetchEvents()
+    await apiFetch(`/candidates/${selectionModal.candidateId}/status`, {
+      method: 'PATCH',
+      body: { status: 'selected', ...selectionModal.form }
+    })
+    const eid = selectionModal.eventId
+    selectionModal.isOpen = false
+    selectionModal.candidateId = null
+    selectionModal.candidateName = ''
+    selectionModal.eventId = null
+    selectionModal.form = { offered_role: '', offered_salary: '', offered_location: '', joining_date: '' }
+    if (eid) {
+      await fetchAssignedCandidates(eid)
+      if (selectionMode.value === 'manual') await fetchEligible(eid)
+    }
+    toast.add({ title: 'Candidate selected!', color: 'success' })
   } catch (err) {
-    console.error('Error removing candidate:', err)
-    toast.add({ title: 'Failed to remove candidate', color: 'error' })
+    console.error('Error submitting selection:', err)
+    toast.add({ title: 'Failed to save selection', color: 'error' })
   }
 }
 
-const openMailModal = (eventId: number) => {
+const openMailModal = (eventId: number | null = null) => {
   mailModal.eventId = eventId
-  const inviteTemplate = templates.value.find(t => t.type === 'invite' && t.is_default)
+  const inviteTemplate = templates.value.find(t => t.type === 'invite')
   mailModal.templateId = inviteTemplate ? String(inviteTemplate.id) : (templates.value[0] ? String(templates.value[0].id) : '')
   mailModal.sending = false
   mailOpen.value = true
 }
 
 const sendInvites = async () => {
-  if (!mailModal.eventId || !mailModal.templateId) return
+  if (!mailModal.templateId) return
   mailModal.sending = true
   try {
-    const res = await apiFetch<{ sent: number, failed: number, skipped: number }>('/mail/interview-invites', {
+    const url = mailModal.eventId
+      ? `/mail/interview-invites/${mailModal.eventId}`
+      : '/mail/interview-invites-all'
+    const res = await apiFetch<{ sent: number, failed: number, skipped: number }>(url, {
       method: 'POST',
-      body: { eventId: mailModal.eventId, templateId: mailModal.templateId },
-      headers: { Authorization: `Bearer ${token.value}` }
+      body: { templateId: mailModal.templateId }
     })
     toast.add({ title: 'Invites Sent', description: `Sent: ${res.sent}, Failed: ${res.failed}, Skipped: ${res.skipped}`, color: 'success' })
     mailOpen.value = false
     fetchEvents()
-    fetchAssignedCandidates(mailModal.eventId)
+    if (mailModal.eventId) fetchAssignedCandidates(mailModal.eventId)
   } catch (err: any) {
     console.error('Mail error:', err)
     toast.add({ title: 'Failed to send invites', description: err.data?.details || err.message, color: 'error' })
@@ -234,6 +372,10 @@ const getEventsForDay = (date: Date) => {
   return events.value.filter(e => e.event_date.startsWith(dStr))
 }
 
+const hasEventsOnDay = (date: Date) => {
+  return getEventsForDay(date).length > 0
+}
+
 const selectDate = (date: Date) => {
   selectedDate.value = date
   createForm.event_date = format(date, 'yyyy-MM-dd')
@@ -243,6 +385,50 @@ const filteredEvents = computed(() => {
   const dStr = format(selectedDate.value, 'yyyy-MM-dd')
   return events.value.filter(e => e.event_date.startsWith(dStr))
 })
+
+// All upcoming events (sorted by date then time)
+const allUpcomingEvents = computed(() => {
+  const today = format(new Date(), 'yyyy-MM-dd')
+  return events.value
+    .filter(e => e.event_date >= today)
+    .sort((a, b) => {
+      if (a.event_date !== b.event_date) return a.event_date.localeCompare(b.event_date)
+      return a.start_time.localeCompare(b.start_time)
+    })
+    .slice(0, 20)
+})
+
+// Past events
+const pastEvents = computed(() => {
+  const today = format(new Date(), 'yyyy-MM-dd')
+  return events.value
+    .filter(e => e.event_date < today)
+    .sort((a, b) => {
+      if (a.event_date !== b.event_date) return b.event_date.localeCompare(a.event_date)
+      return b.start_time.localeCompare(a.start_time)
+    })
+    .slice(0, 10)
+})
+
+// Calendar day class logic
+const getDayClasses = (day: Date) => {
+  const selected = isSameDay(day, selectedDate.value)
+  const today = isToday(day)
+  const hasEvents = hasEventsOnDay(day)
+
+  return {
+    // Selected date: solid primary
+    'bg-[var(--ui-color-primary)] text-white font-bold shadow-lg shadow-primary/30 hover:bg-[var(--ui-color-primary)]': selected && !today,
+    // Today (not selected): emerald ring with subtle bg
+    'ring-2 ring-emerald-500 bg-emerald-500/10 text-emerald-400 font-bold': today && !selected,
+    // Both today AND selected: emerald ring + primary bg
+    'bg-[var(--ui-color-primary)] text-white font-bold ring-2 ring-emerald-400 shadow-lg shadow-primary/30 hover:bg-[var(--ui-color-primary)]': today && selected,
+    // Has events (not selected, not today): subtle highlight
+    'bg-[var(--ui-color-primary)]/10 text-[var(--ui-color-primary)] font-medium': hasEvents && !selected && !today,
+    // Normal day
+    'text-foreground hover:bg-elevated/50': !selected && !today && !hasEvents
+  }
+}
 
 onMounted(() => {
   fetchJobs()
@@ -257,6 +443,30 @@ onMounted(() => {
       <UDashboardNavbar title="Interview Scheduler">
         <template #leading>
           <UDashboardSidebarCollapse />
+        </template>
+        <template #right>
+          <div class="flex items-center gap-3">
+            <span v-if="lastSyncTime" class="text-xs text-muted hidden sm:inline">
+              Last synced: {{ lastSyncTime }}
+            </span>
+            <UButton
+              id="sync-google-calendar-btn"
+              icon="i-lucide-refresh-cw"
+              color="primary"
+              variant="solid"
+              :loading="syncingCalendar"
+              :disabled="syncingCalendar"
+              @click="handleSyncCalendar"
+            >
+              <template #leading>
+                <svg v-if="!syncingCalendar" class="size-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M22 12C22 6.477 17.523 2 12 2S2 6.477 2 12s4.477 10 10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                  <path d="M8 12h8m-4-4v8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </template>
+              {{ syncingCalendar ? 'Syncing...' : 'Sync Google Calendar' }}
+            </UButton>
+          </div>
         </template>
       </UDashboardNavbar>
     </template>
@@ -290,27 +500,143 @@ onMounted(() => {
               <button
                 v-for="day in daysInMonth"
                 :key="day.toString()"
-                class="relative p-2 rounded-lg flex flex-col items-center justify-center min-h-[44px] transition-colors hover:bg-elevated/50"
-                :class="{
-                  'bg-[var(--ui-color-primary)] text-white font-bold hover:bg-[var(--ui-color-primary)]': isSameDay(day, selectedDate),
-                  'text-[var(--ui-color-primary)] font-bold': isToday(day) && !isSameDay(day, selectedDate),
-                  'text-foreground': !isSameDay(day, selectedDate) && !isToday(day)
-                }"
+                class="relative p-2 rounded-lg flex flex-col items-center justify-center min-h-[44px] transition-all duration-200"
+                :class="getDayClasses(day)"
                 @click="selectDate(day)"
               >
                 <span class="text-sm z-10">{{ format(day, 'd') }}</span>
+                <!-- Today label -->
+                <span v-if="isToday(day) && !isSameDay(day, selectedDate)" class="absolute -top-0.5 right-0.5 size-1.5 rounded-full bg-emerald-500"></span>
                 <!-- Event indicators -->
                 <div v-if="getEventsForDay(day).length > 0" class="absolute bottom-1 flex gap-0.5 z-10">
                   <div
                     v-for="(e, idx) in Math.min(getEventsForDay(day).length, 3)"
                     :key="idx"
-                    class="size-1 rounded-full"
-                    :class="isSameDay(day, selectedDate) ? 'bg-white' : 'bg-[var(--ui-color-primary)]'"
+                    class="size-1.5 rounded-full transition-colors"
+                    :class="isSameDay(day, selectedDate) ? 'bg-white' : isToday(day) ? 'bg-emerald-400' : 'bg-[var(--ui-color-primary)]'"
                   ></div>
                 </div>
               </button>
             </div>
+
+            <!-- Calendar Legend -->
+            <div class="mt-4 pt-3 border-t border-default flex items-center gap-4 text-xs text-muted">
+              <div class="flex items-center gap-1.5">
+                <span class="size-3 rounded ring-2 ring-emerald-500 bg-emerald-500/10"></span>
+                <span>Today</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <span class="size-3 rounded bg-[var(--ui-color-primary)]"></span>
+                <span>Selected</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <span class="size-3 rounded bg-[var(--ui-color-primary)]/10"></span>
+                <span>Has Events</span>
+              </div>
+            </div>
           </UCard>
+
+          <!-- Synced Events List Below Calendar -->
+          <div class="mt-4 space-y-3">
+            <!-- Upcoming Events -->
+            <UCard v-if="allUpcomingEvents.length > 0">
+              <template #header>
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <UIcon name="i-lucide-calendar-clock" class="size-4 text-emerald-500" />
+                    <span class="font-semibold text-sm">Upcoming Events</span>
+                  </div>
+                  <UBadge size="xs" variant="subtle" color="success">{{ allUpcomingEvents.length }}</UBadge>
+                </div>
+              </template>
+              <div class="space-y-1 max-h-[340px] overflow-y-auto pr-1 -mr-1">
+                <button
+                  v-for="ev in allUpcomingEvents"
+                  :key="ev.id"
+                  class="w-full flex items-start gap-3 p-2.5 rounded-lg transition-all duration-200 text-left group"
+                  :class="{
+                    'bg-[var(--ui-color-primary)]/10 ring-1 ring-[var(--ui-color-primary)]/30': ev.event_date === format(selectedDate, 'yyyy-MM-dd'),
+                    'hover:bg-elevated/50': ev.event_date !== format(selectedDate, 'yyyy-MM-dd')
+                  }"
+                  @click="selectDate(new Date(ev.event_date + 'T00:00:00'))"
+                >
+                  <!-- Date badge -->
+                  <div class="shrink-0 w-11 text-center">
+                    <div class="text-[10px] uppercase font-semibold text-muted leading-tight">
+                      {{ format(new Date(ev.event_date + 'T00:00:00'), 'MMM') }}
+                    </div>
+                    <div class="text-lg font-bold leading-tight"
+                      :class="ev.event_date === format(new Date(), 'yyyy-MM-dd') ? 'text-emerald-500' : 'text-foreground'"
+                    >
+                      {{ format(new Date(ev.event_date + 'T00:00:00'), 'd') }}
+                    </div>
+                  </div>
+                  <!-- Event info -->
+                  <div class="min-w-0 flex-1">
+                    <div class="font-semibold text-sm truncate leading-tight">{{ ev.role }}</div>
+                    <div class="flex items-center gap-2 mt-0.5 text-xs text-muted">
+                      <span class="flex items-center gap-0.5">
+                        <UIcon name="i-lucide-clock" class="size-3" />
+                        {{ ev.start_time.substring(0, 5) }} - {{ ev.end_time.substring(0, 5) }}
+                      </span>
+                      <UBadge size="xs" :color="ev.interview_mode === 'online' ? 'info' : 'neutral'" variant="subtle">
+                        <UIcon :name="ev.interview_mode === 'online' ? 'i-lucide-video' : 'i-lucide-map-pin'" class="size-2.5 mr-0.5" />
+                        {{ ev.interview_mode }}
+                      </UBadge>
+                    </div>
+                    <div v-if="ev.google_event_id" class="mt-0.5">
+                      <UBadge size="xs" variant="subtle" color="success">
+                        <UIcon name="i-lucide-check-circle" class="size-2.5 mr-0.5" /> Google Synced
+                      </UBadge>
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </UCard>
+
+            <!-- Past Events -->
+            <UCard v-if="pastEvents.length > 0">
+              <template #header>
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <UIcon name="i-lucide-history" class="size-4 text-muted" />
+                    <span class="font-semibold text-sm text-muted">Past Events</span>
+                  </div>
+                  <UBadge size="xs" variant="subtle" color="neutral">{{ pastEvents.length }}</UBadge>
+                </div>
+              </template>
+              <div class="space-y-1 max-h-[200px] overflow-y-auto pr-1 -mr-1 opacity-70">
+                <button
+                  v-for="ev in pastEvents"
+                  :key="ev.id"
+                  class="w-full flex items-start gap-3 p-2 rounded-lg hover:bg-elevated/50 transition-all text-left"
+                  @click="selectDate(new Date(ev.event_date + 'T00:00:00'))"
+                >
+                  <div class="shrink-0 w-11 text-center">
+                    <div class="text-[10px] uppercase font-semibold text-muted leading-tight">
+                      {{ format(new Date(ev.event_date + 'T00:00:00'), 'MMM') }}
+                    </div>
+                    <div class="text-lg font-bold leading-tight text-muted">
+                      {{ format(new Date(ev.event_date + 'T00:00:00'), 'd') }}
+                    </div>
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <div class="font-medium text-sm truncate text-muted">{{ ev.role }}</div>
+                    <div class="text-xs text-muted/70">
+                      {{ ev.start_time.substring(0, 5) }} - {{ ev.end_time.substring(0, 5) }}
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </UCard>
+
+            <!-- Empty state -->
+            <div v-if="allUpcomingEvents.length === 0 && pastEvents.length === 0" class="text-center text-sm text-muted py-6 border border-dashed border-default rounded-xl">
+              <UIcon name="i-lucide-calendar-x" class="size-8 text-muted/50 mx-auto mb-2" />
+              <p>No interview events yet.</p>
+              <p class="text-xs mt-1">Create one or sync from Google Calendar.</p>
+            </div>
+          </div>
         </div>
 
         <!-- Right Column: Events & Creation -->
@@ -385,10 +711,10 @@ onMounted(() => {
                 v-for="event in filteredEvents"
                 :key="event.id"
                 class="transition-all"
-                :class="expandedEvents[event.id] ? 'ring-2 ring-[var(--ui-color-primary)]' : ''"
+                :class="expandedEvent === event.id ? 'ring-2 ring-[var(--ui-color-primary)]' : ''"
               >
                 <!-- Event Header (Always Visible) -->
-                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 cursor-pointer" @click="toggleEventExpanded(event.id)">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 cursor-pointer" @click="toggleEventExpand(event.id)">
                   <div class="flex items-center gap-4">
                     <div class="size-12 rounded-xl bg-elevated/50 flex flex-col items-center justify-center shrink-0">
                       <span class="text-xs font-bold">{{ event.start_time.substring(0, 5) }}</span>
@@ -419,153 +745,254 @@ onMounted(() => {
                       @click="handleDeleteEvent(event.id)"
                     />
                     <UButton
-                      :icon="expandedEvents[event.id] ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+                      :icon="expandedEvent === event.id ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
                       color="neutral"
                       variant="ghost"
                       size="sm"
-                      @click="toggleEventExpanded(event.id)"
+                      @click="toggleEventExpand(event.id)"
                     />
                   </div>
                 </div>
 
                 <!-- Event Details & Candidates (Expanded) -->
-                <div v-if="expandedEvents[event.id]" class="mt-6 pt-6 border-t border-default space-y-6">
+                <div v-if="expandedEvent === event.id" class="mt-6 pt-6 border-t border-default space-y-6">
                   
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- Auto Assign Box -->
-                    <div class="bg-elevated/30 rounded-lg p-4 border border-default">
-                      <h5 class="font-semibold mb-2 text-sm flex items-center gap-2">
-                        <UIcon name="i-lucide-zap" class="size-4 text-primary" /> Auto Assignment
-                      </h5>
-                      <p class="text-xs text-muted mb-4">
-                        Automatically assign up to <strong>{{ event.num_candidates + event.extra_candidates }}</strong> top-scoring shortlisted candidates.
-                      </p>
-                      <UButton color="neutral" variant="outline" size="sm" block @click="handleAutoAssign(event)">
-                        Auto-Assign Best Candidates
-                      </UButton>
-                    </div>
+                  <!-- Selection Mode Buttons -->
+                  <div v-if="selectionMode === null" class="flex flex-col sm:flex-row gap-3">
+                    <UButton
+                      icon="i-lucide-mail"
+                      class="flex-1 justify-center bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white"
+                      @click="openMailModal(event.id)"
+                    >
+                      Send Invites to Candidates
+                    </UButton>
+                    <UButton
+                      icon="i-lucide-check-square"
+                      class="flex-1 justify-center bg-[var(--ui-color-primary)] text-white hover:bg-[var(--ui-color-primary-600)]"
+                      @click="startManualSelection(event.id)"
+                    >
+                      Choose Candidates Manually
+                    </UButton>
+                    <UButton
+                      icon="i-lucide-zap"
+                      class="flex-1 justify-center bg-gradient-to-br from-[var(--ui-color-primary)] to-emerald-600 hover:from-[var(--ui-color-primary-400)] hover:to-emerald-500 text-white"
+                      @click="handleAutoAssign(event.id)"
+                    >
+                      Auto Select Top {{ event.num_candidates + (event.extra_candidates || 0) }} by Score
+                    </UButton>
+                  </div>
 
-                    <!-- Details Box -->
-                    <div class="bg-elevated/30 rounded-lg p-4 border border-default">
-                      <h5 class="font-semibold mb-2 text-sm">Event Details</h5>
-                      <div class="space-y-2 text-sm">
-                        <div class="flex justify-between"><span class="text-muted">Target Capacity:</span> <span class="font-medium">{{ event.num_candidates }} + {{ event.extra_candidates }}</span></div>
-                        <div class="flex justify-between"><span class="text-muted">Assigned:</span> <span class="font-medium">{{ assignedCandidates[event.id]?.length || 0 }}</span></div>
-                        <div class="flex justify-between"><span class="text-muted">Location:</span> <span class="font-medium truncate max-w-[150px]" :title="event.venue_or_link">{{ event.venue_or_link }}</span></div>
+                  <!-- Manual Selection Table -->
+                  <div v-if="selectionMode === 'manual'">
+                    <h4 class="font-semibold text-lg mb-4 flex items-center gap-2">
+                      {{ editingEventId ? 'Edit Candidate Selection' : 'Select Candidates for Interview' }}
+                      <span class="text-sm font-normal text-muted ml-2">({{ selectedCandidateIds.size }} selected)</span>
+                    </h4>
+                    
+                    <div v-if="loadingCandidates" class="text-center py-8 text-muted">Loading candidates...</div>
+                    <div v-else>
+                      <div class="border border-default rounded-lg max-h-[400px] overflow-y-auto bg-[var(--ui-bg)] shadow-sm">
+                        <table class="w-full text-sm text-left whitespace-nowrap">
+                          <thead class="sticky top-0 bg-elevated z-10 border-b border-default shadow-sm">
+                            <tr>
+                              <th class="p-3 w-12 text-center">
+                                <UCheckbox
+                                  :model-value="eligibleCandidates.length > 0 && selectedCandidateIds.size === eligibleCandidates.length"
+                                  @update:model-value="toggleSelectAll"
+                                />
+                              </th>
+                              <th class="p-3 font-semibold text-muted">Source</th>
+                              <th class="p-3 font-semibold text-muted">Name</th>
+                              <th class="p-3 font-semibold text-muted">Mail</th>
+                              <th class="p-3 font-semibold text-muted">Role</th>
+                              <th class="p-3 font-semibold text-muted">Mobile</th>
+                              <th class="p-3 font-semibold text-muted">Location</th>
+                              <th class="p-3 font-semibold text-muted">CTC</th>
+                              <th class="p-3 font-semibold text-muted">Experience</th>
+                              <th class="p-3 font-semibold text-muted">Score</th>
+                              <th class="p-3 font-semibold text-muted">Resume</th>
+                              <th class="p-3 font-semibold text-muted">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr v-if="eligibleCandidates.length === 0">
+                              <td colspan="12" class="p-8 text-center text-muted italic">No eligible candidates found.</td>
+                            </tr>
+                            <tr
+                              v-for="c in eligibleCandidates"
+                              :key="c.id"
+                              class="border-b border-default last:border-0 hover:bg-elevated/50 transition-colors"
+                              :class="{'bg-[var(--ui-color-primary)]/5': selectedCandidateIds.has(c.id)}"
+                            >
+                              <td class="p-3 text-center">
+                                <UCheckbox
+                                  :model-value="selectedCandidateIds.has(c.id)"
+                                  @update:model-value="toggleCandidateSelect(c.id)"
+                                />
+                              </td>
+                              <td class="p-3">
+                                <div class="flex items-center gap-1.5 text-xs">
+                                  <UIcon v-if="c.applied_through === 'WhatsApp'" name="i-lucide-message-circle" class="size-4 text-emerald-500" />
+                                  <UIcon v-else name="i-lucide-mail" class="size-4 text-red-500" />
+                                  {{ c.applied_through }}
+                                </div>
+                              </td>
+                              <td class="p-3 font-semibold">{{ c.name }}</td>
+                              <td class="p-3 text-xs text-muted">{{ c.email }}</td>
+                              <td class="p-3 text-xs">{{ c.role_applied }}</td>
+                              <td class="p-3 text-xs flex items-center gap-1"><UIcon name="i-lucide-phone" class="size-3 opacity-50" /> {{ c.phone }}</td>
+                              <td class="p-3 text-xs">
+                                <div class="flex items-center gap-1"><UIcon name="i-lucide-map-pin" class="size-3 opacity-50" /> {{ c.current_location }}</div>
+                              </td>
+                              <td class="p-3 text-xs">{{ c.current_ctc }}</td>
+                              <td class="p-3 text-xs">{{ c.experience_level }}</td>
+                              <td class="p-3">
+                                <UBadge size="xs" variant="subtle" :color="c.score >= 80 ? 'success' : 'warning'" class="font-bold">
+                                  {{ c.score }}%
+                                </UBadge>
+                              </td>
+                              <td class="p-3 text-center">
+                                <a v-if="c.resume_url" :href="c.resume_url" target="_blank" rel="noopener noreferrer" class="text-[var(--ui-color-primary)] hover:text-[var(--ui-color-primary-600)] transition-colors">
+                                  <UIcon name="i-lucide-file-text" class="size-4" />
+                                </a>
+                                <span v-else class="text-muted">—</span>
+                              </td>
+                              <td class="p-3">
+                                <USelect
+                                  v-model="c.status"
+                                  :items="[
+                                    { label: 'Applied', value: 'applied' },
+                                    { label: 'Shortlisted', value: 'shortlisted' },
+                                    { label: 'Hold', value: 'hold' },
+                                    { label: 'Rejected', value: 'rejected' },
+                                    { label: 'Mark as Selected', value: 'marked' },
+                                    { label: 'Selected', value: 'selected', disabled: true }
+                                  ]"
+                                  size="xs"
+                                  @change="(newVal) => handleStatusChange(c.id, newVal, event.id)"
+                                  class="w-[130px]"
+                                />
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                      
+                      <div class="mt-4 flex gap-3">
+                        <UButton
+                          class="flex-1 justify-center"
+                          color="primary"
+                          @click="saveManualSelection(event.id)"
+                        >
+                          <UIcon name="i-lucide-save" class="size-4 mr-2" />
+                          {{ editingEventId ? 'Save Changes' : 'Select Candidates for Interview' }}
+                        </UButton>
+                        <UButton
+                          class="flex-1 justify-center bg-white/5"
+                          color="neutral"
+                          variant="ghost"
+                          @click="selectionMode = null; editingEventId = null"
+                        >
+                          <UIcon name="i-lucide-x" class="size-4 mr-2" /> Cancel
+                        </UButton>
                       </div>
                     </div>
                   </div>
 
-                  <USeparator />
-
-                  <!-- Manual Assignment Section -->
-                  <div>
-                    <h5 class="font-semibold mb-3 flex items-center justify-between">
-                      <span>Manual Assignment</span>
+                  <!-- Assigned Candidates Display -->
+                  <div v-if="selectionMode !== 'manual' && (eventCandidates[event.id]?.length > 0)">
+                    <div class="flex justify-between items-center mb-4">
+                      <h4 class="font-semibold text-lg text-[var(--ui-color-primary)] flex items-center gap-2">
+                        Candidates Chosen for Interview
+                        <UBadge size="xs" variant="subtle">{{ eventCandidates[event.id]?.length }}</UBadge>
+                      </h4>
                       <div class="flex gap-2">
-                        <UInput
-                          v-model="manualSearch[event.id]"
-                          placeholder="Search candidates..."
+                        <UButton
+                          icon="i-lucide-refresh-cw"
+                          color="neutral"
+                          variant="ghost"
                           size="sm"
-                          icon="i-lucide-search"
-                          @keydown.enter="searchManualCandidates(event.id, event.role)"
+                          title="Refresh List"
+                          @click="fetchAssignedCandidates(event.id)"
                         />
-                        <UButton size="sm" color="neutral" variant="solid" @click="searchManualCandidates(event.id, event.role)">Search</UButton>
+                        <UButton
+                          icon="i-lucide-edit"
+                          color="primary"
+                          variant="soft"
+                          size="sm"
+                          @click="startEditSelection(event.id)"
+                        >
+                          Edit
+                        </UButton>
                       </div>
-                    </h5>
-                    
-                    <div v-if="manualCandidates[event.id] && manualCandidates[event.id].length > 0" class="border border-default rounded-lg max-h-[300px] overflow-y-auto bg-[var(--ui-bg)]">
-                      <table class="w-full text-sm">
-                        <thead class="sticky top-0 bg-[var(--ui-bg)] z-10 border-b border-default">
+                    </div>
+
+                    <div class="border border-default rounded-lg overflow-x-auto bg-[var(--ui-bg)] shadow-sm">
+                      <table class="w-full text-sm text-left whitespace-nowrap">
+                        <thead class="bg-elevated/50 border-b border-default shadow-sm">
                           <tr>
-                            <th class="p-2 text-left w-10"></th>
-                            <th class="p-2 text-left">Name</th>
-                            <th class="p-2 text-left">Score</th>
-                            <th class="p-2 text-left">Location</th>
+                            <th class="p-3 font-semibold text-muted">Source</th>
+                            <th class="p-3 font-semibold text-muted">Name</th>
+                            <th class="p-3 font-semibold text-muted">Mail</th>
+                            <th class="p-3 font-semibold text-muted">Role</th>
+                            <th class="p-3 font-semibold text-muted">Mobile</th>
+                            <th class="p-3 font-semibold text-muted">Location</th>
+                            <th class="p-3 font-semibold text-muted">CTC</th>
+                            <th class="p-3 font-semibold text-muted">Experience</th>
+                            <th class="p-3 font-semibold text-muted">Score</th>
+                            <th class="p-3 font-semibold text-muted">Resume</th>
+                            <th class="p-3 font-semibold text-muted">Status</th>
                           </tr>
                         </thead>
                         <tbody>
-                          <tr v-for="c in manualCandidates[event.id]" :key="c.id" class="border-b border-default last:border-0 hover:bg-elevated/50">
-                            <td class="p-2">
-                              <UCheckbox
-                                :model-value="selectedManual[event.id]?.includes(c.id)"
-                                @update:model-value="(val) => {
-                                  if (!selectedManual[event.id]) selectedManual[event.id] = []
-                                  if (val) selectedManual[event.id].push(c.id)
-                                  else selectedManual[event.id] = selectedManual[event.id].filter(id => id !== c.id)
-                                }"
-                              />
-                            </td>
-                            <td class="p-2">{{ c.name }}</td>
-                            <td class="p-2"><UBadge size="xs" variant="subtle" color="success">{{ c.score }}%</UBadge></td>
-                            <td class="p-2 text-muted">{{ c.current_location }}</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                    <div v-else class="text-sm text-muted italic p-2 border border-default rounded-lg bg-elevated/10">
-                      Search to find unassigned shortlisted candidates for this role.
-                    </div>
-                    
-                    <div class="mt-3 flex justify-end">
-                      <UButton
-                        :disabled="!selectedManual[event.id] || selectedManual[event.id].length === 0"
-                        color="primary"
-                        size="sm"
-                        @click="handleManualAssign(event.id)"
-                      >
-                        Assign Selected ({{ selectedManual[event.id]?.length || 0 }})
-                      </UButton>
-                    </div>
-                  </div>
-
-                  <USeparator />
-
-                  <!-- Assigned Candidates List -->
-                  <div>
-                    <h5 class="font-semibold mb-3 flex items-center justify-between">
-                      <span>Assigned Candidates ({{ assignedCandidates[event.id]?.length || 0 }})</span>
-                      <UButton v-if="unsentCounts[event.id] > 0" color="primary" size="sm" icon="i-lucide-mail" @click="openMailModal(event.id)">
-                        Send {{ unsentCounts[event.id] }} Invites
-                      </UButton>
-                    </h5>
-
-                    <div v-if="assignedCandidates[event.id] && assignedCandidates[event.id].length > 0" class="border border-default rounded-lg overflow-hidden bg-[var(--ui-bg)]">
-                      <table class="w-full text-sm">
-                        <thead class="bg-elevated/30 border-b border-default">
-                          <tr>
-                            <th class="p-3 text-left font-medium text-muted">Name</th>
-                            <th class="p-3 text-left font-medium text-muted">Phone</th>
-                            <th class="p-3 text-left font-medium text-muted">Score</th>
-                            <th class="p-3 text-left font-medium text-muted">Invite</th>
-                            <th class="p-3 text-right font-medium text-muted">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr v-for="c in assignedCandidates[event.id]" :key="c.id" class="border-b border-default last:border-0">
-                            <td class="p-3 font-medium">{{ c.name }}</td>
-                            <td class="p-3">{{ c.phone }}</td>
-                            <td class="p-3"><UBadge size="xs" variant="subtle">{{ c.score }}%</UBadge></td>
+                          <tr
+                            v-for="c in eventCandidates[event.id]"
+                            :key="c.id"
+                            class="border-b border-default last:border-0 hover:bg-elevated/50 transition-colors"
+                          >
                             <td class="p-3">
-                              <UBadge :color="(c as any).invite_sent ? 'success' : 'warning'" size="xs" variant="subtle">
-                                {{ (c as any).invite_sent ? 'Sent' : 'Pending' }}
-                              </UBadge>
+                              <div class="flex items-center gap-1.5 text-xs">
+                                <UIcon v-if="c.applied_through === 'WhatsApp'" name="i-lucide-message-circle" class="size-4 text-emerald-500" />
+                                <UIcon v-else name="i-lucide-mail" class="size-4 text-red-500" />
+                                {{ c.applied_through }}
+                              </div>
                             </td>
-                            <td class="p-3 text-right">
-                              <UButton
-                                icon="i-lucide-user-minus"
-                                color="error"
-                                variant="ghost"
+                            <td class="p-3 font-semibold">{{ c.name }}</td>
+                            <td class="p-3 text-xs text-muted">{{ c.email }}</td>
+                            <td class="p-3 text-xs">{{ c.role_applied }}</td>
+                            <td class="p-3 text-xs flex items-center gap-1"><UIcon name="i-lucide-phone" class="size-3 opacity-50" /> {{ c.phone }}</td>
+                            <td class="p-3 text-xs flex items-center gap-1"><UIcon name="i-lucide-map-pin" class="size-3 opacity-50" /> {{ c.current_location }}</td>
+                            <td class="p-3 text-xs">{{ c.current_ctc }}</td>
+                            <td class="p-3 text-xs">{{ c.experience_level }}</td>
+                            <td class="p-3">
+                              <UBadge size="xs" variant="subtle" color="success" class="font-bold">{{ c.score }}%</UBadge>
+                            </td>
+                            <td class="p-3 text-center">
+                              <a v-if="c.resume_url" :href="c.resume_url" target="_blank" rel="noopener noreferrer" class="text-[var(--ui-color-primary)] hover:text-[var(--ui-color-primary-600)] transition-colors inline-flex items-center gap-1">
+                                <UIcon name="i-lucide-file-text" class="size-4" />
+                                <UIcon name="i-lucide-external-link" class="size-3 opacity-70" />
+                              </a>
+                              <span v-else class="text-muted">—</span>
+                            </td>
+                            <td class="p-3">
+                              <USelect
+                                v-model="c.status"
+                                :items="[
+                                  { label: 'Applied', value: 'applied' },
+                                  { label: 'Shortlisted', value: 'shortlisted' },
+                                  { label: 'Hold', value: 'hold' },
+                                  { label: 'Rejected', value: 'rejected' },
+                                  { label: 'Mark as Selected', value: 'marked' },
+                                  { label: 'Selected', value: 'selected', disabled: true }
+                                ]"
                                 size="xs"
-                                @click="removeCandidateFromEvent(event.id, c.id)"
+                                @change="(newVal) => handleStatusChange(c.id, newVal, event.id)"
+                                class="w-[130px]"
                               />
                             </td>
                           </tr>
                         </tbody>
                       </table>
-                    </div>
-                    <div v-else class="text-sm text-muted italic p-4 text-center border border-default rounded-lg bg-elevated/10">
-                      No candidates assigned yet.
                     </div>
                   </div>
 
@@ -605,6 +1032,40 @@ onMounted(() => {
               @click="sendInvites"
             />
             <UButton label="Cancel" color="neutral" variant="outline" block @click="mailOpen = false" />
+          </div>
+        </template>
+      </UModal>
+
+      <!-- Selection Details Modal -->
+      <UModal v-model:open="selectionModal.isOpen" title="Selection Details">
+        <template #body>
+          <p class="text-sm text-muted mb-4">
+            Please enter offer details for <strong>{{ selectionModal.candidateName }}</strong>.
+          </p>
+          <div class="space-y-4">
+            <UFormField label="Offered Role" required>
+              <UInput v-model="selectionModal.form.offered_role" placeholder="e.g. Senior Frontend Developer" class="w-full" />
+            </UFormField>
+            <UFormField label="Offered Salary/CTC" required>
+              <UInput v-model="selectionModal.form.offered_salary" placeholder="e.g. $120,000" class="w-full" />
+            </UFormField>
+            <UFormField label="Offered Location" required>
+              <UInput v-model="selectionModal.form.offered_location" placeholder="e.g. Remote" class="w-full" />
+            </UFormField>
+            <UFormField label="Expected Joining Date" required>
+              <UInput v-model="selectionModal.form.joining_date" type="date" class="w-full" />
+            </UFormField>
+          </div>
+        </template>
+        <template #footer>
+          <div class="flex gap-3 w-full">
+            <UButton
+              label="Confirm Selection"
+              color="primary"
+              block
+              @click="submitSelection"
+            />
+            <UButton label="Cancel" color="neutral" variant="outline" block @click="selectionModal.isOpen = false" />
           </div>
         </template>
       </UModal>
