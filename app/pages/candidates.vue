@@ -11,10 +11,10 @@ const jobs = ref<Job[]>([])
 
 // Candidate filters & pagination
 const filters = reactive({
-  role: '',
-  source: '',
-  status: '',
-  scoreSort: '',
+  role: 'all',
+  source: 'all',
+  status: 'all',
+  scoreSort: 'newest',
   minScore: 0,
   maxScore: 100,
   name: ''
@@ -29,11 +29,11 @@ const candidatePagination = reactive({
 
 // Selected candidates filters & pagination
 const selectedFilters = reactive({
-  offered_role: '',
-  offered_location: '',
+  offered_role: 'all',
+  offered_location: 'all',
   dateFrom: '',
   dateTo: '',
-  offer_sent: ''
+  offer_sent: 'all'
 })
 const selectedPagination = reactive({
   hasNextPage: false,
@@ -70,7 +70,15 @@ const fetchJobs = async () => {
 const fetchCandidates = async (cursor: string | null = null) => {
   loading.value = true
   try {
-    const params: Record<string, any> = { limit: 10, ...filters }
+    const params: Record<string, any> = { limit: 10 }
+    if (filters.role && filters.role !== 'all') params.role = filters.role
+    if (filters.source && filters.source !== 'all') params.source = filters.source
+    if (filters.status && filters.status !== 'all') params.status = filters.status
+    if (filters.scoreSort && filters.scoreSort !== 'newest') params.scoreSort = filters.scoreSort
+    if (filters.minScore !== 0) params.minScore = filters.minScore
+    if (filters.maxScore !== 100) params.maxScore = filters.maxScore
+    if (filters.name) params.name = filters.name
+    
     if (cursor) params.cursor = cursor
     const response = await apiFetch<PaginatedResponse<Candidate>>('/candidates', { params })
     candidates.value = response.data
@@ -87,7 +95,13 @@ const fetchCandidates = async (cursor: string | null = null) => {
 
 const fetchSelectedCandidates = async (cursor: string | null = null) => {
   try {
-    const params: Record<string, any> = { limit: 10, ...selectedFilters }
+    const params: Record<string, any> = { limit: 10 }
+    if (selectedFilters.offered_role && selectedFilters.offered_role !== 'all') params.offered_role = selectedFilters.offered_role
+    if (selectedFilters.offered_location && selectedFilters.offered_location !== 'all') params.offered_location = selectedFilters.offered_location
+    if (selectedFilters.dateFrom) params.dateFrom = selectedFilters.dateFrom
+    if (selectedFilters.dateTo) params.dateTo = selectedFilters.dateTo
+    if (selectedFilters.offer_sent && selectedFilters.offer_sent !== 'all') params.offer_sent = selectedFilters.offer_sent
+
     if (cursor) params.cursor = cursor
     const response = await apiFetch<PaginatedResponse<Candidate>>('/candidates/selected', { params })
     selectedCandidates.value = response.data
@@ -231,12 +245,21 @@ const statusColor = (status: string) => {
   return (map[status] || 'neutral') as any
 }
 
+const clearFilters = () => {
+  Object.assign(filters, { role: 'all', source: 'all', status: 'all', scoreSort: 'newest', minScore: 0, maxScore: 100, name: '' })
+  searchTerm.value = ''
+}
+
+const hasFilters = computed(() => {
+  return filters.role !== 'all' || filters.source !== 'all' || filters.status !== 'all' || filters.scoreSort !== 'newest' || filters.minScore !== 0 || filters.maxScore !== 100 || filters.name !== ''
+})
+
 const clearSelectedFilters = () => {
-  Object.assign(selectedFilters, { offered_role: '', offered_location: '', dateFrom: '', dateTo: '', offer_sent: '' })
+  Object.assign(selectedFilters, { offered_role: 'all', offered_location: 'all', dateFrom: '', dateTo: '', offer_sent: 'all' })
 }
 
 const hasSelectedFilters = computed(() => {
-  return selectedFilters.offered_role || selectedFilters.offered_location || selectedFilters.dateFrom || selectedFilters.dateTo || selectedFilters.offer_sent
+  return selectedFilters.offered_role !== 'all' || selectedFilters.offered_location !== 'all' || selectedFilters.dateFrom || selectedFilters.dateTo || selectedFilters.offer_sent !== 'all'
 })
 
 // Watchers
@@ -294,17 +317,17 @@ onMounted(() => {
 
             <USelect
               v-model="filters.role"
-              :items="[{ label: 'All Roles', value: '' }, { label: 'Open', value: 'Open' }, ...jobs.map(j => ({ label: j.role, value: j.role }))]"
+              :items="[{ label: 'All Roles', value: 'all' }, { label: 'Open', value: 'Open' }, ...jobs.map(j => ({ label: j.role, value: j.role }))]"
               class="min-w-[150px]"
             />
             <USelect
               v-model="filters.source"
-              :items="[{ label: 'All Sources', value: '' }, { label: 'Gmail', value: 'Gmail' }, { label: 'WhatsApp', value: 'WhatsApp' }]"
+              :items="[{ label: 'All Sources', value: 'all' }, { label: 'Gmail', value: 'Gmail' }, { label: 'WhatsApp', value: 'WhatsApp' }]"
               class="min-w-[150px]"
             />
             <USelect
               v-model="filters.status"
-              :items="[{ label: 'All Statuses', value: '' }, ...statusItems]"
+              :items="[{ label: 'All Statuses', value: 'all' }, ...statusItems]"
               class="min-w-[150px]"
             />
           </div>
@@ -314,7 +337,7 @@ onMounted(() => {
               <span class="text-xs font-semibold text-muted">Score Sort:</span>
               <USelect
                 v-model="filters.scoreSort"
-                :items="[{ label: 'Newest First', value: '' }, { label: 'High to Low', value: 'highToLow' }, { label: 'Low to High', value: 'lowToHigh' }]"
+                :items="[{ label: 'Newest First', value: 'newest' }, { label: 'High to Low', value: 'highToLow' }, { label: 'Low to High', value: 'lowToHigh' }]"
                 class="min-w-[140px]"
               />
             </div>
@@ -324,6 +347,14 @@ onMounted(() => {
               <span class="text-muted text-xs">to</span>
               <UInput v-model.number="filters.maxScore" type="number" :min="0" :max="100" class="w-[70px]" />
             </div>
+            <UButton
+              v-if="hasFilters"
+              label="Clear Filters"
+              color="error"
+              variant="subtle"
+              size="xs"
+              @click="clearFilters"
+            />
           </div>
         </div>
 
@@ -332,9 +363,8 @@ onMounted(() => {
           <table class="w-full text-sm">
             <thead>
               <tr class="border-b border-default">
-                <th class="text-left py-3 px-3 text-muted font-medium">ID</th>
-                <th class="text-left py-3 px-3 text-muted font-medium">Source</th>
                 <th class="text-left py-3 px-3 text-muted font-medium">Name</th>
+                <th class="text-left py-3 px-3 text-muted font-medium">Source</th>
                 <th class="text-left py-3 px-3 text-muted font-medium">Role</th>
                 <th class="text-left py-3 px-3 text-muted font-medium">Mobile</th>
                 <th class="text-left py-3 px-3 text-muted font-medium">Location</th>
@@ -347,7 +377,10 @@ onMounted(() => {
             </thead>
             <tbody>
               <tr v-for="c in candidates" :key="c.id" class="border-b border-default hover:bg-elevated/30">
-                <td class="py-3 px-3">{{ c.id }}</td>
+                <td class="py-3 px-3">
+                  <p class="font-medium">{{ c.name }}</p>
+                  <p class="text-xs text-muted">{{ c.email }}</p>
+                </td>
                 <td class="py-3 px-3">
                   <div class="flex items-center gap-1.5">
                     <UIcon
@@ -357,10 +390,6 @@ onMounted(() => {
                     />
                     <span class="text-xs">{{ c.applied_through }}</span>
                   </div>
-                </td>
-                <td class="py-3 px-3">
-                  <p class="font-medium">{{ c.name }}</p>
-                  <p class="text-xs text-muted">{{ c.email }}</p>
                 </td>
                 <td class="py-3 px-3">{{ c.role_applied }}</td>
                 <td class="py-3 px-3 text-sm">{{ c.phone }}</td>
@@ -459,12 +488,12 @@ onMounted(() => {
         <div class="flex gap-3 flex-wrap items-center">
           <USelect
             v-model="selectedFilters.offered_role"
-            :items="[{ label: 'All Roles', value: '' }, ...selectedFilterOptions.roles.map(r => ({ label: r, value: r }))]"
+            :items="[{ label: 'All Roles', value: 'all' }, ...selectedFilterOptions.roles.map(r => ({ label: r, value: r }))]"
             class="min-w-[150px]"
           />
           <USelect
             v-model="selectedFilters.offered_location"
-            :items="[{ label: 'All Locations', value: '' }, ...selectedFilterOptions.locations.map(l => ({ label: l, value: l }))]"
+            :items="[{ label: 'All Locations', value: 'all' }, ...selectedFilterOptions.locations.map(l => ({ label: l, value: l }))]"
             class="min-w-[150px]"
           />
           <div class="flex items-center gap-2">
@@ -475,7 +504,7 @@ onMounted(() => {
           </div>
           <USelect
             v-model="selectedFilters.offer_sent"
-            :items="[{ label: 'All Offer Status', value: '' }, { label: 'Not Sent', value: 'false' }, { label: 'Sent', value: 'true' }]"
+            :items="[{ label: 'All Offer Status', value: 'all' }, { label: 'Not Sent', value: 'false' }, { label: 'Sent', value: 'true' }]"
             class="min-w-[140px]"
           />
           <UButton
