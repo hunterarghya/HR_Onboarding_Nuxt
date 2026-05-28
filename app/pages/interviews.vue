@@ -416,21 +416,28 @@ const getDayClasses = (day: Date) => {
   const today = isToday(day)
   const hasEvents = hasEventsOnDay(day)
 
-  return {
-    // Selected date: solid primary
-    'bg-[var(--ui-color-primary)] text-white font-bold shadow-lg shadow-primary/30 hover:bg-[var(--ui-color-primary)]': selected && !today,
-    // Today (not selected): emerald ring with subtle bg
-    'ring-2 ring-emerald-500 bg-emerald-500/10 text-emerald-400 font-bold': today && !selected,
-    // Both today AND selected: emerald ring + primary bg
-    'bg-[var(--ui-color-primary)] text-white font-bold ring-2 ring-emerald-400 shadow-lg shadow-primary/30 hover:bg-[var(--ui-color-primary)]': today && selected,
-    // Has events (not selected, not today): subtle highlight
-    'bg-[var(--ui-color-primary)]/10 text-[var(--ui-color-primary)] font-medium': hasEvents && !selected && !today,
-    // Normal day
-    'text-foreground hover:bg-elevated/50': !selected && !today && !hasEvents
+  if (selected && today) {
+    return 'ring-2 ring-primary-500 dark:ring-primary-400 bg-emerald-500 dark:bg-emerald-400 text-white dark:text-gray-900 font-bold'
   }
+  if (selected) {
+    return 'ring-2 ring-primary-500 dark:ring-primary-400 bg-primary-50 dark:bg-primary-900/10 text-primary-600 dark:text-primary-400 font-bold'
+  }
+  if (today) {
+    return 'bg-emerald-500 dark:bg-emerald-400 text-white dark:text-gray-900 font-bold'
+  }
+  if (hasEvents) {
+    return 'bg-primary-50 dark:bg-primary-900/10 text-primary-600 dark:text-primary-400 font-medium'
+  }
+  return 'text-foreground hover:bg-elevated/50'
 }
 
 onMounted(() => {
+  // Re-initialize dates on client to fix SSR timezone hydration mismatch
+  const now = new Date()
+  currentDate.value = now
+  selectedDate.value = now
+  createForm.event_date = format(now, 'yyyy-MM-dd')
+
   fetchJobs()
   fetchEvents()
   fetchTemplates()
@@ -476,7 +483,8 @@ onMounted(() => {
         
         <!-- Left Column: Calendar -->
         <div class="w-full xl:w-[400px] shrink-0">
-          <UCard class="sticky top-4">
+          <ClientOnly>
+            <UCard class="sticky top-4">
             <!-- Calendar Header -->
             <div class="flex items-center justify-between mb-4">
               <h2 class="font-bold text-lg">{{ format(currentDate, 'MMMM yyyy') }}</h2>
@@ -513,28 +521,38 @@ onMounted(() => {
                     v-for="(e, idx) in Math.min(getEventsForDay(day).length, 3)"
                     :key="idx"
                     class="size-1.5 rounded-full transition-colors"
-                    :class="isSameDay(day, selectedDate) ? 'bg-white' : isToday(day) ? 'bg-emerald-400' : 'bg-[var(--ui-color-primary)]'"
+                    :class="isToday(day) ? 'bg-white dark:bg-gray-900' : 'bg-primary-500 dark:bg-primary-400'"
                   ></div>
                 </div>
               </button>
             </div>
 
             <!-- Calendar Legend -->
-            <div class="mt-4 pt-3 border-t border-default flex items-center gap-4 text-xs text-muted">
+            <div class="mt-4 pt-3 border-t border-default flex flex-wrap items-center gap-4 text-xs text-muted">
               <div class="flex items-center gap-1.5">
-                <span class="size-3 rounded ring-2 ring-emerald-500 bg-emerald-500/10"></span>
+                <div class="size-6 rounded-lg bg-emerald-500 dark:bg-emerald-400 text-white dark:text-gray-900 flex items-center justify-center font-bold text-[10px]">1</div>
                 <span>Today</span>
               </div>
               <div class="flex items-center gap-1.5">
-                <span class="size-3 rounded bg-[var(--ui-color-primary)]"></span>
+                <div class="size-6 rounded-lg ring-2 ring-primary-500 dark:ring-primary-400 bg-primary-50 dark:bg-primary-900/10 text-primary-600 dark:text-primary-400 flex items-center justify-center font-bold text-[10px]">1</div>
                 <span>Selected</span>
               </div>
               <div class="flex items-center gap-1.5">
-                <span class="size-3 rounded bg-[var(--ui-color-primary)]/10"></span>
+                <div class="size-6 rounded-lg bg-primary-50 dark:bg-primary-900/10 text-primary-600 dark:text-primary-400 flex flex-col items-center justify-center text-[10px] relative font-medium">
+                  <span class="z-10 mt-[-2px]">1</span>
+                  <div class="absolute bottom-0.5 size-1 rounded-full bg-primary-500 dark:bg-primary-400"></div>
+                </div>
                 <span>Has Events</span>
               </div>
             </div>
           </UCard>
+          <template #fallback>
+            <UCard class="sticky top-4 h-[420px] flex flex-col items-center justify-center text-muted">
+              <UIcon name="i-lucide-loader-2" class="size-8 animate-spin mb-2" />
+              <span class="text-sm">Loading calendar...</span>
+            </UCard>
+          </template>
+        </ClientOnly>
 
           <!-- Synced Events List Below Calendar -->
           <div class="mt-4 space-y-3">
@@ -733,9 +751,9 @@ onMounted(() => {
                   
                   <div class="flex items-center gap-3 w-full sm:w-auto" @click.stop>
                     <div v-if="unsentCounts[event.id] > 0" class="flex items-center gap-2 mr-2">
-                      <UIcon name="i-lucide-alert-circle" class="size-4 text-warning" />
-                      <span class="text-xs font-semibold text-warning">{{ unsentCounts[event.id] }} unsent</span>
-                      <UButton size="xs" color="primary" @click="openMailModal(event.id)">Send</UButton>
+                      <UIcon name="i-lucide-alert-circle" class="size-5 text-warning" />
+                      <span class="text-sm font-semibold text-warning">{{ unsentCounts[event.id] }} unsent</span>
+                      <UButton icon="i-lucide-mail" color="primary" @click="openMailModal(event.id)">Send</UButton>
                     </div>
                     <UButton
                       icon="i-lucide-trash-2"
@@ -760,22 +778,19 @@ onMounted(() => {
                   <!-- Selection Mode Buttons -->
                   <div v-if="selectionMode === null" class="flex flex-col sm:flex-row gap-3">
                     <UButton
-                      icon="i-lucide-mail"
-                      class="flex-1 justify-center bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white"
-                      @click="openMailModal(event.id)"
-                    >
-                      Send Invites to Candidates
-                    </UButton>
-                    <UButton
                       icon="i-lucide-check-square"
-                      class="flex-1 justify-center bg-[var(--ui-color-primary)] text-white hover:bg-[var(--ui-color-primary-600)]"
+                      color="primary"
+                      variant="soft"
+                      class="flex-1 justify-center"
                       @click="startManualSelection(event.id)"
                     >
                       Choose Candidates Manually
                     </UButton>
                     <UButton
                       icon="i-lucide-zap"
-                      class="flex-1 justify-center bg-gradient-to-br from-[var(--ui-color-primary)] to-emerald-600 hover:from-[var(--ui-color-primary-400)] hover:to-emerald-500 text-white"
+                      color="primary"
+                      variant="solid"
+                      class="flex-1 justify-center"
                       @click="handleAutoAssign(event.id)"
                     >
                       Auto Select Top {{ event.num_candidates + (event.extra_candidates || 0) }} by Score
@@ -840,7 +855,9 @@ onMounted(() => {
                               <td class="p-3 font-semibold">{{ c.name }}</td>
                               <td class="p-3 text-xs text-muted">{{ c.email }}</td>
                               <td class="p-3 text-xs">{{ c.role_applied }}</td>
-                              <td class="p-3 text-xs flex items-center gap-1"><UIcon name="i-lucide-phone" class="size-3 opacity-50" /> {{ c.phone }}</td>
+                              <td class="p-3 text-xs">
+                                <div class="flex items-center gap-1"><UIcon name="i-lucide-phone" class="size-3 opacity-50" /> {{ c.phone }}</div>
+                              </td>
                               <td class="p-3 text-xs">
                                 <div class="flex items-center gap-1"><UIcon name="i-lucide-map-pin" class="size-3 opacity-50" /> {{ c.current_location }}</div>
                               </td>
@@ -960,8 +977,12 @@ onMounted(() => {
                             <td class="p-3 font-semibold">{{ c.name }}</td>
                             <td class="p-3 text-xs text-muted">{{ c.email }}</td>
                             <td class="p-3 text-xs">{{ c.role_applied }}</td>
-                            <td class="p-3 text-xs flex items-center gap-1"><UIcon name="i-lucide-phone" class="size-3 opacity-50" /> {{ c.phone }}</td>
-                            <td class="p-3 text-xs flex items-center gap-1"><UIcon name="i-lucide-map-pin" class="size-3 opacity-50" /> {{ c.current_location }}</td>
+                            <td class="p-3 text-xs">
+                              <div class="flex items-center gap-1"><UIcon name="i-lucide-phone" class="size-3 opacity-50" /> {{ c.phone }}</div>
+                            </td>
+                            <td class="p-3 text-xs">
+                              <div class="flex items-center gap-1"><UIcon name="i-lucide-map-pin" class="size-3 opacity-50" /> {{ c.current_location }}</div>
+                            </td>
                             <td class="p-3 text-xs">{{ c.current_ctc }}</td>
                             <td class="p-3 text-xs">{{ c.experience_level }}</td>
                             <td class="p-3">
