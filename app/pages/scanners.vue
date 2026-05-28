@@ -128,35 +128,15 @@ onUnmounted(() => {
             <div class="flex items-end gap-3 flex-wrap">
               <div class="flex-1 min-w-[300px]">
                 <UFormField label="WhatsApp Groups to Scan">
-                  <UPopover>
-                    <UButton
-                      color="neutral"
-                      variant="outline"
-                      block
-                      class="justify-start"
-                      :label="selectedGroups.length === 0 ? 'Select Groups...' : `${selectedGroups.length} group(s) selected`"
-                      trailing-icon="i-lucide-chevron-down"
-                    />
-
-                    <template #content>
-                      <div class="p-2 space-y-1 max-h-[300px] overflow-y-auto min-w-[250px]">
-                        <label
-                          v-for="g in waGroups"
-                          :key="g.id"
-                          class="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-elevated cursor-pointer text-sm"
-                        >
-                          <UCheckbox
-                            :model-value="selectedGroups.includes(g.id)"
-                            @update:model-value="toggleGroup(g.id)"
-                          />
-                          {{ g.name }}
-                        </label>
-                        <p v-if="waGroups.length === 0" class="text-sm text-muted px-2 py-3">
-                          No groups found. Make sure WhatsApp is connected.
-                        </p>
-                      </div>
-                    </template>
-                  </UPopover>
+                  <USelectMenu
+                    v-model="selectedGroups"
+                    :items="waGroups"
+                    value-key="id"
+                    label-key="name"
+                    multiple
+                    class="w-full"
+                    placeholder="Select Groups..."
+                  />
                 </UFormField>
               </div>
 
