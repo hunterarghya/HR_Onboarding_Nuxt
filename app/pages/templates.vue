@@ -1,9 +1,34 @@
 <script setup lang="ts">
-import { Editor, EditorContent } from '@tiptap/vue-3'
+import { Editor, EditorContent, Mark, mergeAttributes } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import Handlebars from 'handlebars'
 import type { EmailTemplate } from '~/types'
+
+const Underline = Mark.create({
+  name: 'underline',
+  parseHTML() {
+    return [
+      { tag: 'u' },
+      { style: 'text-decoration', getAttrs: value => value === 'underline' && null }
+    ]
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['u', mergeAttributes(HTMLAttributes), 0]
+  },
+  addCommands() {
+    return {
+      toggleUnderline: () => ({ commands }) => {
+        return commands.toggleMark(this.name)
+      }
+    }
+  },
+  addKeyboardShortcuts() {
+    return {
+      'Mod-u': () => this.editor.commands.toggleUnderline()
+    }
+  }
+})
 
 const { apiFetch } = useApi()
 const toast = useToast()
@@ -12,6 +37,7 @@ const templates = ref<EmailTemplate[]>([])
 const loading = ref(false)
 const selectedTemplateId = ref<number | null>(null)
 const previewMode = ref(false)
+const lastFocused = ref<'subject' | 'body'>('body')
 
 const form = reactive({
   name: '',
@@ -50,6 +76,16 @@ const dummyData = {
   interview_mode: 'online',
   venue_or_link: 'https://zoom.us/j/123456789'
 }
+
+const previewSubject = computed(() => {
+  if (!form.subject) return ''
+  try {
+    const template = Handlebars.compile(form.subject)
+    return template(dummyData)
+  } catch (err) {
+    return form.subject
+  }
+})
 
 const previewHtml = computed(() => {
   if (!form.body) return ''
@@ -158,14 +194,19 @@ const handleDelete = async () => {
 }
 
 const insertVariable = (format: string) => {
-  if (!editor.value) return
-  editor.value.chain().focus().insertContent(format).run()
+  if (lastFocused.value === 'subject') {
+    form.subject = (form.subject ? form.subject + ' ' : '') + format
+  } else {
+    if (!editor.value) return
+    editor.value.chain().focus().insertContent(format).run()
+  }
 }
 
 onMounted(() => {
   editor.value = new Editor({
     extensions: [
       StarterKit,
+      Underline,
       Placeholder.configure({
         placeholder: 'Write your email template here...'
       })
@@ -173,6 +214,9 @@ onMounted(() => {
     content: form.body,
     onUpdate: () => {
       form.body = editor.value?.getHTML() || ''
+    },
+    onFocus: () => {
+      lastFocused.value = 'body'
     },
     editorProps: {
       attributes: {
@@ -312,20 +356,18 @@ const groupedTemplates = computed(() => {
               </div>
 
               <UFormField label="Email Subject">
-                <UInput v-model="form.subject" class="w-full" />
+                <UInput v-model="form.subject" class="w-full" @focus="lastFocused = 'subject'" />
               </UFormField>
 
               <!-- Editor formatting toolbar -->
               <div class="flex flex-wrap gap-1 p-1 bg-elevated/50 rounded-t-lg border border-default border-b-0 shrink-0">
-                <UButton icon="i-lucide-bold" color="neutral" variant="ghost" size="xs" @click="editor?.chain().focus().toggleBold().run()" :class="{ 'bg-elevated': editor?.isActive('bold') }" />
-                <UButton icon="i-lucide-italic" color="neutral" variant="ghost" size="xs" @click="editor?.chain().focus().toggleItalic().run()" :class="{ 'bg-elevated': editor?.isActive('italic') }" />
-                <UButton icon="i-lucide-strikethrough" color="neutral" variant="ghost" size="xs" @click="editor?.chain().focus().toggleStrike().run()" :class="{ 'bg-elevated': editor?.isActive('strike') }" />
+                <UButton icon="i-lucide-bold" :color="editor?.isActive('bold') ? 'primary' : 'neutral'" :variant="editor?.isActive('bold') ? 'solid' : 'ghost'" size="xs" @click="editor?.chain().focus().toggleBold().run()" />
+                <UButton icon="i-lucide-italic" :color="editor?.isActive('italic') ? 'primary' : 'neutral'" :variant="editor?.isActive('italic') ? 'solid' : 'ghost'" size="xs" @click="editor?.chain().focus().toggleItalic().run()" />
+                <UButton icon="i-lucide-underline" :color="editor?.isActive('underline') ? 'primary' : 'neutral'" :variant="editor?.isActive('underline') ? 'solid' : 'ghost'" size="xs" @click="(editor?.chain().focus() as any).toggleUnderline().run()" />
+                <UButton icon="i-lucide-strikethrough" :color="editor?.isActive('strike') ? 'primary' : 'neutral'" :variant="editor?.isActive('strike') ? 'solid' : 'ghost'" size="xs" @click="editor?.chain().focus().toggleStrike().run()" />
                 <div class="w-px h-5 bg-border my-auto mx-1"></div>
-                <UButton icon="i-lucide-heading-1" color="neutral" variant="ghost" size="xs" @click="editor?.chain().focus().toggleHeading({ level: 1 }).run()" :class="{ 'bg-elevated': editor?.isActive('heading', { level: 1 }) }" />
-                <UButton icon="i-lucide-heading-2" color="neutral" variant="ghost" size="xs" @click="editor?.chain().focus().toggleHeading({ level: 2 }).run()" :class="{ 'bg-elevated': editor?.isActive('heading', { level: 2 }) }" />
-                <div class="w-px h-5 bg-border my-auto mx-1"></div>
-                <UButton icon="i-lucide-list" color="neutral" variant="ghost" size="xs" @click="editor?.chain().focus().toggleBulletList().run()" :class="{ 'bg-elevated': editor?.isActive('bulletList') }" />
-                <UButton icon="i-lucide-list-ordered" color="neutral" variant="ghost" size="xs" @click="editor?.chain().focus().toggleOrderedList().run()" :class="{ 'bg-elevated': editor?.isActive('orderedList') }" />
+                <UButton icon="i-lucide-list" :color="editor?.isActive('bulletList') ? 'primary' : 'neutral'" :variant="editor?.isActive('bulletList') ? 'solid' : 'ghost'" size="xs" @click="editor?.chain().focus().toggleBulletList().run()" />
+                <UButton icon="i-lucide-list-ordered" :color="editor?.isActive('orderedList') ? 'primary' : 'neutral'" :variant="editor?.isActive('orderedList') ? 'solid' : 'ghost'" size="xs" @click="editor?.chain().focus().toggleOrderedList().run()" />
               </div>
 
               <!-- Tiptap Editor Content -->
@@ -338,7 +380,7 @@ const groupedTemplates = computed(() => {
             <div v-show="previewMode" class="flex-1 flex flex-col min-h-0 bg-elevated/30 rounded-lg p-6 overflow-y-auto border border-default">
               <div class="mb-6 pb-4 border-b border-default">
                 <p class="text-sm text-muted mb-1">Subject:</p>
-                <p class="font-medium text-lg">{{ form.subject || '(No Subject)' }}</p>
+                <p class="font-medium text-lg">{{ previewSubject || '(No Subject)' }}</p>
               </div>
               <div class="prose dark:prose-invert max-w-none" v-html="previewHtml"></div>
             </div>
@@ -386,5 +428,20 @@ const groupedTemplates = computed(() => {
   color: var(--ui-color-neutral-500);
   pointer-events: none;
   height: 0;
+}
+.ProseMirror ul {
+  list-style-type: disc !important;
+  padding-left: 1.5rem !important;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.ProseMirror ol {
+  list-style-type: decimal !important;
+  padding-left: 1.5rem !important;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.ProseMirror li p {
+  margin: 0;
 }
 </style>
