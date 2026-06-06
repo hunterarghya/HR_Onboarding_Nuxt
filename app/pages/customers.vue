@@ -128,11 +128,11 @@ const columns: TableColumn<User>[] = [
       })
     }
   },
-  {
-    accessorKey: 'location',
-    header: 'Location',
-    cell: ({ row }) => row.original.location
-  },
+  // {
+  //   accessorKey: 'location',
+  //   header: 'Location',
+  //   cell: ({ row }) => row.original.location
+  // },
   {
     accessorKey: 'status',
     header: 'Status',

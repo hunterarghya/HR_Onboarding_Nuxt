@@ -17,7 +17,7 @@ useHead({
   }
 })
 
-const title = 'HR Platform'
+const title = 'Hunter HR'
 const description = 'AI-powered HR recruitment platform with email scanning, candidate matching, interview scheduling, and offer management.'
 
 useSeoMeta({

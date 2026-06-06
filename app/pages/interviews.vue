@@ -453,26 +453,13 @@ onMounted(() => {
         </template>
         <template #right>
           <div class="flex items-center gap-3">
-            <span v-if="lastSyncTime" class="text-xs text-muted hidden sm:inline">
-              Last synced: {{ lastSyncTime }}
-            </span>
             <UButton
-              id="sync-google-calendar-btn"
               icon="i-lucide-refresh-cw"
-              color="primary"
-              variant="solid"
-              :loading="syncingCalendar"
-              :disabled="syncingCalendar"
-              @click="handleSyncCalendar"
-            >
-              <template #leading>
-                <svg v-if="!syncingCalendar" class="size-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M22 12C22 6.477 17.523 2 12 2S2 6.477 2 12s4.477 10 10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-                  <path d="M8 12h8m-4-4v8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-              </template>
-              {{ syncingCalendar ? 'Syncing...' : 'Sync Google Calendar' }}
-            </UButton>
+              color="neutral"
+              variant="ghost"
+              :loading="loading"
+              @click="fetchEvents"
+            />
           </div>
         </template>
       </UDashboardNavbar>
@@ -553,6 +540,33 @@ onMounted(() => {
             </UCard>
           </template>
         </ClientOnly>
+
+          <USeparator class="my-4" />
+
+          <!-- Sync Google Calendar Button -->
+          <div>
+            <UButton
+              id="sync-google-calendar-btn"
+              icon="i-lucide-refresh-cw"
+              color="primary"
+              variant="solid"
+              block
+              :loading="syncingCalendar"
+              :disabled="syncingCalendar"
+              @click="handleSyncCalendar"
+            >
+              <template #leading>
+                <svg v-if="!syncingCalendar" class="size-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M22 12C22 6.477 17.523 2 12 2S2 6.477 2 12s4.477 10 10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                  <path d="M8 12h8m-4-4v8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </template>
+              {{ syncingCalendar ? 'Syncing...' : 'Sync Google Calendar' }}
+            </UButton>
+            <p v-if="lastSyncTime" class="text-xs text-muted text-center mt-2">
+              Last synced: {{ lastSyncTime }}
+            </p>
+          </div>
 
           <!-- Synced Events List Below Calendar -->
           <div class="mt-4 space-y-3">
@@ -821,9 +835,9 @@ onMounted(() => {
                               <th class="p-3 font-semibold text-muted">Mail</th>
                               <th class="p-3 font-semibold text-muted">Role</th>
                               <th class="p-3 font-semibold text-muted">Mobile</th>
-                              <th class="p-3 font-semibold text-muted">Location</th>
-                              <th class="p-3 font-semibold text-muted">CTC</th>
-                              <th class="p-3 font-semibold text-muted">Experience</th>
+                              <!-- <th class="p-3 font-semibold text-muted">Location</th> -->
+                              <!-- <th class="p-3 font-semibold text-muted">CTC</th> -->
+                              <!-- <th class="p-3 font-semibold text-muted">Experience</th> -->
                               <th class="p-3 font-semibold text-muted">Score</th>
                               <th class="p-3 font-semibold text-muted">Resume</th>
                               <th class="p-3 font-semibold text-muted">Status</th>
@@ -858,11 +872,11 @@ onMounted(() => {
                               <td class="p-3 text-xs">
                                 <div class="flex items-center gap-1"><UIcon name="i-lucide-phone" class="size-3 opacity-50" /> {{ c.phone }}</div>
                               </td>
-                              <td class="p-3 text-xs">
+                              <!-- <td class="p-3 text-xs">
                                 <div class="flex items-center gap-1"><UIcon name="i-lucide-map-pin" class="size-3 opacity-50" /> {{ c.current_location }}</div>
-                              </td>
-                              <td class="p-3 text-xs">{{ c.current_ctc }}</td>
-                              <td class="p-3 text-xs">{{ c.experience_level }}</td>
+                              </td> -->
+                              <!-- <td class="p-3 text-xs">{{ c.current_ctc }}</td> -->
+                              <!-- <td class="p-3 text-xs">{{ c.experience_level }}</td> -->
                               <td class="p-3">
                                 <UBadge size="xs" variant="subtle" :color="c.score >= 80 ? 'success' : 'warning'" class="font-bold">
                                   {{ c.score }}%
@@ -953,9 +967,9 @@ onMounted(() => {
                             <th class="p-3 font-semibold text-muted">Mail</th>
                             <th class="p-3 font-semibold text-muted">Role</th>
                             <th class="p-3 font-semibold text-muted">Mobile</th>
-                            <th class="p-3 font-semibold text-muted">Location</th>
-                            <th class="p-3 font-semibold text-muted">CTC</th>
-                            <th class="p-3 font-semibold text-muted">Experience</th>
+                            <!-- <th class="p-3 font-semibold text-muted">Location</th> -->
+                            <!-- <th class="p-3 font-semibold text-muted">CTC</th> -->
+                            <!-- <th class="p-3 font-semibold text-muted">Experience</th> -->
                             <th class="p-3 font-semibold text-muted">Score</th>
                             <th class="p-3 font-semibold text-muted">Resume</th>
                             <th class="p-3 font-semibold text-muted">Status</th>
@@ -980,11 +994,11 @@ onMounted(() => {
                             <td class="p-3 text-xs">
                               <div class="flex items-center gap-1"><UIcon name="i-lucide-phone" class="size-3 opacity-50" /> {{ c.phone }}</div>
                             </td>
-                            <td class="p-3 text-xs">
+                            <!-- <td class="p-3 text-xs">
                               <div class="flex items-center gap-1"><UIcon name="i-lucide-map-pin" class="size-3 opacity-50" /> {{ c.current_location }}</div>
-                            </td>
-                            <td class="p-3 text-xs">{{ c.current_ctc }}</td>
-                            <td class="p-3 text-xs">{{ c.experience_level }}</td>
+                            </td> -->
+                            <!-- <td class="p-3 text-xs">{{ c.current_ctc }}</td> -->
+                            <!-- <td class="p-3 text-xs">{{ c.experience_level }}</td> -->
                             <td class="p-3">
                               <UBadge size="xs" variant="subtle" color="success" class="font-bold">{{ c.score }}%</UBadge>
                             </td>

@@ -34,7 +34,7 @@ const handleLogin = async () => {
         <div class="mx-auto size-12 bg-primary/10 rounded-xl flex items-center justify-center mb-4">
           <UIcon name="i-lucide-users" class="size-6 text-primary" />
         </div>
-        <h1 class="text-2xl font-bold text-foreground">HR Platform</h1>
+        <h1 class="text-2xl font-bold text-foreground">Hunter HR</h1>
         <p class="text-sm text-muted mt-2">Sign in to manage jobs, candidates, and interviews.</p>
       </div>
 

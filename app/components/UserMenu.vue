@@ -23,7 +23,7 @@ const user = ref({
 const handleLogout = () => {
   token.value = null
   if (import.meta.client) {
-    window.location.href = `/api/auth/google`
+    window.location.href = `/login`
   }
 }
 

@@ -367,9 +367,9 @@ onMounted(() => {
                 <th class="text-left py-3 px-3 text-muted font-medium">Source</th>
                 <th class="text-left py-3 px-3 text-muted font-medium">Role</th>
                 <th class="text-left py-3 px-3 text-muted font-medium">Mobile</th>
-                <th class="text-left py-3 px-3 text-muted font-medium">Location</th>
-                <th class="text-left py-3 px-3 text-muted font-medium">CTC</th>
-                <th class="text-left py-3 px-3 text-muted font-medium">Experience</th>
+                <!-- <th class="text-left py-3 px-3 text-muted font-medium">Location</th> -->
+                <!-- <th class="text-left py-3 px-3 text-muted font-medium">CTC</th> -->
+                <!-- <th class="text-left py-3 px-3 text-muted font-medium">Experience</th> -->
                 <th class="text-left py-3 px-3 text-muted font-medium">Score</th>
                 <th class="text-left py-3 px-3 text-muted font-medium">Resume</th>
                 <th class="text-left py-3 px-3 text-muted font-medium">Status</th>
@@ -393,9 +393,9 @@ onMounted(() => {
                 </td>
                 <td class="py-3 px-3">{{ c.role_applied }}</td>
                 <td class="py-3 px-3 text-sm">{{ c.phone }}</td>
-                <td class="py-3 px-3 text-sm">{{ c.current_location }}</td>
-                <td class="py-3 px-3 text-sm font-medium">{{ c.current_ctc }}</td>
-                <td class="py-3 px-3 text-sm">{{ c.experience_level }}</td>
+                <!-- <td class="py-3 px-3 text-sm">{{ c.current_location }}</td> -->
+                <!-- <td class="py-3 px-3 text-sm font-medium">{{ c.current_ctc }}</td> -->
+                <!-- <td class="py-3 px-3 text-sm">{{ c.experience_level }}</td> -->
                 <td class="py-3 px-3">
                   <UBadge
                     :color="c.score >= 80 ? 'success' : 'warning'"
