@@ -4,7 +4,12 @@ import type { WAStatus, WAGroup } from '~/types'
 const { apiFetch, token } = useApi()
 const toast = useToast()
 
-const scanning = ref(false)
+// --- Email Scanner State ---
+const scanningMail = ref(false)
+const mailLastScanned = ref<string | null>(null)
+
+// --- WhatsApp State ---
+const scanningWA = ref(false)
 const waStatus = ref<WAStatus>({ status: 'not connected', qrCodeData: null })
 const waGroups = ref<WAGroup[]>([])
 const selectedGroups = ref<string[]>([])
@@ -12,6 +17,35 @@ const showQR = ref(false)
 
 let statusInterval: ReturnType<typeof setInterval> | null = null
 
+// --- Fetch scan status ---
+const fetchScanStatus = async () => {
+  try {
+    const status = await apiFetch<Record<string, { lastScannedAt: string | null }>>('/candidates/scan-status')
+    mailLastScanned.value = status.gmail?.lastScannedAt || null
+  } catch (err) {
+    console.error('Error fetching scan status:', err)
+  }
+}
+
+// --- Email Scanner ---
+const handleMailScan = async () => {
+  scanningMail.value = true
+  try {
+    const response = await apiFetch<{ message: string; count: number }>('/candidates/scan-mail', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token.value}` }
+    })
+    toast.add({ title: 'Email Scan Complete', description: `${response.count} candidate(s) found`, color: 'success' })
+    await fetchScanStatus()
+  } catch (err) {
+    console.error('Error scanning emails:', err)
+    toast.add({ title: 'Email scan failed', description: 'Check logs.', color: 'error' })
+  } finally {
+    scanningMail.value = false
+  }
+}
+
+// --- WhatsApp ---
 const fetchWAStatus = async () => {
   try {
     waStatus.value = await apiFetch<WAStatus>('/whatsapp/status')
@@ -28,20 +62,20 @@ const fetchWAGroups = async () => {
   }
 }
 
-const handleScan = async () => {
-  scanning.value = true
+const handleWAScan = async () => {
+  scanningWA.value = true
   try {
-    const response = await apiFetch<{ message: string }>('/candidates/scan', {
+    const response = await apiFetch<{ message: string; count: number }>('/candidates/scan', {
       method: 'POST',
       body: { whatsappGroupIds: selectedGroups.value },
       headers: { Authorization: `Bearer ${token.value}` }
     })
-    toast.add({ title: 'Scan Complete', description: response.message, color: 'success' })
+    toast.add({ title: 'WhatsApp Scan Complete', description: `${response.count} candidate(s) found`, color: 'success' })
   } catch (err) {
     console.error('Error scanning:', err)
-    toast.add({ title: 'Scanning failed', description: 'Check logs.', color: 'error' })
+    toast.add({ title: 'WhatsApp scan failed', description: 'Check logs.', color: 'error' })
   } finally {
-    scanning.value = false
+    scanningWA.value = false
   }
 }
 
@@ -55,18 +89,23 @@ const getStatusColor = computed(() => {
   }
 })
 
-const toggleGroup = (groupId: string) => {
-  const idx = selectedGroups.value.indexOf(groupId)
-  if (idx >= 0) {
-    selectedGroups.value.splice(idx, 1)
-  } else {
-    selectedGroups.value.push(groupId)
-  }
-}
-
-const isScanDisabled = computed(() => {
-  return scanning.value || (selectedGroups.value.length > 0 && waStatus.value.status !== 'ready')
+const isWAScanDisabled = computed(() => {
+  return scanningWA.value || (selectedGroups.value.length > 0 && waStatus.value.status !== 'ready')
 })
+
+const formatLastScanned = (dateStr: string | null) => {
+  if (!dateStr) return 'Never'
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  if (diffMins < 1) return 'Just now'
+  if (diffMins < 60) return `${diffMins} min ago`
+  const diffHours = Math.floor(diffMins / 60)
+  if (diffHours < 24) return `${diffHours}h ago`
+  const diffDays = Math.floor(diffHours / 24)
+  return `${diffDays}d ago`
+}
 
 watch(() => waStatus.value.status, (status) => {
   if (status === 'ready') {
@@ -75,6 +114,7 @@ watch(() => waStatus.value.status, (status) => {
 })
 
 onMounted(() => {
+  fetchScanStatus()
   fetchWAStatus()
   statusInterval = setInterval(fetchWAStatus, 5000)
 })
@@ -96,7 +136,45 @@ onUnmounted(() => {
 
     <template #body>
       <div class="space-y-6">
-        <!-- WhatsApp Connection Section -->
+        <!-- ===== 1. Email Scanner Section ===== -->
+        <UCard>
+          <div class="space-y-4">
+            <div class="flex items-center justify-between flex-wrap gap-4">
+              <div class="flex items-center gap-4">
+                <div class="size-12 rounded-xl bg-[var(--ui-color-primary)]/10 flex items-center justify-center">
+                  <UIcon name="i-lucide-mail" class="size-6 text-[var(--ui-color-primary)]" />
+                </div>
+                <div>
+                  <p class="font-semibold text-lg">Email Scanner</p>
+                  <p class="text-sm text-muted">
+                    Last scanned: {{ formatLastScanned(mailLastScanned) }}
+                  </p>
+                </div>
+              </div>
+
+              <UButton
+                :loading="scanningMail"
+                :disabled="scanningMail"
+                color="primary"
+                size="lg"
+                @click="handleMailScan"
+              >
+                <UIcon v-if="!scanningMail" name="i-lucide-mail-search" class="size-5" />
+                {{ scanningMail ? 'Scanning Emails...' : 'Scan Emails' }}
+              </UButton>
+            </div>
+
+            <UAlert
+              icon="i-lucide-info"
+              color="info"
+              variant="subtle"
+              title="Gmail Scanner"
+              description="Scans your Gmail inbox for job application emails with resume PDF attachments."
+            />
+          </div>
+        </UCard>
+
+        <!-- ===== 2. WhatsApp Connector Section ===== -->
         <UCard>
           <div class="flex items-center justify-between flex-wrap gap-4">
             <div class="flex items-center gap-4">
@@ -122,7 +200,7 @@ onUnmounted(() => {
           </div>
         </UCard>
 
-        <!-- Group Selector & Scan -->
+        <!-- WhatsApp Group Selector & Scan -->
         <UCard>
           <div class="space-y-4">
             <div class="flex items-end gap-3 flex-wrap">
@@ -149,23 +227,58 @@ onUnmounted(() => {
               />
 
               <UButton
-                :loading="scanning"
-                :disabled="isScanDisabled"
+                :loading="scanningWA"
+                :disabled="isWAScanDisabled"
                 color="primary"
                 size="lg"
-                @click="handleScan"
+                @click="handleWAScan"
               >
-                <UIcon v-if="!scanning" name="i-lucide-search" class="size-5" />
-                {{ scanning ? 'Scanning...' : 'Start Full Scan' }}
+                <UIcon v-if="!scanningWA" name="i-lucide-search" class="size-5" />
+                {{ scanningWA ? 'Scanning...' : 'Scan WhatsApp' }}
               </UButton>
             </div>
 
             <UAlert
-              icon="i-lucide-mail"
+              icon="i-lucide-message-circle"
               color="info"
               variant="subtle"
-              title="Full Scan"
-              description="This will process unread emails from Gmail and check the selected WhatsApp groups for new resumes."
+              title="WhatsApp Scanner"
+              description="Scans the selected WhatsApp groups for new resume PDF attachments."
+            />
+          </div>
+        </UCard>
+
+        <!-- ===== 3. Google Forms Section (Placeholder) ===== -->
+        <UCard>
+          <div class="space-y-4">
+            <div class="flex items-center justify-between flex-wrap gap-4">
+              <div class="flex items-center gap-4">
+                <div class="size-12 rounded-xl bg-[var(--ui-color-warning)]/10 flex items-center justify-center">
+                  <UIcon name="i-lucide-file-text" class="size-6 text-[var(--ui-color-warning)]" />
+                </div>
+                <div>
+                  <p class="font-semibold text-lg">Google Forms Scanner</p>
+                  <p class="text-sm text-muted">Coming soon</p>
+                </div>
+              </div>
+
+              <UButton
+                color="neutral"
+                variant="outline"
+                size="lg"
+                disabled
+              >
+                <UIcon name="i-lucide-file-text" class="size-5" />
+                Scan Form Responses
+              </UButton>
+            </div>
+
+            <UAlert
+              icon="i-lucide-construction"
+              color="warning"
+              variant="subtle"
+              title="Under Development"
+              description="Google Forms integration will allow you to generate application forms and scan responses with uploaded resumes."
             />
           </div>
         </UCard>
