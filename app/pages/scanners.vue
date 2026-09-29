@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { WAStatus, WAGroup } from '~/types'
+import type { WAStatus, WAGroup, Job, GoogleForm } from '~/types'
 
 const { apiFetch, token } = useApi()
 const toast = useToast()
@@ -15,6 +15,14 @@ const waGroups = ref<WAGroup[]>([])
 const selectedGroups = ref<string[]>([])
 const showQR = ref(false)
 
+// --- Google Forms State ---
+const scanningForms = ref(false)
+const formsLastScanned = ref<string | null>(null)
+const googleForms = ref<GoogleForm[]>([])
+const jobRoles = ref<Job[]>([])
+const selectedJobRoleId = ref<number | null>(null)
+const creatingForm = ref(false)
+
 let statusInterval: ReturnType<typeof setInterval> | null = null
 
 // --- Fetch scan status ---
@@ -22,6 +30,7 @@ const fetchScanStatus = async () => {
   try {
     const status = await apiFetch<Record<string, { lastScannedAt: string | null }>>('/candidates/scan-status')
     mailLastScanned.value = status.gmail?.lastScannedAt || null
+    formsLastScanned.value = status.google_forms?.lastScannedAt || null
   } catch (err) {
     console.error('Error fetching scan status:', err)
   }
@@ -93,6 +102,88 @@ const isWAScanDisabled = computed(() => {
   return scanningWA.value || (selectedGroups.value.length > 0 && waStatus.value.status !== 'ready')
 })
 
+// --- Google Forms ---
+const fetchGoogleForms = async () => {
+  try {
+    googleForms.value = await apiFetch<GoogleForm[]>('/google-forms')
+  } catch (err) {
+    console.error('Error fetching Google Forms:', err)
+  }
+}
+
+const fetchJobRoles = async () => {
+  try {
+    jobRoles.value = await apiFetch<Job[]>('/jobs')
+  } catch (err) {
+    console.error('Error fetching job roles:', err)
+  }
+}
+
+// Job roles that don't already have a form
+const availableJobRoles = computed(() => {
+  const usedRoleIds = new Set(googleForms.value.map(f => f.job_role_id))
+  return jobRoles.value.filter(j => !usedRoleIds.has(j.id))
+})
+
+const handleCreateForm = async () => {
+  if (!selectedJobRoleId.value) return
+  creatingForm.value = true
+  try {
+    const response = await apiFetch<{ formId: string; formUrl: string }>('/google-forms/create', {
+      method: 'POST',
+      body: { jobRoleId: selectedJobRoleId.value },
+      headers: { Authorization: `Bearer ${token.value}` }
+    })
+    toast.add({ title: 'Form Created', description: 'Google Form generated successfully.', color: 'success' })
+    selectedJobRoleId.value = null
+    await fetchGoogleForms()
+  } catch (err: any) {
+    console.error('Error creating form:', err)
+    const msg = err?.data?.data?.error || 'Failed to create form.'
+    toast.add({ title: 'Form creation failed', description: msg, color: 'error' })
+  } finally {
+    creatingForm.value = false
+  }
+}
+
+const handleDeleteForm = async (formDbId: number) => {
+  try {
+    await apiFetch(`/google-forms/${formDbId}`, { method: 'DELETE' })
+    toast.add({ title: 'Form Removed', description: 'Form record deleted.', color: 'success' })
+    await fetchGoogleForms()
+  } catch (err) {
+    console.error('Error deleting form:', err)
+    toast.add({ title: 'Failed to remove form', color: 'error' })
+  }
+}
+
+const handleFormsScan = async () => {
+  scanningForms.value = true
+  try {
+    const response = await apiFetch<{ message: string; count: number }>('/candidates/scan-forms', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token.value}` }
+    })
+    toast.add({ title: 'Forms Scan Complete', description: `${response.count} candidate(s) found`, color: 'success' })
+    await fetchScanStatus()
+  } catch (err) {
+    console.error('Error scanning forms:', err)
+    toast.add({ title: 'Forms scan failed', description: 'Check logs.', color: 'error' })
+  } finally {
+    scanningForms.value = false
+  }
+}
+
+const copyToClipboard = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text)
+    toast.add({ title: 'Copied!', description: 'Form URL copied to clipboard.', color: 'success' })
+  } catch {
+    toast.add({ title: 'Copy failed', color: 'error' })
+  }
+}
+
+// --- Utilities ---
 const formatLastScanned = (dateStr: string | null) => {
   if (!dateStr) return 'Never'
   const date = new Date(dateStr)
@@ -116,6 +207,8 @@ watch(() => waStatus.value.status, (status) => {
 onMounted(() => {
   fetchScanStatus()
   fetchWAStatus()
+  fetchGoogleForms()
+  fetchJobRoles()
   statusInterval = setInterval(fetchWAStatus, 5000)
 })
 
@@ -248,7 +341,7 @@ onUnmounted(() => {
           </div>
         </UCard>
 
-        <!-- ===== 3. Google Forms Section (Placeholder) ===== -->
+        <!-- ===== 3. Google Forms Scanner Section ===== -->
         <UCard>
           <div class="space-y-4">
             <div class="flex items-center justify-between flex-wrap gap-4">
@@ -258,27 +351,98 @@ onUnmounted(() => {
                 </div>
                 <div>
                   <p class="font-semibold text-lg">Google Forms Scanner</p>
-                  <p class="text-sm text-muted">Coming soon</p>
+                  <p class="text-sm text-muted">
+                    {{ googleForms.length }} form(s) configured · Last scanned: {{ formatLastScanned(formsLastScanned) }}
+                  </p>
                 </div>
               </div>
 
               <UButton
-                color="neutral"
-                variant="outline"
+                :loading="scanningForms"
+                :disabled="scanningForms || googleForms.length === 0"
+                color="primary"
                 size="lg"
-                disabled
+                @click="handleFormsScan"
               >
-                <UIcon name="i-lucide-file-text" class="size-5" />
-                Scan Form Responses
+                <UIcon v-if="!scanningForms" name="i-lucide-file-search" class="size-5" />
+                {{ scanningForms ? 'Scanning Forms...' : 'Scan Form Responses' }}
               </UButton>
             </div>
 
+            <!-- Generate Form -->
+            <div class="flex items-end gap-3 flex-wrap">
+              <div class="flex-1 min-w-[250px]">
+                <UFormField label="Generate Form for Job Role">
+                  <USelectMenu
+                    v-model="selectedJobRoleId"
+                    :items="availableJobRoles"
+                    value-key="id"
+                    label-key="role"
+                    class="w-full"
+                    placeholder="Select a job role..."
+                  />
+                </UFormField>
+              </div>
+
+              <UButton
+                :loading="creatingForm"
+                :disabled="!selectedJobRoleId || creatingForm"
+                color="primary"
+                variant="soft"
+                @click="handleCreateForm"
+              >
+                <UIcon v-if="!creatingForm" name="i-lucide-plus" class="size-4" />
+                {{ creatingForm ? 'Generating...' : 'Generate Form' }}
+              </UButton>
+            </div>
+
+            <!-- Existing Forms List -->
+            <div v-if="googleForms.length > 0" class="space-y-2">
+              <p class="text-sm font-medium text-muted">Active Forms</p>
+              <div
+                v-for="form in googleForms"
+                :key="form.id"
+                class="flex items-center justify-between gap-3 p-3 rounded-lg bg-[var(--ui-bg-elevated)] border border-[var(--ui-border)]"
+              >
+                <div class="flex-1 min-w-0">
+                  <p class="font-medium text-sm truncate">{{ form.form_title || 'Untitled Form' }}</p>
+                  <p class="text-xs text-muted truncate">
+                    {{ form.job_role_name || 'No linked role' }} · {{ form.form_url }}
+                  </p>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <UButton
+                    icon="i-lucide-external-link"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    :to="form.form_url"
+                    target="_blank"
+                  />
+                  <UButton
+                    icon="i-lucide-copy"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    @click="copyToClipboard(form.form_url)"
+                  />
+                  <UButton
+                    icon="i-lucide-trash-2"
+                    color="error"
+                    variant="ghost"
+                    size="xs"
+                    @click="handleDeleteForm(form.id)"
+                  />
+                </div>
+              </div>
+            </div>
+
             <UAlert
-              icon="i-lucide-construction"
-              color="warning"
+              icon="i-lucide-info"
+              color="info"
               variant="subtle"
-              title="Under Development"
-              description="Google Forms integration will allow you to generate application forms and scan responses with uploaded resumes."
+              title="Google Forms Scanner"
+              description="Generate application forms for job roles. Candidates fill the form with their details and upload a resume PDF. Scan to process responses."
             />
           </div>
         </UCard>
