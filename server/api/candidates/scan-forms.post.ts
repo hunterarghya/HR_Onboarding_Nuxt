@@ -56,35 +56,74 @@ export default defineEventHandler(async (event) => {
 
         for (const response of responses) {
           try {
-            // Extract file upload answer (resume PDF)
+            // Extract resume answer (supports Drive links, direct URLs, or file upload answers)
             const resumeQuestionId = questionMap.resume
             if (!resumeQuestionId) {
               console.log(`--- [Forms Scanner] No resume question mapped for form ${formId}, skipping ---`)
               continue
             }
 
+            let base64Data: string | null = null
+            let fileName = 'resume.pdf'
+
+            // 1. Try file upload answer (if user manually configured a file upload question)
             const fileInfo = extractFileAnswer(response, resumeQuestionId)
-            if (!fileInfo) {
-              console.log(`--- [Forms Scanner] Response ${response.responseId} has no file upload, skipping ---`)
-              continue
+            if (fileInfo?.fileId) {
+              try {
+                base64Data = await downloadDriveFile(tokens, fileInfo.fileId)
+                fileName = fileInfo.fileName || 'resume.pdf'
+              } catch (dErr: any) {
+                console.error(`--- [Forms Scanner] Drive file download error: ${dErr.message} ---`)
+              }
             }
 
-            // Download the PDF from Google Drive
-            const base64Data = await downloadDriveFile(tokens, fileInfo.fileId)
+            // 2. Try text link answer (Drive share link, public URL)
+            if (!base64Data) {
+              const resumeLink = extractTextAnswer(response, resumeQuestionId)
+              if (resumeLink && resumeLink !== 'N/A') {
+                const driveFileId = extractDriveFileId(resumeLink)
+                if (driveFileId) {
+                  try {
+                    base64Data = await downloadDriveFile(tokens, driveFileId)
+                    fileName = `${driveFileId}.pdf`
+                  } catch (dErr: any) {
+                    console.error(`--- [Forms Scanner] Drive link download error: ${dErr.message} ---`)
+                  }
+                }
 
-            // Extract text fields from the response
+                // If not Google Drive or Drive download failed, try direct HTTP fetch if URL
+                if (!base64Data && (resumeLink.startsWith('http://') || resumeLink.startsWith('https://'))) {
+                  try {
+                    const fetchRes = await fetch(resumeLink)
+                    if (fetchRes.ok) {
+                      const arrBuf = await fetchRes.arrayBuffer()
+                      base64Data = Buffer.from(arrBuf).toString('base64')
+                      const urlPart = resumeLink.split('/').pop()?.split('?')[0] || 'resume.pdf'
+                      fileName = urlPart.endsWith('.pdf') ? urlPart : `${urlPart}.pdf`
+                    }
+                  } catch (fErr: any) {
+                    console.error(`--- [Forms Scanner] Direct URL fetch error: ${fErr.message} ---`)
+                  }
+                }
+              }
+            }
+
+            // Extract candidate email
             const senderEmail = questionMap.email
               ? extractTextAnswer(response, questionMap.email)
               : 'N/A'
 
-            allAttachments.push({
-              filename: fileInfo.fileName,
-              data: base64Data,
-              source: 'GoogleForms',
-              sender: senderEmail
-            })
-
-            console.log(`--- [Forms Scanner] ✅ Resume collected: ${fileInfo.fileName} from ${senderEmail} ---`)
+            if (base64Data) {
+              allAttachments.push({
+                filename: fileName,
+                data: base64Data,
+                source: 'GoogleForms',
+                sender: senderEmail
+              })
+              console.log(`--- [Forms Scanner] ✅ Resume collected: ${fileName} from ${senderEmail} ---`)
+            } else {
+              console.warn(`--- [Forms Scanner] ⚠️ Could not retrieve PDF for response ${response.responseId} (${senderEmail}) ---`)
+            }
           } catch (respErr: any) {
             console.error(`--- [Forms Scanner] Error processing response ${response.responseId}: ${respErr.message} ---`)
           }

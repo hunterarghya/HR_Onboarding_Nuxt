@@ -47,17 +47,18 @@ export const createApplicationForm = async (tokens: any, jobTitle: string): Prom
 
   console.log(`--- [GoogleForms] Form created: ${formId} ---`)
 
-  // 2. Define form questions
+  // 2. Define form questions (Google Forms API does not support programmatic creation of file_upload questions)
   const questionDefs = [
     { title: 'Full Name', field: 'name', required: true, paragraph: false },
     { title: 'Email Address', field: 'email', required: true, paragraph: false },
     { title: 'Phone Number', field: 'phone', required: true, paragraph: false },
     { title: 'Years of Experience', field: 'experience', required: false, paragraph: false },
     { title: 'Current Location', field: 'location', required: false, paragraph: false },
-    { title: 'Current CTC / Expected CTC', field: 'ctc', required: false, paragraph: false }
+    { title: 'Current CTC / Expected CTC', field: 'ctc', required: false, paragraph: false },
+    { title: 'Resume Link (Google Drive / Dropbox / Public PDF URL)', field: 'resume', required: true, paragraph: false }
   ]
 
-  // Build batch update requests for text questions
+  // Build batch update requests for questions
   const requests: any[] = questionDefs.map((q, index) => ({
     createItem: {
       item: {
@@ -72,28 +73,6 @@ export const createApplicationForm = async (tokens: any, jobTitle: string): Prom
       location: { index }
     }
   }))
-
-  // Add file upload question for resume
-  requests.push({
-    createItem: {
-      item: {
-        title: 'Upload Resume (PDF only)',
-        description: 'Please upload your resume in PDF format.',
-        questionItem: {
-          question: {
-            required: true,
-            fileUploadQuestion: {
-              folderId: formId, // Uses the form's own folder
-              types: ['PDF'],
-              maxFiles: 1,
-              maxFileSize: '10485760' // 10MB
-            }
-          }
-        }
-      },
-      location: { index: questionDefs.length }
-    }
-  })
 
   // 3. Add questions to the form
   const batchResponse = await forms.forms.batchUpdate({
@@ -110,7 +89,7 @@ export const createApplicationForm = async (tokens: any, jobTitle: string): Prom
   const updatedForm = batchResponse.data.form
   const items = updatedForm?.items || []
 
-  const fieldNames = [...questionDefs.map(q => q.field), 'resume']
+  const fieldNames = questionDefs.map(q => q.field)
   const questionMap: Record<string, string> = {}
 
   items.forEach((item: any, index: number) => {
@@ -122,6 +101,15 @@ export const createApplicationForm = async (tokens: any, jobTitle: string): Prom
   console.log(`--- [GoogleForms] Question map: ${JSON.stringify(questionMap)} ---`)
 
   return { formId, formUrl, questionMap }
+}
+
+/**
+ * Extracts a Google Drive file ID from a Drive share or view URL.
+ */
+export const extractDriveFileId = (url: string): string | null => {
+  if (!url || typeof url !== 'string') return null
+  const driveMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/) || url.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+  return driveMatch ? driveMatch[1] : null
 }
 
 /**
