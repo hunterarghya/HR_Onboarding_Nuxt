@@ -11,6 +11,8 @@ export interface Job {
   min_score: number
   criteria_weights: Record<string, number>
   created_at: string
+  form_url?: string
+  google_form_id?: string
 }
 
 export type CandidateStatus = 'applied' | 'shortlisted' | 'hold' | 'rejected' | 'marked' | 'selected'

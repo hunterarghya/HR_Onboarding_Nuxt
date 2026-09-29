@@ -34,16 +34,72 @@ const fetchJobs = async () => {
   }
 }
 
+const generatingFormJobId = ref<number | null>(null)
+const copiedJobId = ref<number | null>(null)
+
+const copyFormUrl = async (url: string, jobId?: number) => {
+  try {
+    await navigator.clipboard.writeText(url)
+    if (jobId) {
+      copiedJobId.value = jobId
+      setTimeout(() => {
+        if (copiedJobId.value === jobId) copiedJobId.value = null
+      }, 2000)
+    }
+    toast.add({ title: 'Form link copied to clipboard!', color: 'success' })
+  } catch (err) {
+    console.error('Failed to copy link:', err)
+    toast.add({ title: 'Failed to copy link', color: 'error' })
+  }
+}
+
+const handleGenerateForm = async (job: Job) => {
+  if (generatingFormJobId.value) return
+  generatingFormJobId.value = job.id
+  try {
+    const res = await apiFetch<{ formUrl: string }>('/google-forms/create', {
+      method: 'POST',
+      body: { jobRoleId: job.id }
+    })
+    job.form_url = res.formUrl
+    toast.add({ title: 'Google Form generated successfully', color: 'success' })
+    await fetchJobs()
+  } catch (err: any) {
+    console.error('Error generating Google Form:', err)
+    toast.add({
+      title: 'Failed to generate form',
+      description: err?.data?.statusMessage || err?.data?.data?.error || err?.message || 'Please check your Google account connection',
+      color: 'error'
+    })
+  } finally {
+    generatingFormJobId.value = null
+  }
+}
+
 const handleCreateJob = async () => {
   if (submittingJob.value) return
   submittingJob.value = true
   try {
-    await apiFetch('/jobs', { method: 'POST', body: { ...newJob } })
+    const createdJob = await apiFetch<Job>('/jobs', { method: 'POST', body: { ...newJob } })
     Object.assign(newJob, {
       role: '', salary: '', qualification: '', skills: '', experience: '',
       location: '', shortlist_mode: 'manual', deadline: '', min_score: 60, criteria_weights: {}
     })
     toast.add({ title: 'Job posted successfully', color: 'success' })
+
+    // Auto-generate Google Form if backend didn't already create it
+    if (createdJob?.id && !createdJob.form_url) {
+      try {
+        await apiFetch('/google-forms/create', {
+          method: 'POST',
+          body: { jobRoleId: createdJob.id }
+        })
+        toast.add({ title: 'Google Form generated successfully', color: 'success' })
+      } catch (formErr: any) {
+        console.warn('Form auto-generation notice:', formErr)
+      }
+    }
+
     await fetchJobs()
   } catch (err) {
     console.error('Error creating job:', err)
@@ -66,7 +122,11 @@ const openEditJob = (job: Job) => {
 const handleUpdateJob = async () => {
   if (!editingJob.value) return
   try {
-    await apiFetch(`/jobs/${editingJob.value.id}`, { method: 'PATCH', body: editingJob.value })
+    const { id, role, salary, qualification, skills, experience, location, shortlist_mode, deadline, min_score, criteria_weights } = editingJob.value
+    await apiFetch(`/jobs/${id}`, {
+      method: 'PATCH',
+      body: { role, salary, qualification, skills, experience, location, shortlist_mode, deadline, min_score, criteria_weights }
+    })
     editOpen.value = false
     editingJob.value = null
     toast.add({ title: 'Job updated successfully', color: 'success' })
@@ -268,6 +328,59 @@ onMounted(() => {
                   />
                 </div>
               </div>
+
+              <!-- Google Form Link Section (below JD on the same card) -->
+              <div class="mt-3 pt-3 border-t border-[var(--ui-border)]">
+                <div v-if="job.form_url" class="flex items-center justify-between gap-2 bg-neutral-50 dark:bg-neutral-900/60 p-2 rounded-lg border border-[var(--ui-border)]">
+                  <div class="flex items-center gap-2 min-w-0 flex-1">
+                    <UIcon name="i-lucide-file-text" class="size-4 text-primary shrink-0" />
+                    <span class="text-xs font-medium text-muted shrink-0">Form:</span>
+                    <a
+                      :href="job.form_url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="text-xs text-primary underline truncate hover:text-primary-600 font-mono"
+                      :title="job.form_url"
+                    >
+                      {{ job.form_url }}
+                    </a>
+                  </div>
+                  <div class="flex items-center gap-1 shrink-0">
+                    <UButton
+                      :icon="copiedJobId === job.id ? 'i-lucide-check' : 'i-lucide-copy'"
+                      :color="copiedJobId === job.id ? 'success' : 'neutral'"
+                      variant="subtle"
+                      size="xs"
+                      :label="copiedJobId === job.id ? 'Copied' : 'Copy'"
+                      @click="copyFormUrl(job.form_url, job.id)"
+                    />
+                    <UButton
+                      icon="i-lucide-external-link"
+                      color="neutral"
+                      variant="ghost"
+                      size="xs"
+                      :to="job.form_url"
+                      target="_blank"
+                      title="Open Google Form"
+                    />
+                  </div>
+                </div>
+                <div v-else class="flex items-center justify-between text-xs text-muted">
+                  <span class="flex items-center gap-1.5">
+                    <UIcon name="i-lucide-file-question" class="size-3.5" />
+                    No Google Form linked
+                  </span>
+                  <UButton
+                    icon="i-lucide-plus"
+                    size="xs"
+                    color="neutral"
+                    variant="subtle"
+                    label="Generate Form"
+                    :loading="generatingFormJobId === job.id"
+                    @click="handleGenerateForm(job)"
+                  />
+                </div>
+              </div>
             </UCard>
 
             <p v-if="jobs.length === 0" class="text-center text-muted py-8">
@@ -318,6 +431,24 @@ onMounted(() => {
             <div>
               <p class="text-xs text-muted font-semibold">Qualifications</p>
               <p class="text-sm whitespace-pre-wrap mt-1">{{ viewingJob.qualification }}</p>
+            </div>
+
+            <!-- Form Link in Modal -->
+            <div v-if="viewingJob.form_url" class="mt-3 pt-3 border-t border-[var(--ui-border)]">
+              <p class="text-xs text-muted font-semibold mb-1.5">Google Application Form</p>
+              <div class="flex items-center justify-between gap-2 bg-neutral-50 dark:bg-neutral-900/60 p-2 rounded-lg border border-[var(--ui-border)]">
+                <a :href="viewingJob.form_url" target="_blank" class="text-xs text-primary underline truncate font-mono">
+                  {{ viewingJob.form_url }}
+                </a>
+                <UButton
+                  icon="i-lucide-copy"
+                  size="xs"
+                  color="neutral"
+                  variant="subtle"
+                  label="Copy"
+                  @click="copyFormUrl(viewingJob.form_url)"
+                />
+              </div>
             </div>
           </div>
         </template>
