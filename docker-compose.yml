@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
       POSTGRES_DB: ${DB_NAME:-hr_onboarding}
     ports:
-      - "5432:5432"
+      - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -22,7 +22,7 @@ services:
     image: redis:alpine
     container_name: hr-redis
     ports:
-      - "6379:6379"
+      - "6380:6379"
 
   ollama:
     image: ollama/ollama:latest
@@ -31,7 +31,7 @@ services:
       - OLLAMA_HOST=0.0.0.0
       - OLLAMA_ORIGINS="*"
     ports:
-      - "11434:11434"
+      - "11435:11434"
     volumes:
       - ollama_data:/root/.ollama
 
@@ -39,7 +39,7 @@ services:
     image: qdrant/qdrant:latest
     container_name: hr-qdrant
     ports:
-      - "6333:6333"
+      - "6335:6333"
     volumes:
       - qdrant_data:/qdrant/storage
 
