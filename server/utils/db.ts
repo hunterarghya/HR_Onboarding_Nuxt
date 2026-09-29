@@ -95,6 +95,16 @@ export const initDb = async (): Promise<void> => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS google_forms (
+        id SERIAL PRIMARY KEY,
+        form_id VARCHAR(255) NOT NULL UNIQUE,
+        form_url TEXT NOT NULL,
+        form_title VARCHAR(500),
+        job_role_id INTEGER REFERENCES job_roles(id) ON DELETE SET NULL,
+        question_map JSONB DEFAULT '{}',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
     `)
 
     // Seed default templates (only if none exist)

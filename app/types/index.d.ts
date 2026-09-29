@@ -26,7 +26,7 @@ export interface Candidate {
   experience_level: string
   status: CandidateStatus
   resume_url: string
-  applied_through: 'Gmail' | 'WhatsApp'
+  applied_through: 'Gmail' | 'WhatsApp' | 'GoogleForms'
   current_location: string
   current_ctc: string
   offered_role?: string
@@ -81,4 +81,15 @@ export interface UnsentCount {
   event_id: number
   event_date: string
   unsent_count: number
+}
+
+export interface GoogleForm {
+  id: number
+  form_id: string
+  form_url: string
+  form_title: string
+  job_role_id: number | null
+  job_role_name: string | null
+  question_map: Record<string, string>
+  created_at: string
 }
