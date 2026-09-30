@@ -35,6 +35,7 @@ const fetchJobs = async () => {
 }
 
 const generatingFormJobId = ref<number | null>(null)
+const deletingFormJobId = ref<number | null>(null)
 const copiedJobId = ref<number | null>(null)
 
 const copyFormUrl = async (url: string, jobId?: number) => {
@@ -73,6 +74,24 @@ const handleGenerateForm = async (job: Job) => {
     })
   } finally {
     generatingFormJobId.value = null
+  }
+}
+
+const handleDeleteForm = async (job: Job) => {
+  if (deletingFormJobId.value) return
+  deletingFormJobId.value = job.id
+  try {
+    await apiFetch(`/google-forms/${job.id}?type=job`, { method: 'DELETE' })
+    job.form_url = undefined
+    job.google_form_id = undefined
+    job.google_form_db_id = undefined
+    toast.add({ title: 'Form removed', description: 'Google Form record deleted.', color: 'success' })
+    await fetchJobs()
+  } catch (err: any) {
+    console.error('Error deleting form:', err)
+    toast.add({ title: 'Failed to remove form', color: 'error' })
+  } finally {
+    deletingFormJobId.value = null
   }
 }
 
@@ -362,6 +381,15 @@ onMounted(() => {
                       :to="job.form_url"
                       target="_blank"
                       title="Open Google Form"
+                    />
+                    <UButton
+                      icon="i-lucide-trash-2"
+                      color="error"
+                      variant="ghost"
+                      size="xs"
+                      title="Delete Google Form"
+                      :loading="deletingFormJobId === job.id"
+                      @click="handleDeleteForm(job)"
                     />
                   </div>
                 </div>

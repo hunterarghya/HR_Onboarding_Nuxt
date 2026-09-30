@@ -27,19 +27,32 @@ export default defineEventHandler(async (event) => {
   console.log(`--- [Forms Scanner] Starting Google Forms scan for ${userData.email} ---`)
 
   try {
-    // Fetch all registered forms from DB
-    const formsResult = await pool.query(`
+    const body = await readBody(event).catch(() => ({}))
+    const selectedFormIds = Array.isArray(body?.formIds) ? body.formIds.map(String).filter(Boolean) : []
+
+    // Fetch registered forms from DB (all or filtered by selectedFormIds)
+    let formsQuery = `
       SELECT gf.*, jr.role as job_role_name
       FROM google_forms gf
       LEFT JOIN job_roles jr ON gf.job_role_id = jr.id
-    `)
+    `
+    const queryParams: any[] = []
+    if (selectedFormIds.length > 0) {
+      formsQuery += ` WHERE gf.form_id = ANY($1) OR gf.id::text = ANY($1)`
+      queryParams.push(selectedFormIds)
+    }
+
+    const formsResult = await pool.query(formsQuery, queryParams)
 
     const forms = formsResult.rows
     if (forms.length === 0) {
-      return { message: 'No Google Forms configured', count: 0 }
+      return {
+        message: selectedFormIds.length > 0 ? 'No matching Google Forms found to scan' : 'No Google Forms configured',
+        count: 0
+      }
     }
 
-    console.log(`--- [Forms Scanner] Processing ${forms.length} form(s) ---`)
+    console.log(`--- [Forms Scanner] Processing ${forms.length} form(s) (Selected filter: ${selectedFormIds.length > 0 ? selectedFormIds.join(', ') : 'ALL'}) ---`)
     const allAttachments: RawAttachment[] = []
 
     for (const form of forms) {

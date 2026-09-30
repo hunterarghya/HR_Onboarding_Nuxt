@@ -2,10 +2,10 @@ export default defineEventHandler(async () => {
   const pool = usePool()
   try {
     const result = await pool.query(`
-      SELECT jr.*, gf.form_url, gf.form_id as google_form_id
+      SELECT jr.*, gf.form_url, gf.form_id as google_form_id, gf.id as google_form_db_id
       FROM job_roles jr
       LEFT JOIN (
-        SELECT DISTINCT ON (job_role_id) job_role_id, form_url, form_id
+        SELECT DISTINCT ON (job_role_id) id, job_role_id, form_url, form_id
         FROM google_forms
         ORDER BY job_role_id, id DESC
       ) gf ON jr.id = gf.job_role_id

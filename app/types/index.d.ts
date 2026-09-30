@@ -13,6 +13,7 @@ export interface Job {
   created_at: string
   form_url?: string
   google_form_id?: string
+  google_form_db_id?: number
 }
 
 export type CandidateStatus = 'applied' | 'shortlisted' | 'hold' | 'rejected' | 'marked' | 'selected'

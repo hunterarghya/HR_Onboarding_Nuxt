@@ -19,9 +19,7 @@ const showQR = ref(false)
 const scanningForms = ref(false)
 const formsLastScanned = ref<string | null>(null)
 const googleForms = ref<GoogleForm[]>([])
-const jobRoles = ref<Job[]>([])
-const selectedJobRoleId = ref<number | null>(null)
-const creatingForm = ref(false)
+const selectedFormIds = ref<Set<string>>(new Set())
 
 let statusInterval: ReturnType<typeof setInterval> | null = null
 
@@ -106,62 +104,38 @@ const isWAScanDisabled = computed(() => {
 const fetchGoogleForms = async () => {
   try {
     googleForms.value = await apiFetch<GoogleForm[]>('/google-forms')
+    // Default: all forms selected (empty set = scan all)
+    selectedFormIds.value = new Set()
   } catch (err) {
     console.error('Error fetching Google Forms:', err)
   }
 }
 
-const fetchJobRoles = async () => {
-  try {
-    jobRoles.value = await apiFetch<Job[]>('/jobs')
-  } catch (err) {
-    console.error('Error fetching job roles:', err)
+const toggleFormSelection = (formId: string) => {
+  const newSet = new Set(selectedFormIds.value)
+  if (newSet.has(formId)) {
+    newSet.delete(formId)
+  } else {
+    newSet.add(formId)
   }
+  selectedFormIds.value = newSet
 }
 
-// Job roles that don't already have a form
-const availableJobRoles = computed(() => {
-  const usedRoleIds = new Set(googleForms.value.map(f => f.job_role_id))
-  return jobRoles.value.filter(j => !usedRoleIds.has(j.id))
-})
-
-const handleCreateForm = async () => {
-  if (!selectedJobRoleId.value) return
-  creatingForm.value = true
-  try {
-    const response = await apiFetch<{ formId: string; formUrl: string }>('/google-forms/create', {
-      method: 'POST',
-      body: { jobRoleId: selectedJobRoleId.value },
-      headers: { Authorization: `Bearer ${token.value}` }
-    })
-    toast.add({ title: 'Form Created', description: 'Google Form generated successfully.', color: 'success' })
-    selectedJobRoleId.value = null
-    await fetchGoogleForms()
-  } catch (err: any) {
-    console.error('Error creating form:', err)
-    const msg = err?.data?.data?.error || 'Failed to create form.'
-    toast.add({ title: 'Form creation failed', description: msg, color: 'error' })
-  } finally {
-    creatingForm.value = false
-  }
-}
-
-const handleDeleteForm = async (formDbId: number) => {
-  try {
-    await apiFetch(`/google-forms/${formDbId}`, { method: 'DELETE' })
-    toast.add({ title: 'Form Removed', description: 'Form record deleted.', color: 'success' })
-    await fetchGoogleForms()
-  } catch (err) {
-    console.error('Error deleting form:', err)
-    toast.add({ title: 'Failed to remove form', color: 'error' })
-  }
+const isFormSelected = (formId: string) => {
+  // If no forms are explicitly selected, all are considered selected
+  return selectedFormIds.value.size === 0 || selectedFormIds.value.has(formId)
 }
 
 const handleFormsScan = async () => {
   scanningForms.value = true
   try {
+    const body: { formIds?: string[] } = {}
+    if (selectedFormIds.value.size > 0) {
+      body.formIds = Array.from(selectedFormIds.value)
+    }
     const response = await apiFetch<{ message: string; count: number }>('/candidates/scan-forms', {
       method: 'POST',
+      body,
       headers: { Authorization: `Bearer ${token.value}` }
     })
     toast.add({ title: 'Forms Scan Complete', description: `${response.count} candidate(s) found`, color: 'success' })
@@ -208,7 +182,6 @@ onMounted(() => {
   fetchScanStatus()
   fetchWAStatus()
   fetchGoogleForms()
-  fetchJobRoles()
   statusInterval = setInterval(fetchWAStatus, 5000)
 })
 
@@ -352,7 +325,7 @@ onUnmounted(() => {
                 <div>
                   <p class="font-semibold text-lg">Google Forms Scanner</p>
                   <p class="text-sm text-muted">
-                    {{ googleForms.length }} form(s) configured · Last scanned: {{ formatLastScanned(formsLastScanned) }}
+                    {{ googleForms.length }} form(s) available · Last scanned: {{ formatLastScanned(formsLastScanned) }}
                   </p>
                 </div>
               </div>
@@ -365,50 +338,44 @@ onUnmounted(() => {
                 @click="handleFormsScan"
               >
                 <UIcon v-if="!scanningForms" name="i-lucide-file-search" class="size-5" />
-                {{ scanningForms ? 'Scanning Forms...' : 'Scan Form Responses' }}
+                {{ scanningForms ? 'Scanning Forms...' : (selectedFormIds.size > 0 ? `Scan ${selectedFormIds.size} Form(s)` : 'Scan All Forms') }}
               </UButton>
             </div>
 
-            <!-- Generate Form -->
-            <div class="flex items-end gap-3 flex-wrap">
-              <div class="flex-1 min-w-[250px]">
-                <UFormField label="Generate Form for Job Role">
-                  <USelectMenu
-                    v-model="selectedJobRoleId"
-                    :items="availableJobRoles"
-                    value-key="id"
-                    label-key="role"
-                    class="w-full"
-                    placeholder="Select a job role..."
-                  />
-                </UFormField>
-              </div>
-
-              <UButton
-                :loading="creatingForm"
-                :disabled="!selectedJobRoleId || creatingForm"
-                color="primary"
-                variant="soft"
-                @click="handleCreateForm"
-              >
-                <UIcon v-if="!creatingForm" name="i-lucide-plus" class="size-4" />
-                {{ creatingForm ? 'Generating...' : 'Generate Form' }}
-              </UButton>
-            </div>
-
-            <!-- Existing Forms List -->
+            <!-- Forms List with Toggle Selection -->
             <div v-if="googleForms.length > 0" class="space-y-2">
-              <p class="text-sm font-medium text-muted">Active Forms</p>
+              <div class="flex items-center justify-between">
+                <p class="text-sm font-medium text-muted">Select Forms to Scan</p>
+                <p class="text-xs text-muted">
+                  {{ selectedFormIds.size === 0 ? 'All forms will be scanned' : `${selectedFormIds.size} of ${googleForms.length} selected` }}
+                </p>
+              </div>
               <div
                 v-for="form in googleForms"
                 :key="form.id"
-                class="flex items-center justify-between gap-3 p-3 rounded-lg bg-[var(--ui-bg-elevated)] border border-[var(--ui-border)]"
+                class="flex items-center justify-between gap-3 p-3 rounded-lg border transition-colors"
+                :class="isFormSelected(form.form_id) ? 'bg-[var(--ui-color-primary)]/5 border-[var(--ui-color-primary)]/20' : 'bg-[var(--ui-bg-elevated)] border-[var(--ui-border)]'"
               >
-                <div class="flex-1 min-w-0">
-                  <p class="font-medium text-sm truncate">{{ form.form_title || 'Untitled Form' }}</p>
-                  <p class="text-xs text-muted truncate">
-                    {{ form.job_role_name || 'No linked role' }} · {{ form.form_url }}
-                  </p>
+                <div class="flex items-center gap-3 flex-1 min-w-0">
+                  <button
+                    type="button"
+                    class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                    :class="isFormSelected(form.form_id) ? 'bg-[var(--ui-color-primary)]' : 'bg-[var(--ui-border)]'"
+                    role="switch"
+                    :aria-checked="isFormSelected(form.form_id)"
+                    @click="toggleFormSelection(form.form_id)"
+                  >
+                    <span
+                      class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out"
+                      :class="isFormSelected(form.form_id) ? 'translate-x-4' : 'translate-x-0'"
+                    />
+                  </button>
+                  <div class="min-w-0">
+                    <p class="font-medium text-sm truncate">{{ form.form_title || 'Untitled Form' }}</p>
+                    <p class="text-xs text-muted truncate">
+                      {{ form.job_role_name || 'No linked role' }}
+                    </p>
+                  </div>
                 </div>
                 <div class="flex items-center gap-1.5 shrink-0">
                   <UButton
@@ -418,23 +385,28 @@ onUnmounted(() => {
                     size="xs"
                     :to="form.form_url"
                     target="_blank"
+                    title="Open Form"
                   />
                   <UButton
                     icon="i-lucide-copy"
                     color="neutral"
                     variant="ghost"
                     size="xs"
+                    title="Copy Form URL"
                     @click="copyToClipboard(form.form_url)"
-                  />
-                  <UButton
-                    icon="i-lucide-trash-2"
-                    color="error"
-                    variant="ghost"
-                    size="xs"
-                    @click="handleDeleteForm(form.id)"
                   />
                 </div>
               </div>
+            </div>
+
+            <div v-else>
+              <UAlert
+                icon="i-lucide-file-question"
+                color="warning"
+                variant="subtle"
+                title="No Forms Available"
+                description="Create a Google Form from the Jobs page by clicking 'Generate Form' on any job description card."
+              />
             </div>
 
             <UAlert
@@ -442,7 +414,7 @@ onUnmounted(() => {
               color="info"
               variant="subtle"
               title="Google Forms Scanner"
-              description="Generate application forms for job roles. Candidates fill the form with their details and upload a resume PDF. Scan to process responses."
+              description="Toggle on the forms you want to scan. If none are selected, all forms will be scanned. Forms are generated from the Jobs page."
             />
           </div>
         </UCard>
