@@ -1,17 +1,7 @@
-import jwt from 'jsonwebtoken'
-import { config } from '~~/server/config/env'
+import { requireUser } from '~~/server/core/auth/current-user'
 
 export default defineEventHandler(async (event) => {
-  const authHeader = getHeader(event, 'authorization')
-  const token = authHeader && authHeader.split(' ')[1]
-  if (!token) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
-
-  let userData: any
-  try {
-    userData = jwt.verify(token, config.auth.jwtSecret)
-  } catch {
-    throw createError({ statusCode: 403, statusMessage: 'Invalid token' })
-  }
+  const userData = requireUser(event)
 
   const id = getRouterParam(event, 'id')
   const pool = usePool()
@@ -26,7 +16,7 @@ export default defineEventHandler(async (event) => {
 
     if (googleEventId) {
       try {
-        await deleteCalendarEvent(userData.tokens, googleEventId)
+        await deleteCalendarEvent(userData.tokens ?? {}, googleEventId)
       } catch (calErr: any) {
         console.error('--- [Calendar] Delete sync failed:', calErr.message)
       }

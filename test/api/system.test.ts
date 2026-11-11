@@ -44,7 +44,7 @@ describe('GET /auth/google/callback', () => {
 })
 
 describe('GET /api/whatsapp/status', () => {
-  it('is public and reports the client state (SEC-02: exposes the QR code)', async () => {
+  it('reports the client state to signed-in users', async () => {
     const res = await api('GET', '/api/whatsapp/status')
     expect(res.status).toBe(200)
     expect(res.body).toEqual({ status: expect.stringMatching(/^(initializing|error)$/), qrCodeData: null })

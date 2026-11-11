@@ -1,19 +1,4 @@
-import jwt from 'jsonwebtoken'
-import { config } from '~~/server/config/env'
-
 export default defineEventHandler(async (event) => {
-  const authHeader = getHeader(event, 'authorization')
-  const token = authHeader && authHeader.split(' ')[1]
-  if (!token) {
-    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
-  }
-
-  try {
-    jwt.verify(token, config.auth.jwtSecret)
-  } catch {
-    throw createError({ statusCode: 403, statusMessage: 'Invalid token' })
-  }
-
   const id = getRouterParam(event, 'id')
   if (!id) {
     throw createError({ statusCode: 400, statusMessage: 'Form ID is required' })

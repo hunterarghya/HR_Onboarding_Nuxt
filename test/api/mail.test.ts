@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { api, expectError } from './helpers/http'
-import { itChecksToken, userToken } from './helpers/auth'
+import { itRequiresLogin, userToken } from './helpers/auth'
 import { assignCandidate, db, insertCandidate, insertEvent, resetDb } from './helpers/db'
 
 beforeEach(resetDb)
@@ -13,7 +13,7 @@ const templateId = async (type: string): Promise<number> => {
 // Sending real mail needs Gmail; these cover every path that stops before (or survives) the Gmail call.
 
 describe('POST /api/mail/interview-invites/:eventId', () => {
-  itChecksToken('POST', '/api/mail/interview-invites/1', { templateId: 1 })
+  itRequiresLogin('POST', '/api/mail/interview-invites/1', { templateId: 1 })
 
   it('requires templateId (400)', async () => {
     expectError(await api('POST', '/api/mail/interview-invites/1', { token: userToken(), body: {} }), 400, 'templateId is required')
@@ -38,7 +38,7 @@ describe('POST /api/mail/interview-invites/:eventId', () => {
 })
 
 describe('POST /api/mail/interview-invites-all', () => {
-  itChecksToken('POST', '/api/mail/interview-invites-all', { templateId: 1 })
+  itRequiresLogin('POST', '/api/mail/interview-invites-all', { templateId: 1 })
 
   it('requires templateId (400)', async () => {
     expectError(await api('POST', '/api/mail/interview-invites-all', { token: userToken(), body: {} }), 400, 'templateId is required')
@@ -57,7 +57,7 @@ describe('POST /api/mail/interview-invites-all', () => {
 })
 
 describe('POST /api/mail/offer-letters', () => {
-  itChecksToken('POST', '/api/mail/offer-letters', { templateId: 1, candidateIds: [1] })
+  itRequiresLogin('POST', '/api/mail/offer-letters', { templateId: 1, candidateIds: [1] })
 
   it('requires templateId and candidateIds (400)', async () => {
     const res = await api('POST', '/api/mail/offer-letters', { token: userToken(), body: { templateId: 1, candidateIds: [] } })

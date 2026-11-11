@@ -1,19 +1,4 @@
-import jwt from 'jsonwebtoken'
-import { config } from '~~/server/config/env'
-
-export default defineEventHandler(async (event) => {
-  const authHeader = getHeader(event, 'authorization')
-  const token = authHeader && authHeader.split(' ')[1]
-  if (!token) {
-    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
-  }
-
-  try {
-    jwt.verify(token, config.auth.jwtSecret)
-  } catch {
-    throw createError({ statusCode: 403, statusMessage: 'Invalid token' })
-  }
-
+export default defineEventHandler(async () => {
   const pool = usePool()
 
   const result = await pool.query(

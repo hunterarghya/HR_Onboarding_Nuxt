@@ -7,6 +7,13 @@ export const useApi = () => {
       headers: {
         ...opts.headers,
         ...(token.value ? { Authorization: `Bearer ${token.value}` } : {})
+      },
+      onResponseError({ response }) {
+        // Every /api route needs a session; an expired or invalid one means signing in again
+        if (response.status === 401) {
+          token.value = null
+          navigateTo('/login')
+        }
       }
     })
   }

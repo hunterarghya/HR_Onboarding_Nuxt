@@ -3,38 +3,12 @@
  * A route is "covered" when some file in test/api has `describe('<METHOD> <path>', ...)`, with the
  * path written the way Nitro serves it: `index` dropped and `[param]` written as `:param`.
  */
-import { readdirSync, readFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { listFiles, listRoutes, ROOT, routeTitle } from '../helpers/routes'
 
-const ROOT = resolve(import.meta.dirname, '../..')
-
-const ROUTE_DIRS = [
-  { dir: 'server/api', prefix: '/api' },
-  { dir: 'server/routes', prefix: '' }
-]
-
-const METHODS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options']
-
-const listFiles = (dir: string) =>
-  readdirSync(join(ROOT, dir), { recursive: true, encoding: 'utf8' })
-    .filter(f => f.endsWith('.ts'))
-    .map(f => f.replaceAll('\\', '/'))
-
-/** `jobs/[id].patch.ts` → `PATCH /api/jobs/:id`; `jobs/index.get.ts` → `GET /api/jobs`. */
-const routeTitle = (file: string, prefix: string) => {
-  const parts = file.replace(/\.ts$/, '').split('/')
-  const [name = '', method] = parts.pop()!.split('.')
-  if (!method || !METHODS.includes(method)) throw new Error(`Route file without an HTTP method suffix: ${file}`)
-  const segments = [...parts, name]
-    .filter(s => s !== 'index')
-    .map(s => s.replace(/^\[\.\.\.(.+)\]$/, '**:$1').replace(/^\[(.+)\]$/, ':$1'))
-  return `${method.toUpperCase()} ${prefix}/${segments.join('/')}`
-}
-
-const routes = ROUTE_DIRS.flatMap(({ dir, prefix }) =>
-  listFiles(dir).map(file => ({ file: `${dir}/${file}`, title: routeTitle(file, prefix) }))
-)
+const routes = listRoutes()
 
 const testedTitles = new Set(
   listFiles('test/api')
