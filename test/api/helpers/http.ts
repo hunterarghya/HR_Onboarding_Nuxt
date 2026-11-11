@@ -10,13 +10,14 @@ interface RequestOptions {
   token?: string
   body?: unknown
   query?: Record<string, string | number | boolean>
+  headers?: Record<string, string>
 }
 
 export const api = async <T = any>(method: string, path: string, opts: RequestOptions = {}): Promise<ApiResponse<T>> => {
   const url = new URL(path, inject('baseURL'))
   for (const [k, v] of Object.entries(opts.query ?? {})) url.searchParams.set(k, String(v))
 
-  const headers: Record<string, string> = {}
+  const headers: Record<string, string> = { ...opts.headers }
   if (opts.token) headers.authorization = `Bearer ${opts.token}`
   if (opts.body !== undefined) headers['content-type'] = 'application/json'
 
