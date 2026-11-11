@@ -10,3 +10,6 @@ ignoredBuiltDependencies:
 # The template editor uses tiptap v2 while @nuxt/ui 4 bundles tiptap v3; root
 # resolution forced one core version on both and broke whichever side lost.
 resolvePeersFromWorkspaceRoot: false
+
+# Run package.json scripts with a POSIX-like shell on every OS, so `VAR=value cmd` works on Windows.
+shellEmulator: true

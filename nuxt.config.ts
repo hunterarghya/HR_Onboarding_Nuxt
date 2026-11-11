@@ -6,6 +6,12 @@ export default defineNuxtConfig({
     '@vueuse/nuxt'
   ],
 
+  // `pnpm test` boots its own dev server with --envName test; this keeps its generated files out
+  // of the `.nuxt` that `pnpm dev` and `pnpm typecheck` use.
+  $test: {
+    buildDir: 'node_modules/.cache/nuxt-smoke'
+  },
+
   devtools: {
     enabled: true
   },

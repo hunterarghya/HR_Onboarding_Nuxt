@@ -9,4 +9,10 @@ export default withNuxt({
     // refactor phases 1-3. Phase 3's Definition of Done restores this to 'error' for server/**.
     '@typescript-eslint/no-explicit-any': 'warn'
   }
+}, {
+  // Tests assert on untyped JSON responses and raw rows; `any` is the honest type there.
+  files: ['test/**'],
+  rules: {
+    '@typescript-eslint/no-explicit-any': 'off'
+  }
 })

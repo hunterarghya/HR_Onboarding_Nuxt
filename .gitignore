@@ -50,3 +50,6 @@ Thumbs.db
 
 # WhatsApp session credentials (whatsapp-web.js LocalAuth)
 whatsapp-auth/
+
+# Local guide documentation
+guide_docs/
