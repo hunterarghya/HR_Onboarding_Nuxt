@@ -1,18 +1,7 @@
-import pg from 'pg'
-import { config } from '~~/server/config/env'
+import { getPool } from '~~/server/core/db/pool'
 
-const { Pool } = pg
-
-let pool: pg.Pool | null = null
-
-export const usePool = (): pg.Pool => {
-  if (!pool) {
-    pool = new Pool({
-      connectionString: config.db.url
-    })
-  }
-  return pool
-}
+// TEMPORARY alias so existing callers keep working; removed once every module uses getPool directly.
+export const usePool = getPool
 
 export const initDb = async (): Promise<void> => {
   const pool = usePool()

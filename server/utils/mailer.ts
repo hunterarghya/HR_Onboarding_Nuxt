@@ -1,10 +1,7 @@
 import { google } from 'googleapis'
 import Handlebars from 'handlebars'
-import pg from 'pg'
 import { config } from '~~/server/config/env'
-
-const { Pool } = pg
-const pool = new Pool({ connectionString: config.db.url })
+import { getPool } from '~~/server/core/db/pool'
 
 const getGmailService = (tokens: any) => {
   const oauth2Client = new google.auth.OAuth2(
@@ -40,15 +37,15 @@ const compileTemplate = (templateStr: string, data: any): string => {
 export const sendInterviewInvites = async (tokens: any, senderEmail: string, eventId: number, templateId: number) => {
   const gmail = getGmailService(tokens)
 
-  const tpl = await pool.query('SELECT * FROM email_templates WHERE id = $1', [templateId])
+  const tpl = await getPool().query('SELECT * FROM email_templates WHERE id = $1', [templateId])
   if (tpl.rows.length === 0) throw new Error('Template not found')
   const template = tpl.rows[0]
 
-  const evt = await pool.query('SELECT * FROM interview_events WHERE id = $1', [eventId])
+  const evt = await getPool().query('SELECT * FROM interview_events WHERE id = $1', [eventId])
   if (evt.rows.length === 0) throw new Error('Event not found')
   const event = evt.rows[0]
 
-  const candidates = await pool.query(
+  const candidates = await getPool().query(
     `SELECT c.*, ic.id as ic_id
      FROM interview_candidates ic
      JOIN candidates c ON c.id = ic.candidate_id
@@ -81,7 +78,7 @@ export const sendInterviewInvites = async (tokens: any, senderEmail: string, eve
       const raw = buildRawEmail(candidate.email, senderEmail, compiledSubject, compiledBody)
 
       await gmail.users.messages.send({ userId: 'me', requestBody: { raw } })
-      await pool.query('UPDATE interview_candidates SET invite_sent = true WHERE id = $1', [candidate.ic_id])
+      await getPool().query('UPDATE interview_candidates SET invite_sent = true WHERE id = $1', [candidate.ic_id])
 
       console.log(`[Mailer] ✅ Invite sent to ${candidate.name} (${candidate.email})`)
       sent++
@@ -101,12 +98,12 @@ export const sendInterviewInvites = async (tokens: any, senderEmail: string, eve
 export const sendOfferLetters = async (tokens: any, senderEmail: string, templateId: number, candidateIds: number[]) => {
   const gmail = getGmailService(tokens)
 
-  const tpl = await pool.query('SELECT * FROM email_templates WHERE id = $1', [templateId])
+  const tpl = await getPool().query('SELECT * FROM email_templates WHERE id = $1', [templateId])
   if (tpl.rows.length === 0) throw new Error('Template not found')
   const template = tpl.rows[0]
 
   const placeholders = candidateIds.map((_, i) => `$${i + 1}`).join(',')
-  const candidates = await pool.query(
+  const candidates = await getPool().query(
     `SELECT * FROM candidates
      WHERE id IN (${placeholders}) AND status = 'selected' AND offer_sent = false`,
     candidateIds
@@ -133,7 +130,7 @@ export const sendOfferLetters = async (tokens: any, senderEmail: string, templat
       const raw = buildRawEmail(candidate.email, senderEmail, compiledSubject, compiledBody)
 
       await gmail.users.messages.send({ userId: 'me', requestBody: { raw } })
-      await pool.query('UPDATE candidates SET offer_sent = true WHERE id = $1', [candidate.id])
+      await getPool().query('UPDATE candidates SET offer_sent = true WHERE id = $1', [candidate.id])
 
       console.log(`[Mailer] ✅ Offer sent to ${candidate.name} (${candidate.email})`)
       sent++
