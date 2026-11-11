@@ -9,12 +9,30 @@ export default defineEventHandler(async (event) => {
     const params: any[] = []
     let paramIndex = 1
 
-    if (role) { q += ` AND role_applied = $${paramIndex++}`; params.push(role) }
-    if (status) { q += ` AND status = $${paramIndex++}`; params.push(status) }
-    if (source) { q += ` AND applied_through = $${paramIndex++}`; params.push(source) }
-    if (name) { q += ` AND name ILIKE $${paramIndex++}`; params.push(`%${name}%`) }
-    if (minScore !== undefined && minScore !== '') { q += ` AND score >= $${paramIndex++}`; params.push(parseInt(minScore)) }
-    if (maxScore !== undefined && maxScore !== '') { q += ` AND score <= $${paramIndex++}`; params.push(parseInt(maxScore)) }
+    if (role) {
+      q += ` AND role_applied = $${paramIndex++}`
+      params.push(role)
+    }
+    if (status) {
+      q += ` AND status = $${paramIndex++}`
+      params.push(status)
+    }
+    if (source) {
+      q += ` AND applied_through = $${paramIndex++}`
+      params.push(source)
+    }
+    if (name) {
+      q += ` AND name ILIKE $${paramIndex++}`
+      params.push(`%${name}%`)
+    }
+    if (minScore !== undefined && minScore !== '') {
+      q += ` AND score >= $${paramIndex++}`
+      params.push(parseInt(minScore))
+    }
+    if (maxScore !== undefined && maxScore !== '') {
+      q += ` AND score <= $${paramIndex++}`
+      params.push(parseInt(maxScore))
+    }
 
     if (cursor) {
       const [cScore, cTime, cId] = (cursor as string).split('|')

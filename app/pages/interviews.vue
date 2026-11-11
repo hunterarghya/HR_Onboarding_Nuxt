@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { addMonths, subMonths, format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, parseISO, isBefore, isAfter, startOfDay } from 'date-fns'
-import type { InterviewEvent, Job, Candidate, UnsentCount, EmailTemplate, PaginatedResponse } from '~/types'
+import { addMonths, subMonths, format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday } from 'date-fns'
+import type { InterviewEvent, Job, UnsentCount, EmailTemplate } from '~/types'
 
-const { apiFetch, token } = useApi()
+const { apiFetch } = useApi()
 const toast = useToast()
 
 // Calendar sync state
@@ -63,19 +63,26 @@ const fetchJobs = async () => {
   }
 }
 
+const loading = ref(false)
+
 const fetchEvents = async () => {
+  loading.value = true
   try {
     events.value = await apiFetch<InterviewEvent[]>('/interviews/events')
-    
+
     // Fetch unsent counts
     try {
       const res = await apiFetch<UnsentCount[]>('/mail/unsent-invites-count')
       const counts: Record<number, number> = {}
-      res.forEach(r => { counts[r.event_id] = r.unsent_count })
+      res.forEach((r) => {
+        counts[r.event_id] = r.unsent_count
+      })
       unsentCounts.value = counts
-    } catch (e) { /* ignore if endpoint not available */ }
+    } catch { /* ignore if endpoint not available */ }
   } catch (err) {
     console.error('Error fetching events:', err)
+  } finally {
+    loading.value = false
   }
 }
 
@@ -364,8 +371,12 @@ const firstDayOffset = computed(() => {
   return start.getDay() // 0 = Sunday, 1 = Monday...
 })
 
-const nextMonth = () => { currentDate.value = addMonths(currentDate.value, 1) }
-const prevMonth = () => { currentDate.value = subMonths(currentDate.value, 1) }
+const nextMonth = () => {
+  currentDate.value = addMonths(currentDate.value, 1)
+}
+const prevMonth = () => {
+  currentDate.value = subMonths(currentDate.value, 1)
+}
 
 const getEventsForDay = (date: Date) => {
   const dStr = format(date, 'yyyy-MM-dd')
@@ -467,79 +478,96 @@ onMounted(() => {
 
     <template #body>
       <div class="flex flex-col xl:flex-row gap-6">
-        
         <!-- Left Column: Calendar -->
         <div class="w-full xl:w-[400px] shrink-0">
           <ClientOnly>
             <UCard class="sticky top-4">
-            <!-- Calendar Header -->
-            <div class="flex items-center justify-between mb-4">
-              <h2 class="font-bold text-lg">{{ format(currentDate, 'MMMM yyyy') }}</h2>
-              <div class="flex gap-1">
-                <UButton icon="i-lucide-chevron-left" color="neutral" variant="ghost" size="sm" @click="prevMonth" />
-                <UButton icon="i-lucide-chevron-right" color="neutral" variant="ghost" size="sm" @click="nextMonth" />
-              </div>
-            </div>
-
-            <!-- Calendar Grid -->
-            <div class="grid grid-cols-7 gap-1 text-center mb-2">
-              <div v-for="day in ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']" :key="day" class="text-xs font-semibold text-muted py-1">
-                {{ day }}
-              </div>
-            </div>
-            <div class="grid grid-cols-7 gap-1">
-              <!-- Empty slots for offset -->
-              <div v-for="i in firstDayOffset" :key="`empty-${i}`" class="p-2"></div>
-              
-              <!-- Days -->
-              <button
-                v-for="day in daysInMonth"
-                :key="day.toString()"
-                class="relative p-2 rounded-lg flex flex-col items-center justify-center min-h-[44px] transition-all duration-200"
-                :class="getDayClasses(day)"
-                @click="selectDate(day)"
-              >
-                <span class="text-sm z-10">{{ format(day, 'd') }}</span>
-                <!-- Today label -->
-                <span v-if="isToday(day) && !isSameDay(day, selectedDate)" class="absolute -top-0.5 right-0.5 size-1.5 rounded-full bg-emerald-500"></span>
-                <!-- Event indicators -->
-                <div v-if="getEventsForDay(day).length > 0" class="absolute bottom-1 flex gap-0.5 z-10">
-                  <div
-                    v-for="(e, idx) in Math.min(getEventsForDay(day).length, 3)"
-                    :key="idx"
-                    class="size-1.5 rounded-full transition-colors"
-                    :class="isToday(day) ? 'bg-white dark:bg-gray-900' : 'bg-primary-500 dark:bg-primary-400'"
-                  ></div>
+              <!-- Calendar Header -->
+              <div class="flex items-center justify-between mb-4">
+                <h2 class="font-bold text-lg">
+                  {{ format(currentDate, 'MMMM yyyy') }}
+                </h2>
+                <div class="flex gap-1">
+                  <UButton
+                    icon="i-lucide-chevron-left"
+                    color="neutral"
+                    variant="ghost"
+                    size="sm"
+                    @click="prevMonth"
+                  />
+                  <UButton
+                    icon="i-lucide-chevron-right"
+                    color="neutral"
+                    variant="ghost"
+                    size="sm"
+                    @click="nextMonth"
+                  />
                 </div>
-              </button>
-            </div>
+              </div>
 
-            <!-- Calendar Legend -->
-            <div class="mt-4 pt-3 border-t border-default flex flex-wrap items-center gap-4 text-xs text-muted">
-              <div class="flex items-center gap-1.5">
-                <div class="size-6 rounded-lg bg-emerald-500 dark:bg-emerald-400 text-white dark:text-gray-900 flex items-center justify-center font-bold text-[10px]">1</div>
-                <span>Today</span>
-              </div>
-              <div class="flex items-center gap-1.5">
-                <div class="size-6 rounded-lg ring-2 ring-primary-500 dark:ring-primary-400 bg-primary-50 dark:bg-primary-900/10 text-primary-600 dark:text-primary-400 flex items-center justify-center font-bold text-[10px]">1</div>
-                <span>Selected</span>
-              </div>
-              <div class="flex items-center gap-1.5">
-                <div class="size-6 rounded-lg bg-primary-50 dark:bg-primary-900/10 text-primary-600 dark:text-primary-400 flex flex-col items-center justify-center text-[10px] relative font-medium">
-                  <span class="z-10 mt-[-2px]">1</span>
-                  <div class="absolute bottom-0.5 size-1 rounded-full bg-primary-500 dark:bg-primary-400"></div>
+              <!-- Calendar Grid -->
+              <div class="grid grid-cols-7 gap-1 text-center mb-2">
+                <div v-for="day in ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']" :key="day" class="text-xs font-semibold text-muted py-1">
+                  {{ day }}
                 </div>
-                <span>Has Events</span>
               </div>
-            </div>
-          </UCard>
-          <template #fallback>
-            <UCard class="sticky top-4 h-[420px] flex flex-col items-center justify-center text-muted">
-              <UIcon name="i-lucide-loader-2" class="size-8 animate-spin mb-2" />
-              <span class="text-sm">Loading calendar...</span>
+              <div class="grid grid-cols-7 gap-1">
+                <!-- Empty slots for offset -->
+                <div v-for="i in firstDayOffset" :key="`empty-${i}`" class="p-2" />
+
+                <!-- Days -->
+                <button
+                  v-for="day in daysInMonth"
+                  :key="day.toString()"
+                  class="relative p-2 rounded-lg flex flex-col items-center justify-center min-h-[44px] transition-all duration-200"
+                  :class="getDayClasses(day)"
+                  @click="selectDate(day)"
+                >
+                  <span class="text-sm z-10">{{ format(day, 'd') }}</span>
+                  <!-- Today label -->
+                  <span v-if="isToday(day) && !isSameDay(day, selectedDate)" class="absolute -top-0.5 right-0.5 size-1.5 rounded-full bg-emerald-500" />
+                  <!-- Event indicators -->
+                  <div v-if="getEventsForDay(day).length > 0" class="absolute bottom-1 flex gap-0.5 z-10">
+                    <div
+                      v-for="(e, idx) in Math.min(getEventsForDay(day).length, 3)"
+                      :key="idx"
+                      class="size-1.5 rounded-full transition-colors"
+                      :class="isToday(day) ? 'bg-white dark:bg-gray-900' : 'bg-primary-500 dark:bg-primary-400'"
+                    />
+                  </div>
+                </button>
+              </div>
+
+              <!-- Calendar Legend -->
+              <div class="mt-4 pt-3 border-t border-default flex flex-wrap items-center gap-4 text-xs text-muted">
+                <div class="flex items-center gap-1.5">
+                  <div class="size-6 rounded-lg bg-emerald-500 dark:bg-emerald-400 text-white dark:text-gray-900 flex items-center justify-center font-bold text-[10px]">
+                    1
+                  </div>
+                  <span>Today</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <div class="size-6 rounded-lg ring-2 ring-primary-500 dark:ring-primary-400 bg-primary-50 dark:bg-primary-900/10 text-primary-600 dark:text-primary-400 flex items-center justify-center font-bold text-[10px]">
+                    1
+                  </div>
+                  <span>Selected</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <div class="size-6 rounded-lg bg-primary-50 dark:bg-primary-900/10 text-primary-600 dark:text-primary-400 flex flex-col items-center justify-center text-[10px] relative font-medium">
+                    <span class="z-10 mt-[-2px]">1</span>
+                    <div class="absolute bottom-0.5 size-1 rounded-full bg-primary-500 dark:bg-primary-400" />
+                  </div>
+                  <span>Has Events</span>
+                </div>
+              </div>
             </UCard>
-          </template>
-        </ClientOnly>
+            <template #fallback>
+              <UCard class="sticky top-4 h-[420px] flex flex-col items-center justify-center text-muted">
+                <UIcon name="i-lucide-loader-2" class="size-8 animate-spin mb-2" />
+                <span class="text-sm">Loading calendar...</span>
+              </UCard>
+            </template>
+          </ClientOnly>
 
           <USeparator class="my-4" />
 
@@ -556,9 +584,26 @@ onMounted(() => {
               @click="handleSyncCalendar"
             >
               <template #leading>
-                <svg v-if="!syncingCalendar" class="size-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M22 12C22 6.477 17.523 2 12 2S2 6.477 2 12s4.477 10 10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-                  <path d="M8 12h8m-4-4v8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                <svg
+                  v-if="!syncingCalendar"
+                  class="size-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M22 12C22 6.477 17.523 2 12 2S2 6.477 2 12s4.477 10 10 10"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                  />
+                  <path
+                    d="M8 12h8m-4-4v8"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
                 </svg>
               </template>
               {{ syncingCalendar ? 'Syncing...' : 'Sync Google Calendar' }}
@@ -578,7 +623,9 @@ onMounted(() => {
                     <UIcon name="i-lucide-calendar-clock" class="size-4 text-emerald-500" />
                     <span class="font-semibold text-sm">Upcoming Events</span>
                   </div>
-                  <UBadge size="xs" variant="subtle" color="success">{{ allUpcomingEvents.length }}</UBadge>
+                  <UBadge size="xs" variant="subtle" color="success">
+                    {{ allUpcomingEvents.length }}
+                  </UBadge>
                 </div>
               </template>
               <div class="space-y-1 max-h-[340px] overflow-y-auto pr-1 -mr-1">
@@ -597,7 +644,8 @@ onMounted(() => {
                     <div class="text-[10px] uppercase font-semibold text-muted leading-tight">
                       {{ format(new Date(ev.event_date + 'T00:00:00'), 'MMM') }}
                     </div>
-                    <div class="text-lg font-bold leading-tight"
+                    <div
+                      class="text-lg font-bold leading-tight"
                       :class="ev.event_date === format(new Date(), 'yyyy-MM-dd') ? 'text-emerald-500' : 'text-foreground'"
                     >
                       {{ format(new Date(ev.event_date + 'T00:00:00'), 'd') }}
@@ -605,7 +653,9 @@ onMounted(() => {
                   </div>
                   <!-- Event info -->
                   <div class="min-w-0 flex-1">
-                    <div class="font-semibold text-sm truncate leading-tight">{{ ev.role }}</div>
+                    <div class="font-semibold text-sm truncate leading-tight">
+                      {{ ev.role }}
+                    </div>
                     <div class="flex items-center gap-2 mt-0.5 text-xs text-muted">
                       <span class="flex items-center gap-0.5">
                         <UIcon name="i-lucide-clock" class="size-3" />
@@ -634,7 +684,9 @@ onMounted(() => {
                     <UIcon name="i-lucide-history" class="size-4 text-muted" />
                     <span class="font-semibold text-sm text-muted">Past Events</span>
                   </div>
-                  <UBadge size="xs" variant="subtle" color="neutral">{{ pastEvents.length }}</UBadge>
+                  <UBadge size="xs" variant="subtle" color="neutral">
+                    {{ pastEvents.length }}
+                  </UBadge>
                 </div>
               </template>
               <div class="space-y-1 max-h-[200px] overflow-y-auto pr-1 -mr-1 opacity-70">
@@ -653,7 +705,9 @@ onMounted(() => {
                     </div>
                   </div>
                   <div class="min-w-0 flex-1">
-                    <div class="font-medium text-sm truncate text-muted">{{ ev.role }}</div>
+                    <div class="font-medium text-sm truncate text-muted">
+                      {{ ev.role }}
+                    </div>
                     <div class="text-xs text-muted/70">
                       {{ ev.start_time.substring(0, 5) }} - {{ ev.end_time.substring(0, 5) }}
                     </div>
@@ -666,14 +720,15 @@ onMounted(() => {
             <div v-if="allUpcomingEvents.length === 0 && pastEvents.length === 0" class="text-center text-sm text-muted py-6 border border-dashed border-default rounded-xl">
               <UIcon name="i-lucide-calendar-x" class="size-8 text-muted/50 mx-auto mb-2" />
               <p>No interview events yet.</p>
-              <p class="text-xs mt-1">Create one or sync from Google Calendar.</p>
+              <p class="text-xs mt-1">
+                Create one or sync from Google Calendar.
+              </p>
             </div>
           </div>
         </div>
 
         <!-- Right Column: Events & Creation -->
         <div class="flex-1 space-y-6 min-w-0">
-          
           <!-- Event Creation Form -->
           <UCard>
             <template #header>
@@ -693,7 +748,12 @@ onMounted(() => {
                   />
                 </UFormField>
                 <UFormField label="Date">
-                  <UInput v-model="createForm.event_date" type="date" disabled class="w-full" />
+                  <UInput
+                    v-model="createForm.event_date"
+                    type="date"
+                    disabled
+                    class="w-full"
+                  />
                 </UFormField>
               </div>
 
@@ -705,10 +765,20 @@ onMounted(() => {
                   <UInput v-model="createForm.end_time" type="time" class="w-full" />
                 </UFormField>
                 <UFormField label="Base Candidates">
-                  <UInput v-model.number="createForm.num_candidates" type="number" min="1" class="w-full" />
+                  <UInput
+                    v-model.number="createForm.num_candidates"
+                    type="number"
+                    min="1"
+                    class="w-full"
+                  />
                 </UFormField>
                 <UFormField label="Buffer Slots">
-                  <UInput v-model.number="createForm.extra_candidates" type="number" min="0" class="w-full" />
+                  <UInput
+                    v-model.number="createForm.extra_candidates"
+                    type="number"
+                    min="0"
+                    class="w-full"
+                  />
                 </UFormField>
               </div>
 
@@ -716,7 +786,7 @@ onMounted(() => {
                 <UFormField label="Mode">
                   <USelect
                     v-model="createForm.interview_mode"
-                    :items="[{label: 'Offline (In-Person)', value: 'offline'}, {label: 'Online (Video Call)', value: 'online'}]"
+                    :items="[{ label: 'Offline (In-Person)', value: 'offline' }, { label: 'Online (Video Call)', value: 'online' }]"
                     class="w-full"
                   />
                 </UFormField>
@@ -726,7 +796,12 @@ onMounted(() => {
               </div>
 
               <div class="flex justify-end pt-2">
-                <UButton type="submit" color="primary" label="Create Event" icon="i-lucide-plus" />
+                <UButton
+                  type="submit"
+                  color="primary"
+                  label="Create Event"
+                  icon="i-lucide-plus"
+                />
               </div>
             </form>
           </UCard>
@@ -752,7 +827,9 @@ onMounted(() => {
                       <span class="text-xs font-bold">{{ event.start_time.substring(0, 5) }}</span>
                     </div>
                     <div>
-                      <h4 class="font-bold text-lg leading-tight">{{ event.role }}</h4>
+                      <h4 class="font-bold text-lg leading-tight">
+                        {{ event.role }}
+                      </h4>
                       <div class="flex items-center gap-3 text-sm text-muted mt-1">
                         <span class="flex items-center gap-1"><UIcon name="i-lucide-clock" class="size-3.5" />{{ event.start_time.substring(0, 5) }} - {{ event.end_time.substring(0, 5) }}</span>
                         <span class="flex items-center gap-1">
@@ -762,12 +839,14 @@ onMounted(() => {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div class="flex items-center gap-3 w-full sm:w-auto" @click.stop>
-                    <div v-if="unsentCounts[event.id] > 0" class="flex items-center gap-2 mr-2">
+                    <div v-if="(unsentCounts[event.id] ?? 0) > 0" class="flex items-center gap-2 mr-2">
                       <UIcon name="i-lucide-alert-circle" class="size-5 text-warning" />
                       <span class="text-sm font-semibold text-warning">{{ unsentCounts[event.id] }} unsent</span>
-                      <UButton icon="i-lucide-mail" color="primary" @click="openMailModal(event.id)">Send</UButton>
+                      <UButton icon="i-lucide-mail" color="primary" @click="openMailModal(event.id)">
+                        Send
+                      </UButton>
                     </div>
                     <UButton
                       icon="i-lucide-trash-2"
@@ -788,7 +867,6 @@ onMounted(() => {
 
                 <!-- Event Details & Candidates (Expanded) -->
                 <div v-if="expandedEvent === event.id" class="mt-6 pt-6 border-t border-default space-y-6">
-                  
                   <!-- Selection Mode Buttons -->
                   <div v-if="selectionMode === null" class="flex flex-col sm:flex-row gap-3">
                     <UButton
@@ -817,8 +895,10 @@ onMounted(() => {
                       {{ editingEventId ? 'Edit Candidate Selection' : 'Select Candidates for Interview' }}
                       <span class="text-sm font-normal text-muted ml-2">({{ selectedCandidateIds.size }} selected)</span>
                     </h4>
-                    
-                    <div v-if="loadingCandidates" class="text-center py-8 text-muted">Loading candidates...</div>
+
+                    <div v-if="loadingCandidates" class="text-center py-8 text-muted">
+                      Loading candidates...
+                    </div>
                     <div v-else>
                       <div class="border border-default rounded-lg max-h-[400px] overflow-y-auto bg-[var(--ui-bg)] shadow-sm">
                         <table class="w-full text-sm text-left whitespace-nowrap">
@@ -830,28 +910,46 @@ onMounted(() => {
                                   @update:model-value="toggleSelectAll"
                                 />
                               </th>
-                              <th class="p-3 font-semibold text-muted">Source</th>
-                              <th class="p-3 font-semibold text-muted">Name</th>
-                              <th class="p-3 font-semibold text-muted">Mail</th>
-                              <th class="p-3 font-semibold text-muted">Role</th>
-                              <th class="p-3 font-semibold text-muted">Mobile</th>
+                              <th class="p-3 font-semibold text-muted">
+                                Source
+                              </th>
+                              <th class="p-3 font-semibold text-muted">
+                                Name
+                              </th>
+                              <th class="p-3 font-semibold text-muted">
+                                Mail
+                              </th>
+                              <th class="p-3 font-semibold text-muted">
+                                Role
+                              </th>
+                              <th class="p-3 font-semibold text-muted">
+                                Mobile
+                              </th>
                               <!-- <th class="p-3 font-semibold text-muted">Location</th> -->
                               <!-- <th class="p-3 font-semibold text-muted">CTC</th> -->
                               <!-- <th class="p-3 font-semibold text-muted">Experience</th> -->
-                              <th class="p-3 font-semibold text-muted">Score</th>
-                              <th class="p-3 font-semibold text-muted">Resume</th>
-                              <th class="p-3 font-semibold text-muted">Status</th>
+                              <th class="p-3 font-semibold text-muted">
+                                Score
+                              </th>
+                              <th class="p-3 font-semibold text-muted">
+                                Resume
+                              </th>
+                              <th class="p-3 font-semibold text-muted">
+                                Status
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
                             <tr v-if="eligibleCandidates.length === 0">
-                              <td colspan="12" class="p-8 text-center text-muted italic">No eligible candidates found.</td>
+                              <td colspan="12" class="p-8 text-center text-muted italic">
+                                No eligible candidates found.
+                              </td>
                             </tr>
                             <tr
                               v-for="c in eligibleCandidates"
                               :key="c.id"
                               class="border-b border-default last:border-0 hover:bg-elevated/50 transition-colors"
-                              :class="{'bg-[var(--ui-color-primary)]/5': selectedCandidateIds.has(c.id)}"
+                              :class="{ 'bg-[var(--ui-color-primary)]/5': selectedCandidateIds.has(c.id) }"
                             >
                               <td class="p-3 text-center">
                                 <UCheckbox
@@ -866,11 +964,19 @@ onMounted(() => {
                                   {{ c.applied_through }}
                                 </div>
                               </td>
-                              <td class="p-3 font-semibold">{{ c.name }}</td>
-                              <td class="p-3 text-xs text-muted">{{ c.email }}</td>
-                              <td class="p-3 text-xs">{{ c.role_applied }}</td>
+                              <td class="p-3 font-semibold">
+                                {{ c.name }}
+                              </td>
+                              <td class="p-3 text-xs text-muted">
+                                {{ c.email }}
+                              </td>
                               <td class="p-3 text-xs">
-                                <div class="flex items-center gap-1"><UIcon name="i-lucide-phone" class="size-3 opacity-50" /> {{ c.phone }}</div>
+                                {{ c.role_applied }}
+                              </td>
+                              <td class="p-3 text-xs">
+                                <div class="flex items-center gap-1">
+                                  <UIcon name="i-lucide-phone" class="size-3 opacity-50" /> {{ c.phone }}
+                                </div>
                               </td>
                               <!-- <td class="p-3 text-xs">
                                 <div class="flex items-center gap-1"><UIcon name="i-lucide-map-pin" class="size-3 opacity-50" /> {{ c.current_location }}</div>
@@ -878,12 +984,23 @@ onMounted(() => {
                               <!-- <td class="p-3 text-xs">{{ c.current_ctc }}</td> -->
                               <!-- <td class="p-3 text-xs">{{ c.experience_level }}</td> -->
                               <td class="p-3">
-                                <UBadge size="xs" variant="subtle" :color="c.score >= 80 ? 'success' : 'warning'" class="font-bold">
+                                <UBadge
+                                  size="xs"
+                                  variant="subtle"
+                                  :color="c.score >= 80 ? 'success' : 'warning'"
+                                  class="font-bold"
+                                >
                                   {{ c.score }}%
                                 </UBadge>
                               </td>
                               <td class="p-3 text-center">
-                                <a v-if="c.resume_url" :href="c.resume_url" target="_blank" rel="noopener noreferrer" class="text-[var(--ui-color-primary)] hover:text-[var(--ui-color-primary-600)] transition-colors">
+                                <a
+                                  v-if="c.resume_url"
+                                  :href="c.resume_url"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  class="text-[var(--ui-color-primary)] hover:text-[var(--ui-color-primary-600)] transition-colors"
+                                >
                                   <UIcon name="i-lucide-file-text" class="size-4" />
                                 </a>
                                 <span v-else class="text-muted">—</span>
@@ -900,15 +1017,15 @@ onMounted(() => {
                                     { label: 'Selected', value: 'selected', disabled: true }
                                   ]"
                                   size="xs"
-                                  @change="(newVal) => handleStatusChange(c.id, newVal, event.id)"
                                   class="w-[130px]"
+                                  @update:model-value="(newVal: string) => handleStatusChange(c.id, newVal, event.id)"
                                 />
                               </td>
                             </tr>
                           </tbody>
                         </table>
                       </div>
-                      
+
                       <div class="mt-4 flex gap-3">
                         <UButton
                           class="flex-1 justify-center"
@@ -931,11 +1048,13 @@ onMounted(() => {
                   </div>
 
                   <!-- Assigned Candidates Display -->
-                  <div v-if="selectionMode !== 'manual' && (eventCandidates[event.id]?.length > 0)">
+                  <div v-if="selectionMode !== 'manual' && ((eventCandidates[event.id]?.length ?? 0) > 0)">
                     <div class="flex justify-between items-center mb-4">
                       <h4 class="font-semibold text-lg text-[var(--ui-color-primary)] flex items-center gap-2">
                         Candidates Chosen for Interview
-                        <UBadge size="xs" variant="subtle">{{ eventCandidates[event.id]?.length }}</UBadge>
+                        <UBadge size="xs" variant="subtle">
+                          {{ eventCandidates[event.id]?.length }}
+                        </UBadge>
                       </h4>
                       <div class="flex gap-2">
                         <UButton
@@ -962,17 +1081,33 @@ onMounted(() => {
                       <table class="w-full text-sm text-left whitespace-nowrap">
                         <thead class="bg-elevated/50 border-b border-default shadow-sm">
                           <tr>
-                            <th class="p-3 font-semibold text-muted">Source</th>
-                            <th class="p-3 font-semibold text-muted">Name</th>
-                            <th class="p-3 font-semibold text-muted">Mail</th>
-                            <th class="p-3 font-semibold text-muted">Role</th>
-                            <th class="p-3 font-semibold text-muted">Mobile</th>
+                            <th class="p-3 font-semibold text-muted">
+                              Source
+                            </th>
+                            <th class="p-3 font-semibold text-muted">
+                              Name
+                            </th>
+                            <th class="p-3 font-semibold text-muted">
+                              Mail
+                            </th>
+                            <th class="p-3 font-semibold text-muted">
+                              Role
+                            </th>
+                            <th class="p-3 font-semibold text-muted">
+                              Mobile
+                            </th>
                             <!-- <th class="p-3 font-semibold text-muted">Location</th> -->
                             <!-- <th class="p-3 font-semibold text-muted">CTC</th> -->
                             <!-- <th class="p-3 font-semibold text-muted">Experience</th> -->
-                            <th class="p-3 font-semibold text-muted">Score</th>
-                            <th class="p-3 font-semibold text-muted">Resume</th>
-                            <th class="p-3 font-semibold text-muted">Status</th>
+                            <th class="p-3 font-semibold text-muted">
+                              Score
+                            </th>
+                            <th class="p-3 font-semibold text-muted">
+                              Resume
+                            </th>
+                            <th class="p-3 font-semibold text-muted">
+                              Status
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
@@ -988,11 +1123,19 @@ onMounted(() => {
                                 {{ c.applied_through }}
                               </div>
                             </td>
-                            <td class="p-3 font-semibold">{{ c.name }}</td>
-                            <td class="p-3 text-xs text-muted">{{ c.email }}</td>
-                            <td class="p-3 text-xs">{{ c.role_applied }}</td>
+                            <td class="p-3 font-semibold">
+                              {{ c.name }}
+                            </td>
+                            <td class="p-3 text-xs text-muted">
+                              {{ c.email }}
+                            </td>
                             <td class="p-3 text-xs">
-                              <div class="flex items-center gap-1"><UIcon name="i-lucide-phone" class="size-3 opacity-50" /> {{ c.phone }}</div>
+                              {{ c.role_applied }}
+                            </td>
+                            <td class="p-3 text-xs">
+                              <div class="flex items-center gap-1">
+                                <UIcon name="i-lucide-phone" class="size-3 opacity-50" /> {{ c.phone }}
+                              </div>
                             </td>
                             <!-- <td class="p-3 text-xs">
                               <div class="flex items-center gap-1"><UIcon name="i-lucide-map-pin" class="size-3 opacity-50" /> {{ c.current_location }}</div>
@@ -1000,10 +1143,23 @@ onMounted(() => {
                             <!-- <td class="p-3 text-xs">{{ c.current_ctc }}</td> -->
                             <!-- <td class="p-3 text-xs">{{ c.experience_level }}</td> -->
                             <td class="p-3">
-                              <UBadge size="xs" variant="subtle" color="success" class="font-bold">{{ c.score }}%</UBadge>
+                              <UBadge
+                                size="xs"
+                                variant="subtle"
+                                color="success"
+                                class="font-bold"
+                              >
+                                {{ c.score }}%
+                              </UBadge>
                             </td>
                             <td class="p-3 text-center">
-                              <a v-if="c.resume_url" :href="c.resume_url" target="_blank" rel="noopener noreferrer" class="text-[var(--ui-color-primary)] hover:text-[var(--ui-color-primary-600)] transition-colors inline-flex items-center gap-1">
+                              <a
+                                v-if="c.resume_url"
+                                :href="c.resume_url"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="text-[var(--ui-color-primary)] hover:text-[var(--ui-color-primary-600)] transition-colors inline-flex items-center gap-1"
+                              >
                                 <UIcon name="i-lucide-file-text" class="size-4" />
                                 <UIcon name="i-lucide-external-link" class="size-3 opacity-70" />
                               </a>
@@ -1021,8 +1177,8 @@ onMounted(() => {
                                   { label: 'Selected', value: 'selected', disabled: true }
                                 ]"
                                 size="xs"
-                                @change="(newVal) => handleStatusChange(c.id, newVal, event.id)"
                                 class="w-[130px]"
+                                @update:model-value="(newVal: string) => handleStatusChange(c.id, newVal, event.id)"
                               />
                             </td>
                           </tr>
@@ -1030,7 +1186,6 @@ onMounted(() => {
                       </table>
                     </div>
                   </div>
-
                 </div>
               </UCard>
 
@@ -1066,7 +1221,13 @@ onMounted(() => {
               :disabled="!mailModal.templateId"
               @click="sendInvites"
             />
-            <UButton label="Cancel" color="neutral" variant="outline" block @click="mailOpen = false" />
+            <UButton
+              label="Cancel"
+              color="neutral"
+              variant="outline"
+              block
+              @click="mailOpen = false"
+            />
           </div>
         </template>
       </UModal>
@@ -1100,7 +1261,13 @@ onMounted(() => {
               block
               @click="submitSelection"
             />
-            <UButton label="Cancel" color="neutral" variant="outline" block @click="selectionModal.isOpen = false" />
+            <UButton
+              label="Cancel"
+              color="neutral"
+              variant="outline"
+              block
+              @click="selectionModal.isOpen = false"
+            />
           </div>
         </template>
       </UModal>

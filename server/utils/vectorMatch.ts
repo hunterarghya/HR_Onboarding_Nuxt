@@ -110,15 +110,17 @@ const cosineSimilarity = (a: number[], b: number[]): number => {
 
 export const matchResumeToJobs = async (
   resumeText: string,
-  sections: { skills: string; projects: string; experience: string },
+  sections: { skills: string, projects: string, experience: string },
   jobRoles: any[]
-): Promise<{ target_role: string; score: number }> => {
+): Promise<{ target_role: string, score: number }> => {
   try {
     console.log('--- [Vector] Starting Match Process ---')
     const resumeVec = await embed(resumeText)
 
-    const searchResult = await qdrant.search(COLLECTION_NAME, {
-      vector: { name: 'full', vector: resumeVec },
+    // search() was removed from the client in 1.x; query() is its replacement
+    const { points: searchResult } = await qdrant.query(COLLECTION_NAME, {
+      query: resumeVec,
+      using: 'full',
       limit: 3,
       with_payload: true
     })

@@ -204,7 +204,12 @@ onMounted(() => {
 
           <form class="space-y-4" @submit.prevent="handleCreateJob">
             <UFormField label="Job Role">
-              <UInput v-model="newJob.role" placeholder="e.g. Backend Developer" required class="w-full" />
+              <UInput
+                v-model="newJob.role"
+                placeholder="e.g. Backend Developer"
+                required
+                class="w-full"
+              />
             </UFormField>
 
             <div class="grid grid-cols-2 gap-4">
@@ -225,18 +230,29 @@ onMounted(() => {
             </UFormField>
 
             <UFormField label="Qualifications">
-              <UTextarea v-model="newJob.qualification" placeholder="Degree in CS..." :rows="3" class="w-full" />
+              <UTextarea
+                v-model="newJob.qualification"
+                placeholder="Degree in CS..."
+                :rows="3"
+                class="w-full"
+              />
             </UFormField>
 
             <USeparator />
 
-            <p class="text-xs font-semibold uppercase tracking-wide text-muted">Advanced Settings</p>
+            <p class="text-xs font-semibold uppercase tracking-wide text-muted">
+              Advanced Settings
+            </p>
 
             <!-- Shortlisting Mode -->
             <div class="flex items-center justify-between">
               <div>
-                <p class="text-sm font-semibold">Shortlisting Mode</p>
-                <p class="text-xs text-muted">Auto will process candidates immediately</p>
+                <p class="text-sm font-semibold">
+                  Shortlisting Mode
+                </p>
+                <p class="text-xs text-muted">
+                  Auto will process candidates immediately
+                </p>
               </div>
               <div class="flex items-center gap-3">
                 <USwitch
@@ -249,14 +265,21 @@ onMounted(() => {
 
             <!-- Deadline -->
             <UFormField label="Application Deadline">
-              <UInput v-model="newJob.deadline" type="datetime-local" required class="w-full" />
+              <UInput
+                v-model="newJob.deadline"
+                type="datetime-local"
+                required
+                class="w-full"
+              />
             </UFormField>
 
             <!-- Min Score -->
             <UFormField label="Minimum Match Score">
               <div class="flex items-center justify-between mb-1">
                 <span class="text-xs text-muted">Score threshold</span>
-                <UBadge color="primary" variant="subtle">{{ newJob.min_score }}%</UBadge>
+                <UBadge color="primary" variant="subtle">
+                  {{ newJob.min_score }}%
+                </UBadge>
               </div>
               <input
                 v-model.number="newJob.min_score"
@@ -264,19 +287,25 @@ onMounted(() => {
                 min="0"
                 max="100"
                 class="w-full accent-[var(--ui-color-primary)]"
-              />
+              >
             </UFormField>
 
             <USeparator />
 
             <!-- Criteria Weights -->
-            <p class="text-xs font-semibold uppercase tracking-wide text-muted">Scoring Criteria (Optional)</p>
-            <p class="text-xs text-muted">Set weights for each criterion. Leave at 0 to ignore.</p>
+            <p class="text-xs font-semibold uppercase tracking-wide text-muted">
+              Scoring Criteria (Optional)
+            </p>
+            <p class="text-xs text-muted">
+              Set weights for each criterion. Leave at 0 to ignore.
+            </p>
 
             <div v-for="key in criteriaKeys" :key="key" class="space-y-1">
               <div class="flex items-center justify-between">
                 <span class="text-sm capitalize">{{ key }}</span>
-                <UBadge variant="subtle" color="neutral">{{ newJob.criteria_weights[key] || 0 }}</UBadge>
+                <UBadge variant="subtle" color="neutral">
+                  {{ newJob.criteria_weights[key] || 0 }}
+                </UBadge>
               </div>
               <input
                 :value="newJob.criteria_weights[key] || 0"
@@ -284,8 +313,11 @@ onMounted(() => {
                 min="0"
                 max="10"
                 class="w-full accent-[var(--ui-color-primary)]"
-                @input="(e: Event) => { const v = parseInt((e.target as HTMLInputElement).value); if (v === 0) { delete newJob.criteria_weights[key]; } else { newJob.criteria_weights[key] = v; } }"
-              />
+                @input="(e: Event) => {
+                  const v = parseInt((e.target as HTMLInputElement).value); if (v === 0) { delete newJob.criteria_weights[key]; }
+                  else { newJob.criteria_weights[key] = v; }
+                }"
+              >
             </div>
 
             <UButton
@@ -317,11 +349,24 @@ onMounted(() => {
               <div class="flex items-start justify-between">
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2 mb-1">
-                    <p class="font-semibold truncate">{{ job.role }}</p>
-                    <UBadge v-if="isExpired(job)" color="error" variant="solid" size="xs">CLOSED</UBadge>
+                    <p class="font-semibold truncate">
+                      {{ job.role }}
+                    </p>
+                    <UBadge
+                      v-if="isExpired(job)"
+                      color="error"
+                      variant="solid"
+                      size="xs"
+                    >
+                      CLOSED
+                    </UBadge>
                   </div>
-                  <p class="text-sm text-muted">{{ job.location }} • {{ job.salary }}</p>
-                  <p class="text-xs mt-1 text-muted">{{ job.skills }}</p>
+                  <p class="text-sm text-muted">
+                    {{ job.location }} • {{ job.salary }}
+                  </p>
+                  <p class="text-xs mt-1 text-muted">
+                    {{ job.skills }}
+                  </p>
                 </div>
                 <div class="flex items-center gap-1 shrink-0">
                   <UButton
@@ -424,46 +469,84 @@ onMounted(() => {
           <div v-if="viewingJob" class="space-y-3">
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <p class="text-xs text-muted font-semibold">Role</p>
-                <p class="text-sm font-medium">{{ viewingJob.role }}</p>
+                <p class="text-xs text-muted font-semibold">
+                  Role
+                </p>
+                <p class="text-sm font-medium">
+                  {{ viewingJob.role }}
+                </p>
               </div>
               <div>
-                <p class="text-xs text-muted font-semibold">Location</p>
-                <p class="text-sm">{{ viewingJob.location || 'N/A' }}</p>
+                <p class="text-xs text-muted font-semibold">
+                  Location
+                </p>
+                <p class="text-sm">
+                  {{ viewingJob.location || 'N/A' }}
+                </p>
               </div>
               <div>
-                <p class="text-xs text-muted font-semibold">Salary</p>
-                <p class="text-sm">{{ viewingJob.salary || 'N/A' }}</p>
+                <p class="text-xs text-muted font-semibold">
+                  Salary
+                </p>
+                <p class="text-sm">
+                  {{ viewingJob.salary || 'N/A' }}
+                </p>
               </div>
               <div>
-                <p class="text-xs text-muted font-semibold">Experience</p>
-                <p class="text-sm">{{ viewingJob.experience || 'N/A' }}</p>
+                <p class="text-xs text-muted font-semibold">
+                  Experience
+                </p>
+                <p class="text-sm">
+                  {{ viewingJob.experience || 'N/A' }}
+                </p>
               </div>
               <div>
-                <p class="text-xs text-muted font-semibold">Skills</p>
-                <p class="text-sm">{{ viewingJob.skills || 'N/A' }}</p>
+                <p class="text-xs text-muted font-semibold">
+                  Skills
+                </p>
+                <p class="text-sm">
+                  {{ viewingJob.skills || 'N/A' }}
+                </p>
               </div>
               <div>
-                <p class="text-xs text-muted font-semibold">Shortlisting</p>
-                <p class="text-sm">{{ viewingJob.shortlist_mode?.toUpperCase() }}</p>
+                <p class="text-xs text-muted font-semibold">
+                  Shortlisting
+                </p>
+                <p class="text-sm">
+                  {{ viewingJob.shortlist_mode?.toUpperCase() }}
+                </p>
               </div>
               <div>
-                <p class="text-xs text-muted font-semibold">Min Score</p>
-                <p class="text-sm">{{ viewingJob.min_score }}%</p>
+                <p class="text-xs text-muted font-semibold">
+                  Min Score
+                </p>
+                <p class="text-sm">
+                  {{ viewingJob.min_score }}%
+                </p>
               </div>
               <div>
-                <p class="text-xs text-muted font-semibold">Deadline</p>
-                <p class="text-sm">{{ formatDeadline(viewingJob.deadline) }}</p>
+                <p class="text-xs text-muted font-semibold">
+                  Deadline
+                </p>
+                <p class="text-sm">
+                  {{ formatDeadline(viewingJob.deadline) }}
+                </p>
               </div>
             </div>
             <div>
-              <p class="text-xs text-muted font-semibold">Qualifications</p>
-              <p class="text-sm whitespace-pre-wrap mt-1">{{ viewingJob.qualification }}</p>
+              <p class="text-xs text-muted font-semibold">
+                Qualifications
+              </p>
+              <p class="text-sm whitespace-pre-wrap mt-1">
+                {{ viewingJob.qualification }}
+              </p>
             </div>
 
             <!-- Form Link in Modal -->
             <div v-if="viewingJob.form_url" class="mt-3 pt-3 border-t border-[var(--ui-border)]">
-              <p class="text-xs text-muted font-semibold mb-1.5">Google Application Form</p>
+              <p class="text-xs text-muted font-semibold mb-1.5">
+                Google Application Form
+              </p>
               <div class="flex items-center justify-between gap-2 bg-neutral-50 dark:bg-neutral-900/60 p-2 rounded-lg border border-[var(--ui-border)]">
                 <a :href="viewingJob.form_url" target="_blank" class="text-xs text-primary underline truncate font-mono">
                   {{ viewingJob.form_url }}
@@ -481,7 +564,13 @@ onMounted(() => {
           </div>
         </template>
         <template #footer>
-          <UButton label="Close" color="neutral" variant="outline" block @click="viewOpen = false" />
+          <UButton
+            label="Close"
+            color="neutral"
+            variant="outline"
+            block
+            @click="viewOpen = false"
+          />
         </template>
       </UModal>
 
@@ -514,8 +603,12 @@ onMounted(() => {
 
             <div class="flex items-center justify-between">
               <div>
-                <p class="text-sm font-semibold">Shortlisting Mode</p>
-                <p class="text-xs text-muted">Auto will process candidates immediately</p>
+                <p class="text-sm font-semibold">
+                  Shortlisting Mode
+                </p>
+                <p class="text-xs text-muted">
+                  Auto will process candidates immediately
+                </p>
               </div>
               <div class="flex items-center gap-3">
                 <USwitch
@@ -538,7 +631,9 @@ onMounted(() => {
             <UFormField label="Minimum Match Score">
               <div class="flex items-center justify-between mb-1">
                 <span class="text-xs text-muted">Score threshold</span>
-                <UBadge color="primary" variant="subtle">{{ editingJob.min_score }}%</UBadge>
+                <UBadge color="primary" variant="subtle">
+                  {{ editingJob.min_score }}%
+                </UBadge>
               </div>
               <input
                 v-model.number="editingJob.min_score"
@@ -546,15 +641,19 @@ onMounted(() => {
                 min="0"
                 max="100"
                 class="w-full accent-[var(--ui-color-primary)]"
-              />
+              >
             </UFormField>
 
             <USeparator />
-            <p class="text-xs font-semibold uppercase tracking-wide text-muted">Scoring Criteria (Optional)</p>
+            <p class="text-xs font-semibold uppercase tracking-wide text-muted">
+              Scoring Criteria (Optional)
+            </p>
             <div v-for="key in criteriaKeys" :key="key" class="space-y-1">
               <div class="flex items-center justify-between">
                 <span class="text-sm capitalize">{{ key }}</span>
-                <UBadge variant="subtle" color="neutral">{{ editingJob.criteria_weights?.[key] || 0 }}</UBadge>
+                <UBadge variant="subtle" color="neutral">
+                  {{ editingJob.criteria_weights?.[key] || 0 }}
+                </UBadge>
               </div>
               <input
                 :value="editingJob.criteria_weights?.[key] || 0"
@@ -562,13 +661,25 @@ onMounted(() => {
                 min="0"
                 max="10"
                 class="w-full accent-[var(--ui-color-primary)]"
-                @input="(e: Event) => { if (!editingJob) return; const v = parseInt((e.target as HTMLInputElement).value); if (!editingJob.criteria_weights) editingJob.criteria_weights = {}; if (v === 0) { delete editingJob.criteria_weights[key]; } else { editingJob.criteria_weights[key] = v; } }"
-              />
+                @input="(e: Event) => {
+                  if (!editingJob) return; const v = parseInt((e.target as HTMLInputElement).value); if (!editingJob.criteria_weights) editingJob.criteria_weights = {}; if (v === 0) { delete editingJob.criteria_weights[key]; }
+                  else { editingJob.criteria_weights[key] = v; }
+                }"
+              >
             </div>
 
             <div class="flex gap-3 mt-4">
-              <UButton type="submit" color="primary" block>Save Changes</UButton>
-              <UButton color="neutral" variant="outline" block @click="editOpen = false">Cancel</UButton>
+              <UButton type="submit" color="primary" block>
+                Save Changes
+              </UButton>
+              <UButton
+                color="neutral"
+                variant="outline"
+                block
+                @click="editOpen = false"
+              >
+                Cancel
+              </UButton>
             </div>
           </form>
         </template>

@@ -5,7 +5,7 @@
  */
 
 const extractEmail = (text: string): string => {
-  const emailRegex = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
   const matches = text.match(emailRegex)
   if (!matches || matches.length === 0) return 'N/A'
 
@@ -17,9 +17,9 @@ const extractEmail = (text: string): string => {
 
 const extractPhone = (text: string): string => {
   const patterns = [
-    /(?:\+91[\s\-]?|91[\s\-]|0)?[6-9]\d{4}[\s\-]?\d{5}/g,
-    /\+?\d{1,3}[\s\-]?\(?\d{2,4}\)?[\s\-]?\d{3,4}[\s\-]?\d{3,4}/g,
-    /(?:phone|mobile|cell|contact|tel|ph)[\s:.\-]*(\+?\d[\d\s\-()]{8,15}\d)/gi
+    /(?:\+91[\s-]?|91[\s-]|0)?[6-9]\d{4}[\s-]?\d{5}/g,
+    /\+?\d{1,3}[\s-]?\(?\d{2,4}\)?[\s-]?\d{3,4}[\s-]?\d{3,4}/g,
+    /(?:phone|mobile|cell|contact|tel|ph)[\s:.-]*(\+?\d[\d\s()-]{8,15}\d)/gi
   ]
 
   for (const pattern of patterns) {

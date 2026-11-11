@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { WAStatus, WAGroup, Job, GoogleForm } from '~/types'
+import type { WAStatus, WAGroup, GoogleForm } from '~/types'
 
 const { apiFetch, token } = useApi()
 const toast = useToast()
@@ -38,7 +38,7 @@ const fetchScanStatus = async () => {
 const handleMailScan = async () => {
   scanningMail.value = true
   try {
-    const response = await apiFetch<{ message: string; count: number }>('/candidates/scan-mail', {
+    const response = await apiFetch<{ message: string, count: number }>('/candidates/scan-mail', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token.value}` }
     })
@@ -72,7 +72,7 @@ const fetchWAGroups = async () => {
 const handleWAScan = async () => {
   scanningWA.value = true
   try {
-    const response = await apiFetch<{ message: string; count: number }>('/candidates/scan', {
+    const response = await apiFetch<{ message: string, count: number }>('/candidates/scan', {
       method: 'POST',
       body: { whatsappGroupIds: selectedGroups.value },
       headers: { Authorization: `Bearer ${token.value}` }
@@ -133,7 +133,7 @@ const handleFormsScan = async () => {
     if (selectedFormIds.value.size > 0) {
       body.formIds = Array.from(selectedFormIds.value)
     }
-    const response = await apiFetch<{ message: string; count: number }>('/candidates/scan-forms', {
+    const response = await apiFetch<{ message: string, count: number }>('/candidates/scan-forms', {
       method: 'POST',
       body,
       headers: { Authorization: `Bearer ${token.value}` }
@@ -211,7 +211,9 @@ onUnmounted(() => {
                   <UIcon name="i-lucide-mail" class="size-6 text-[var(--ui-color-primary)]" />
                 </div>
                 <div>
-                  <p class="font-semibold text-lg">Email Scanner</p>
+                  <p class="font-semibold text-lg">
+                    Email Scanner
+                  </p>
                   <p class="text-sm text-muted">
                     Last scanned: {{ formatLastScanned(mailLastScanned) }}
                   </p>
@@ -248,7 +250,9 @@ onUnmounted(() => {
                 <UIcon name="i-lucide-message-circle" class="size-6 text-[var(--ui-color-success)]" />
               </div>
               <div>
-                <p class="font-semibold text-lg">WhatsApp Connector</p>
+                <p class="font-semibold text-lg">
+                  WhatsApp Connector
+                </p>
                 <div class="flex items-center gap-2 mt-0.5">
                   <UChip :color="getStatusColor" standalone size="sm" />
                   <span class="text-sm text-muted">Status: {{ waStatus.status }}</span>
@@ -323,7 +327,9 @@ onUnmounted(() => {
                   <UIcon name="i-lucide-file-text" class="size-6 text-[var(--ui-color-warning)]" />
                 </div>
                 <div>
-                  <p class="font-semibold text-lg">Google Forms Scanner</p>
+                  <p class="font-semibold text-lg">
+                    Google Forms Scanner
+                  </p>
                   <p class="text-sm text-muted">
                     {{ googleForms.length }} form(s) available · Last scanned: {{ formatLastScanned(formsLastScanned) }}
                   </p>
@@ -345,7 +351,9 @@ onUnmounted(() => {
             <!-- Forms List with Toggle Selection -->
             <div v-if="googleForms.length > 0" class="space-y-2">
               <div class="flex items-center justify-between">
-                <p class="text-sm font-medium text-muted">Select Forms to Scan</p>
+                <p class="text-sm font-medium text-muted">
+                  Select Forms to Scan
+                </p>
                 <p class="text-xs text-muted">
                   {{ selectedFormIds.size === 0 ? 'All forms will be scanned' : `${selectedFormIds.size} of ${googleForms.length} selected` }}
                 </p>
@@ -371,7 +379,9 @@ onUnmounted(() => {
                     />
                   </button>
                   <div class="min-w-0">
-                    <p class="font-medium text-sm truncate">{{ form.form_title || 'Untitled Form' }}</p>
+                    <p class="font-medium text-sm truncate">
+                      {{ form.form_title || 'Untitled Form' }}
+                    </p>
                     <p class="text-xs text-muted truncate">
                       {{ form.job_role_name || 'No linked role' }}
                     </p>
@@ -425,7 +435,7 @@ onUnmounted(() => {
         <template #body>
           <div class="text-center space-y-4">
             <div v-if="waStatus.qrCodeData" class="bg-white p-4 rounded-xl inline-block">
-              <img :src="waStatus.qrCodeData" alt="WhatsApp QR" class="w-[250px] h-[250px]" />
+              <img :src="waStatus.qrCodeData" alt="WhatsApp QR" class="w-[250px] h-[250px]">
             </div>
             <p class="text-sm text-muted leading-relaxed">
               Open WhatsApp on your phone, go to Linked Devices, and scan this code to connect.
@@ -433,7 +443,13 @@ onUnmounted(() => {
           </div>
         </template>
         <template #footer>
-          <UButton label="Close" color="neutral" variant="outline" block @click="showQR = false" />
+          <UButton
+            label="Close"
+            color="neutral"
+            variant="outline"
+            block
+            @click="showQR = false"
+          />
         </template>
       </UModal>
     </template>

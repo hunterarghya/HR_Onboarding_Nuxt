@@ -109,7 +109,7 @@ export const createApplicationForm = async (tokens: any, jobTitle: string): Prom
 export const extractDriveFileId = (url: string): string | null => {
   if (!url || typeof url !== 'string') return null
   const driveMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/) || url.match(/[?&]id=([a-zA-Z0-9_-]+)/)
-  return driveMatch ? driveMatch[1] : null
+  return driveMatch?.[1] ?? null
 }
 
 /**
@@ -155,7 +155,7 @@ export const extractTextAnswer = (response: any, questionId: string): string => 
  * Extracts file upload info from a form response for a given question ID.
  * Returns the Drive file ID and filename.
  */
-export const extractFileAnswer = (response: any, questionId: string): { fileId: string; fileName: string } | null => {
+export const extractFileAnswer = (response: any, questionId: string): { fileId: string, fileName: string } | null => {
   const answer = response.answers?.[questionId]
   if (!answer) return null
 

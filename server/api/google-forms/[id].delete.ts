@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     jwt.verify(token, process.env.JWT_SECRET || 'secret')
-  } catch (err) {
+  } catch {
     throw createError({ statusCode: 403, statusMessage: 'Invalid token' })
   }
 
