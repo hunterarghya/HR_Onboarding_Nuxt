@@ -1,4 +1,5 @@
 import pg from 'pg'
+import { config } from '~~/server/config/env'
 
 const { Pool } = pg
 
@@ -7,7 +8,7 @@ let pool: pg.Pool | null = null
 export const usePool = (): pg.Pool => {
   if (!pool) {
     pool = new Pool({
-      connectionString: process.env.DATABASE_URL
+      connectionString: config.db.url
     })
   }
   return pool

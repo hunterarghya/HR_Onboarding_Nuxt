@@ -1,15 +1,16 @@
 import { google } from 'googleapis'
 import Handlebars from 'handlebars'
 import pg from 'pg'
+import { config } from '~~/server/config/env'
 
 const { Pool } = pg
-const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+const pool = new Pool({ connectionString: config.db.url })
 
 const getGmailService = (tokens: any) => {
   const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
+    config.google.clientId,
+    config.google.clientSecret,
+    config.google.redirectUri
   )
   oauth2Client.setCredentials(tokens)
   return google.gmail({ version: 'v1', auth: oauth2Client })

@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken'
+import { config } from '~~/server/config/env'
 
 export default defineEventHandler(async (event) => {
   const authHeader = getHeader(event, 'authorization')
@@ -9,7 +10,7 @@ export default defineEventHandler(async (event) => {
 
   let userData: any
   try {
-    userData = jwt.verify(token, process.env.JWT_SECRET || 'secret')
+    userData = jwt.verify(token, config.auth.jwtSecret)
   } catch {
     throw createError({ statusCode: 403, statusMessage: 'Invalid token' })
   }

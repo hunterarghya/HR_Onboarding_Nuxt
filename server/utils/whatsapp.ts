@@ -2,6 +2,7 @@ import pkg from 'whatsapp-web.js'
 import qrcode from 'qrcode'
 import fs from 'fs'
 import path from 'path'
+import { config } from '~~/server/config/env'
 
 const { Client, LocalAuth } = pkg
 
@@ -60,7 +61,7 @@ export const initWhatsApp = (): void => {
         '--no-zygote',
         '--disable-gpu'
       ],
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+      executablePath: config.whatsapp.executablePath,
       headless: true,
       protocolTimeout: 180000
     }

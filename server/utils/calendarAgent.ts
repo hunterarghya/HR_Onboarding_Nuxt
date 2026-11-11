@@ -1,7 +1,8 @@
 import axios from 'axios'
+import { config } from '~~/server/config/env'
 
-const OLLAMA_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434'
-const MODEL = process.env.OLLAMA_MODEL || 'phi3'
+const OLLAMA_URL = config.ollama.baseUrl
+const MODEL = config.ollama.model
 
 const convertToIST = (timeStr: string): string => {
   if (!timeStr || !timeStr.includes(':')) return timeStr

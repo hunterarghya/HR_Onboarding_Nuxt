@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken'
+import { config } from '~~/server/config/env'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -20,7 +21,7 @@ export default defineEventHandler(async (event) => {
     const token = authHeader && authHeader.split(' ')[1]
     if (token) {
       try {
-        const userData: any = jwt.verify(token, process.env.JWT_SECRET || 'secret')
+        const userData: any = jwt.verify(token, config.auth.jwtSecret)
         if (userData?.tokens) {
           const { formId, formUrl, questionMap } = await createApplicationForm(userData.tokens, newJob.role)
           await pool.query(

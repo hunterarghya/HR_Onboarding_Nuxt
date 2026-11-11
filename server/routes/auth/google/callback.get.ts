@@ -1,5 +1,6 @@
 import { google } from 'googleapis'
 import jwt from 'jsonwebtoken'
+import { config } from '~~/server/config/env'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
@@ -7,9 +8,9 @@ export default defineEventHandler(async (event) => {
 
   try {
     const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI
+      config.google.clientId,
+      config.google.clientSecret,
+      config.google.redirectUri
     )
 
     const { tokens } = await oauth2Client.getToken(code)
@@ -24,7 +25,7 @@ export default defineEventHandler(async (event) => {
         name: userInfo.data.name,
         tokens: tokens // Store tokens to access Gmail API later
       },
-      process.env.JWT_SECRET || 'secret',
+      config.auth.jwtSecret,
       { expiresIn: '24h' }
     )
 
