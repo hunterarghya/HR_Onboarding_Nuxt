@@ -47,3 +47,6 @@ Thumbs.db
 *.tsbuildinfo
 .vercel/
 .vercel_build_output/
+
+# WhatsApp session credentials (whatsapp-web.js LocalAuth)
+whatsapp-auth/
