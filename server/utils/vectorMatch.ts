@@ -117,8 +117,10 @@ export const matchResumeToJobs = async (
     console.log('--- [Vector] Starting Match Process ---')
     const resumeVec = await embed(resumeText)
 
-    const searchResult = await qdrant.search(COLLECTION_NAME, {
-      vector: { name: 'full', vector: resumeVec },
+    // search() was removed from the client in 1.x; query() is its replacement
+    const { points: searchResult } = await qdrant.query(COLLECTION_NAME, {
+      query: resumeVec,
+      using: 'full',
       limit: 3,
       with_payload: true
     })
