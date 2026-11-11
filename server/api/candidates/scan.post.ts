@@ -62,5 +62,3 @@ export default defineEventHandler(async (event) => {
     isScanning = false
   }
 })
-
-

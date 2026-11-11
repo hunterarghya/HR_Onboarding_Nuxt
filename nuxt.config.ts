@@ -12,14 +12,14 @@ export default defineNuxtConfig({
 
   css: ['~/assets/css/main.css'],
 
-  devServer: {
-    port: 3001
-  },
-
   routeRules: {
     '/api/**': {
       cors: true
     }
+  },
+
+  devServer: {
+    port: 3001
   },
 
   compatibilityDate: '2024-07-11',

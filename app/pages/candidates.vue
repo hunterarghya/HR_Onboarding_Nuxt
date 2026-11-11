@@ -78,7 +78,7 @@ const fetchCandidates = async (cursor: string | null = null) => {
     if (filters.minScore !== 0) params.minScore = filters.minScore
     if (filters.maxScore !== 100) params.maxScore = filters.maxScore
     if (filters.name) params.name = filters.name
-    
+
     if (cursor) params.cursor = cursor
     const response = await apiFetch<PaginatedResponse<Candidate>>('/candidates', { params })
     candidates.value = response.data
@@ -186,7 +186,7 @@ const handleSendOfferLetters = async () => {
   mailModal.sending = true
   try {
     const candidateIds = selectedCandidates.value.map(c => c.id)
-    const res = await apiFetch<{ sent: number; failed: number; skipped: number }>('/mail/offer-letters', {
+    const res = await apiFetch<{ sent: number, failed: number, skipped: number }>('/mail/offer-letters', {
       method: 'POST',
       body: { templateId: mailModal.selectedTemplateId, candidateIds },
       headers: { Authorization: `Bearer ${token.value}` }
@@ -239,7 +239,7 @@ const statusColor = (status: string) => {
     shortlisted: 'success',
     hold: 'warning',
     rejected: 'error',
-    marked: 'purple' ,
+    marked: 'purple',
     selected: 'success'
   }
   return (map[status] || 'neutral') as any
@@ -343,9 +343,21 @@ onMounted(() => {
             </div>
             <div class="flex items-center gap-2">
               <span class="text-xs font-semibold text-muted">Score Range:</span>
-              <UInput v-model.number="filters.minScore" type="number" :min="0" :max="100" class="w-[70px]" />
+              <UInput
+                v-model.number="filters.minScore"
+                type="number"
+                :min="0"
+                :max="100"
+                class="w-[70px]"
+              />
               <span class="text-muted text-xs">to</span>
-              <UInput v-model.number="filters.maxScore" type="number" :min="0" :max="100" class="w-[70px]" />
+              <UInput
+                v-model.number="filters.maxScore"
+                type="number"
+                :min="0"
+                :max="100"
+                class="w-[70px]"
+              />
             </div>
             <UButton
               v-if="hasFilters"
@@ -363,23 +375,41 @@ onMounted(() => {
           <table class="w-full text-sm">
             <thead>
               <tr class="border-b border-default">
-                <th class="text-left py-3 px-3 text-muted font-medium">Name</th>
-                <th class="text-left py-3 px-3 text-muted font-medium">Source</th>
-                <th class="text-left py-3 px-3 text-muted font-medium">Role</th>
-                <th class="text-left py-3 px-3 text-muted font-medium">Mobile</th>
+                <th class="text-left py-3 px-3 text-muted font-medium">
+                  Name
+                </th>
+                <th class="text-left py-3 px-3 text-muted font-medium">
+                  Source
+                </th>
+                <th class="text-left py-3 px-3 text-muted font-medium">
+                  Role
+                </th>
+                <th class="text-left py-3 px-3 text-muted font-medium">
+                  Mobile
+                </th>
                 <!-- <th class="text-left py-3 px-3 text-muted font-medium">Location</th> -->
                 <!-- <th class="text-left py-3 px-3 text-muted font-medium">CTC</th> -->
                 <!-- <th class="text-left py-3 px-3 text-muted font-medium">Experience</th> -->
-                <th class="text-left py-3 px-3 text-muted font-medium">Score</th>
-                <th class="text-left py-3 px-3 text-muted font-medium">Resume</th>
-                <th class="text-left py-3 px-3 text-muted font-medium">Status</th>
+                <th class="text-left py-3 px-3 text-muted font-medium">
+                  Score
+                </th>
+                <th class="text-left py-3 px-3 text-muted font-medium">
+                  Resume
+                </th>
+                <th class="text-left py-3 px-3 text-muted font-medium">
+                  Status
+                </th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="c in candidates" :key="c.id" class="border-b border-default hover:bg-elevated/30">
                 <td class="py-3 px-3">
-                  <p class="font-medium">{{ c.name }}</p>
-                  <p class="text-xs text-muted">{{ c.email }}</p>
+                  <p class="font-medium">
+                    {{ c.name }}
+                  </p>
+                  <p class="text-xs text-muted">
+                    {{ c.email }}
+                  </p>
                 </td>
                 <td class="py-3 px-3">
                   <div class="flex items-center gap-1.5">
@@ -391,8 +421,12 @@ onMounted(() => {
                     <span class="text-xs">{{ c.applied_through }}</span>
                   </div>
                 </td>
-                <td class="py-3 px-3">{{ c.role_applied }}</td>
-                <td class="py-3 px-3 text-sm">{{ c.phone }}</td>
+                <td class="py-3 px-3">
+                  {{ c.role_applied }}
+                </td>
+                <td class="py-3 px-3 text-sm">
+                  {{ c.phone }}
+                </td>
                 <!-- <td class="py-3 px-3 text-sm">{{ c.current_location }}</td> -->
                 <!-- <td class="py-3 px-3 text-sm font-medium">{{ c.current_ctc }}</td> -->
                 <!-- <td class="py-3 px-3 text-sm">{{ c.experience_level }}</td> -->
@@ -522,25 +556,55 @@ onMounted(() => {
           <table class="w-full text-sm">
             <thead>
               <tr class="border-b border-default">
-                <th class="text-left py-3 px-3 text-muted font-medium">Name</th>
-                <th class="text-left py-3 px-3 text-muted font-medium">Email</th>
-                <th class="text-left py-3 px-3 text-muted font-medium">Phone</th>
-                <th class="text-left py-3 px-3 text-muted font-medium">Role Offered</th>
-                <th class="text-left py-3 px-3 text-muted font-medium">Joining Date</th>
-                <th class="text-left py-3 px-3 text-muted font-medium">Salary Offered</th>
-                <th class="text-left py-3 px-3 text-muted font-medium">Location</th>
-                <th class="text-left py-3 px-3 text-muted font-medium">Offer Status</th>
+                <th class="text-left py-3 px-3 text-muted font-medium">
+                  Name
+                </th>
+                <th class="text-left py-3 px-3 text-muted font-medium">
+                  Email
+                </th>
+                <th class="text-left py-3 px-3 text-muted font-medium">
+                  Phone
+                </th>
+                <th class="text-left py-3 px-3 text-muted font-medium">
+                  Role Offered
+                </th>
+                <th class="text-left py-3 px-3 text-muted font-medium">
+                  Joining Date
+                </th>
+                <th class="text-left py-3 px-3 text-muted font-medium">
+                  Salary Offered
+                </th>
+                <th class="text-left py-3 px-3 text-muted font-medium">
+                  Location
+                </th>
+                <th class="text-left py-3 px-3 text-muted font-medium">
+                  Offer Status
+                </th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="c in selectedCandidates" :key="c.id" class="border-b border-default hover:bg-elevated/30">
-                <td class="py-3 px-3 font-medium">{{ c.name }}</td>
-                <td class="py-3 px-3 text-muted text-xs">{{ c.email }}</td>
-                <td class="py-3 px-3">{{ c.phone }}</td>
-                <td class="py-3 px-3 font-semibold text-[var(--ui-color-primary)]">{{ c.offered_role }}</td>
-                <td class="py-3 px-3">{{ c.joining_date ? new Date(c.joining_date).toLocaleDateString() : '—' }}</td>
-                <td class="py-3 px-3">{{ c.offered_salary }}</td>
-                <td class="py-3 px-3">{{ c.offered_location }}</td>
+                <td class="py-3 px-3 font-medium">
+                  {{ c.name }}
+                </td>
+                <td class="py-3 px-3 text-muted text-xs">
+                  {{ c.email }}
+                </td>
+                <td class="py-3 px-3">
+                  {{ c.phone }}
+                </td>
+                <td class="py-3 px-3 font-semibold text-[var(--ui-color-primary)]">
+                  {{ c.offered_role }}
+                </td>
+                <td class="py-3 px-3">
+                  {{ c.joining_date ? new Date(c.joining_date).toLocaleDateString() : '—' }}
+                </td>
+                <td class="py-3 px-3">
+                  {{ c.offered_salary }}
+                </td>
+                <td class="py-3 px-3">
+                  {{ c.offered_location }}
+                </td>
                 <td class="py-3 px-3">
                   <UBadge
                     :color="c.offer_sent ? 'success' : 'warning'"
@@ -552,7 +616,9 @@ onMounted(() => {
                 </td>
               </tr>
               <tr v-if="selectedCandidates.length === 0">
-                <td colspan="8" class="text-center py-8 text-muted">No selected candidates found.</td>
+                <td colspan="8" class="text-center py-8 text-muted">
+                  No selected candidates found.
+                </td>
               </tr>
             </tbody>
           </table>
@@ -604,8 +670,19 @@ onMounted(() => {
         </template>
         <template #footer>
           <div class="flex gap-3 w-full">
-            <UButton label="Confirm Selection" color="primary" block @click="submitSelection" />
-            <UButton label="Cancel" color="neutral" variant="outline" block @click="selectionOpen = false" />
+            <UButton
+              label="Confirm Selection"
+              color="primary"
+              block
+              @click="submitSelection"
+            />
+            <UButton
+              label="Cancel"
+              color="neutral"
+              variant="outline"
+              block
+              @click="selectionOpen = false"
+            />
           </div>
         </template>
       </UModal>
@@ -634,7 +711,13 @@ onMounted(() => {
               :disabled="!mailModal.selectedTemplateId"
               @click="handleSendOfferLetters"
             />
-            <UButton label="Cancel" color="neutral" variant="outline" block @click="mailOpen = false" />
+            <UButton
+              label="Cancel"
+              color="neutral"
+              variant="outline"
+              block
+              @click="mailOpen = false"
+            />
           </div>
         </template>
       </UModal>

@@ -155,7 +155,7 @@ export const extractTextAnswer = (response: any, questionId: string): string => 
  * Extracts file upload info from a form response for a given question ID.
  * Returns the Drive file ID and filename.
  */
-export const extractFileAnswer = (response: any, questionId: string): { fileId: string; fileName: string } | null => {
+export const extractFileAnswer = (response: any, questionId: string): { fileId: string, fileName: string } | null => {
   const answer = response.answers?.[questionId]
   if (!answer) return null
 

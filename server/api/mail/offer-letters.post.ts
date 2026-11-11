@@ -6,8 +6,7 @@ export default defineEventHandler(async (event) => {
   if (!token) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
 
   let userData: any
-  try { userData = jwt.verify(token, process.env.JWT_SECRET || 'secret') }
-  catch { throw createError({ statusCode: 403, statusMessage: 'Invalid token' }) }
+  try { userData = jwt.verify(token, process.env.JWT_SECRET || 'secret') } catch { throw createError({ statusCode: 403, statusMessage: 'Invalid token' }) }
 
   const body = await readBody(event)
   const { templateId, candidateIds } = body

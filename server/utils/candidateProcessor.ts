@@ -8,9 +8,9 @@ import pdf from 'pdf-parse'
 
 export interface RawAttachment {
   filename: string
-  data: string        // base64 PDF data
-  source: string      // 'Gmail' | 'WhatsApp' | 'GoogleForms'
-  sender?: string     // email or identifier of who submitted
+  data: string // base64 PDF data
+  source: string // 'Gmail' | 'WhatsApp' | 'GoogleForms'
+  sender?: string // email or identifier of who submitted
 }
 
 /**

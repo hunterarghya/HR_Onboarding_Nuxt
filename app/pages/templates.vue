@@ -250,7 +250,7 @@ const groupedTemplates = computed(() => {
     offer: [],
     custom: []
   }
-  templates.value.forEach(t => {
+  templates.value.forEach((t) => {
     if (groups[t.type]) groups[t.type].push(t)
     else groups.custom.push(t)
   })
@@ -283,7 +283,9 @@ const groupedTemplates = computed(() => {
           <div class="flex-1 overflow-y-auto space-y-4">
             <div v-for="(groupTemplates, type) in groupedTemplates" :key="type">
               <div v-if="groupTemplates.length > 0">
-                <p class="text-xs font-semibold text-muted uppercase tracking-wider mb-2 px-1">{{ type }}</p>
+                <p class="text-xs font-semibold text-muted uppercase tracking-wider mb-2 px-1">
+                  {{ type }}
+                </p>
                 <div class="space-y-1">
                   <button
                     v-for="t in groupTemplates"
@@ -349,7 +351,7 @@ const groupedTemplates = computed(() => {
                 <UFormField label="Template Type" class="w-48">
                   <USelect
                     v-model="form.type"
-                    :items="[{label: 'Custom', value: 'custom'}, {label: 'Rejection', value: 'rejection'}, {label: 'Invite', value: 'invite'}, {label: 'Offer', value: 'offer'}]"
+                    :items="[{ label: 'Custom', value: 'custom' }, { label: 'Rejection', value: 'rejection' }, { label: 'Invite', value: 'invite' }, { label: 'Offer', value: 'offer' }]"
                     class="w-full"
                   />
                 </UFormField>
@@ -361,13 +363,49 @@ const groupedTemplates = computed(() => {
 
               <!-- Editor formatting toolbar -->
               <div class="flex flex-wrap gap-1 p-1 bg-elevated/50 rounded-t-lg border border-default border-b-0 shrink-0">
-                <UButton icon="i-lucide-bold" :color="editor?.isActive('bold') ? 'primary' : 'neutral'" :variant="editor?.isActive('bold') ? 'solid' : 'ghost'" size="xs" @click="editor?.chain().focus().toggleBold().run()" />
-                <UButton icon="i-lucide-italic" :color="editor?.isActive('italic') ? 'primary' : 'neutral'" :variant="editor?.isActive('italic') ? 'solid' : 'ghost'" size="xs" @click="editor?.chain().focus().toggleItalic().run()" />
-                <UButton icon="i-lucide-underline" :color="editor?.isActive('underline') ? 'primary' : 'neutral'" :variant="editor?.isActive('underline') ? 'solid' : 'ghost'" size="xs" @click="(editor?.chain().focus() as any).toggleUnderline().run()" />
-                <UButton icon="i-lucide-strikethrough" :color="editor?.isActive('strike') ? 'primary' : 'neutral'" :variant="editor?.isActive('strike') ? 'solid' : 'ghost'" size="xs" @click="editor?.chain().focus().toggleStrike().run()" />
-                <div class="w-px h-5 bg-border my-auto mx-1"></div>
-                <UButton icon="i-lucide-list" :color="editor?.isActive('bulletList') ? 'primary' : 'neutral'" :variant="editor?.isActive('bulletList') ? 'solid' : 'ghost'" size="xs" @click="editor?.chain().focus().toggleBulletList().run()" />
-                <UButton icon="i-lucide-list-ordered" :color="editor?.isActive('orderedList') ? 'primary' : 'neutral'" :variant="editor?.isActive('orderedList') ? 'solid' : 'ghost'" size="xs" @click="editor?.chain().focus().toggleOrderedList().run()" />
+                <UButton
+                  icon="i-lucide-bold"
+                  :color="editor?.isActive('bold') ? 'primary' : 'neutral'"
+                  :variant="editor?.isActive('bold') ? 'solid' : 'ghost'"
+                  size="xs"
+                  @click="editor?.chain().focus().toggleBold().run()"
+                />
+                <UButton
+                  icon="i-lucide-italic"
+                  :color="editor?.isActive('italic') ? 'primary' : 'neutral'"
+                  :variant="editor?.isActive('italic') ? 'solid' : 'ghost'"
+                  size="xs"
+                  @click="editor?.chain().focus().toggleItalic().run()"
+                />
+                <UButton
+                  icon="i-lucide-underline"
+                  :color="editor?.isActive('underline') ? 'primary' : 'neutral'"
+                  :variant="editor?.isActive('underline') ? 'solid' : 'ghost'"
+                  size="xs"
+                  @click="(editor?.chain().focus() as any).toggleUnderline().run()"
+                />
+                <UButton
+                  icon="i-lucide-strikethrough"
+                  :color="editor?.isActive('strike') ? 'primary' : 'neutral'"
+                  :variant="editor?.isActive('strike') ? 'solid' : 'ghost'"
+                  size="xs"
+                  @click="editor?.chain().focus().toggleStrike().run()"
+                />
+                <div class="w-px h-5 bg-border my-auto mx-1" />
+                <UButton
+                  icon="i-lucide-list"
+                  :color="editor?.isActive('bulletList') ? 'primary' : 'neutral'"
+                  :variant="editor?.isActive('bulletList') ? 'solid' : 'ghost'"
+                  size="xs"
+                  @click="editor?.chain().focus().toggleBulletList().run()"
+                />
+                <UButton
+                  icon="i-lucide-list-ordered"
+                  :color="editor?.isActive('orderedList') ? 'primary' : 'neutral'"
+                  :variant="editor?.isActive('orderedList') ? 'solid' : 'ghost'"
+                  size="xs"
+                  @click="editor?.chain().focus().toggleOrderedList().run()"
+                />
               </div>
 
               <!-- Tiptap Editor Content -->
@@ -379,10 +417,14 @@ const groupedTemplates = computed(() => {
             <!-- Preview Mode -->
             <div v-show="previewMode" class="flex-1 flex flex-col min-h-0 bg-elevated/30 rounded-lg p-6 overflow-y-auto border border-default">
               <div class="mb-6 pb-4 border-b border-default">
-                <p class="text-sm text-muted mb-1">Subject:</p>
-                <p class="font-medium text-lg">{{ previewSubject || '(No Subject)' }}</p>
+                <p class="text-sm text-muted mb-1">
+                  Subject:
+                </p>
+                <p class="font-medium text-lg">
+                  {{ previewSubject || '(No Subject)' }}
+                </p>
               </div>
-              <div class="prose dark:prose-invert max-w-none" v-html="previewHtml"></div>
+              <div class="prose dark:prose-invert max-w-none" v-html="previewHtml" />
             </div>
           </UCard>
         </div>

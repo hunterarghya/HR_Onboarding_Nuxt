@@ -110,9 +110,9 @@ const cosineSimilarity = (a: number[], b: number[]): number => {
 
 export const matchResumeToJobs = async (
   resumeText: string,
-  sections: { skills: string; projects: string; experience: string },
+  sections: { skills: string, projects: string, experience: string },
   jobRoles: any[]
-): Promise<{ target_role: string; score: number }> => {
+): Promise<{ target_role: string, score: number }> => {
   try {
     console.log('--- [Vector] Starting Match Process ---')
     const resumeVec = await embed(resumeText)

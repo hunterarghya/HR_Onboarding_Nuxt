@@ -134,7 +134,7 @@ export const parseCalendarEvent = async (calendarEvent: any, activeRoles: string
     }
     if (!endTime) {
       const [sh, sm] = startTime.split(':').map(Number)
-      let endMinutes = (sh * 60 + sm + 240) % (24 * 60)
+      const endMinutes = (sh * 60 + sm + 240) % (24 * 60)
       endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`
       console.log(`[CalendarAgent] End time missing/invalid. Defaulting to ${endTime} (start + 4h)`)
     }

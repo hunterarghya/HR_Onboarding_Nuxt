@@ -1,8 +1,9 @@
 import pkg from 'whatsapp-web.js'
-const { Client, LocalAuth } = pkg;
 import qrcode from 'qrcode'
 import fs from 'fs'
 import path from 'path'
+
+const { Client, LocalAuth } = pkg
 
 let client: any = null
 let qrCodeData: string | null = null
@@ -156,16 +157,16 @@ export const fetchPDFsFromGroup = async (groupId: string, sinceDate: Date | null
                 timestamp: new Date(msg.timestamp * 1000)
               })
             } else {
-               console.log(`--- WhatsApp: Media is not a PDF (skipped) ---`)
+              console.log(`--- WhatsApp: Media is not a PDF (skipped) ---`)
             }
           } else {
-             console.log(`--- WhatsApp: downloadMedia returned null or no data ---`)
+            console.log(`--- WhatsApp: downloadMedia returned null or no data ---`)
           }
         } catch (downloadErr: any) {
           console.error(`--- WhatsApp: ❌ downloadMedia Error: ${downloadErr.message} ---`)
         }
       } else {
-         // console.log(`--- WhatsApp: Message has no media ---`)
+        // console.log(`--- WhatsApp: Message has no media ---`)
       }
     }
 
