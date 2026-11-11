@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { addMonths, subMonths, format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, parseISO, isBefore, isAfter, startOfDay } from 'date-fns'
-import type { InterviewEvent, Job, Candidate, UnsentCount, EmailTemplate, PaginatedResponse } from '~/types'
+import { addMonths, subMonths, format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday } from 'date-fns'
+import type { InterviewEvent, Job, UnsentCount, EmailTemplate } from '~/types'
 
-const { apiFetch, token } = useApi()
+const { apiFetch } = useApi()
 const toast = useToast()
 
 // Calendar sync state
@@ -63,7 +63,10 @@ const fetchJobs = async () => {
   }
 }
 
+const loading = ref(false)
+
 const fetchEvents = async () => {
+  loading.value = true
   try {
     events.value = await apiFetch<InterviewEvent[]>('/interviews/events')
 
@@ -71,11 +74,15 @@ const fetchEvents = async () => {
     try {
       const res = await apiFetch<UnsentCount[]>('/mail/unsent-invites-count')
       const counts: Record<number, number> = {}
-      res.forEach((r) => { counts[r.event_id] = r.unsent_count })
+      res.forEach((r) => {
+        counts[r.event_id] = r.unsent_count
+      })
       unsentCounts.value = counts
-    } catch (e) { /* ignore if endpoint not available */ }
+    } catch { /* ignore if endpoint not available */ }
   } catch (err) {
     console.error('Error fetching events:', err)
+  } finally {
+    loading.value = false
   }
 }
 
@@ -364,8 +371,12 @@ const firstDayOffset = computed(() => {
   return start.getDay() // 0 = Sunday, 1 = Monday...
 })
 
-const nextMonth = () => { currentDate.value = addMonths(currentDate.value, 1) }
-const prevMonth = () => { currentDate.value = subMonths(currentDate.value, 1) }
+const nextMonth = () => {
+  currentDate.value = addMonths(currentDate.value, 1)
+}
+const prevMonth = () => {
+  currentDate.value = subMonths(currentDate.value, 1)
+}
 
 const getEventsForDay = (date: Date) => {
   const dStr = format(date, 'yyyy-MM-dd')
@@ -830,7 +841,7 @@ onMounted(() => {
                   </div>
 
                   <div class="flex items-center gap-3 w-full sm:w-auto" @click.stop>
-                    <div v-if="unsentCounts[event.id] > 0" class="flex items-center gap-2 mr-2">
+                    <div v-if="(unsentCounts[event.id] ?? 0) > 0" class="flex items-center gap-2 mr-2">
                       <UIcon name="i-lucide-alert-circle" class="size-5 text-warning" />
                       <span class="text-sm font-semibold text-warning">{{ unsentCounts[event.id] }} unsent</span>
                       <UButton icon="i-lucide-mail" color="primary" @click="openMailModal(event.id)">
@@ -1007,7 +1018,7 @@ onMounted(() => {
                                   ]"
                                   size="xs"
                                   class="w-[130px]"
-                                  @change="(newVal) => handleStatusChange(c.id, newVal, event.id)"
+                                  @update:model-value="(newVal: string) => handleStatusChange(c.id, newVal, event.id)"
                                 />
                               </td>
                             </tr>
@@ -1037,7 +1048,7 @@ onMounted(() => {
                   </div>
 
                   <!-- Assigned Candidates Display -->
-                  <div v-if="selectionMode !== 'manual' && (eventCandidates[event.id]?.length > 0)">
+                  <div v-if="selectionMode !== 'manual' && ((eventCandidates[event.id]?.length ?? 0) > 0)">
                     <div class="flex justify-between items-center mb-4">
                       <h4 class="font-semibold text-lg text-[var(--ui-color-primary)] flex items-center gap-2">
                         Candidates Chosen for Interview
@@ -1167,7 +1178,7 @@ onMounted(() => {
                                 ]"
                                 size="xs"
                                 class="w-[130px]"
-                                @change="(newVal) => handleStatusChange(c.id, newVal, event.id)"
+                                @update:model-value="(newVal: string) => handleStatusChange(c.id, newVal, event.id)"
                               />
                             </td>
                           </tr>
