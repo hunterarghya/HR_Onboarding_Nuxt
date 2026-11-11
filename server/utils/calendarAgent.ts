@@ -5,7 +5,7 @@ const MODEL = process.env.OLLAMA_MODEL || 'phi3'
 
 const convertToIST = (timeStr: string): string => {
   if (!timeStr || !timeStr.includes(':')) return timeStr
-  const [h, m] = timeStr.split(':').map(Number)
+  const [h = 0, m = 0] = timeStr.split(':').map(Number)
   let totalMinutes = h * 60 + m + (5 * 60 + 30)
   totalMinutes = totalMinutes % (24 * 60)
   const newH = Math.floor(totalMinutes / 60)
@@ -133,7 +133,7 @@ export const parseCalendarEvent = async (calendarEvent: any, activeRoles: string
       return null
     }
     if (!endTime) {
-      const [sh, sm] = startTime.split(':').map(Number)
+      const [sh = 0, sm = 0] = startTime.split(':').map(Number)
       const endMinutes = (sh * 60 + sm + 240) % (24 * 60)
       endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`
       console.log(`[CalendarAgent] End time missing/invalid. Defaulting to ${endTime} (start + 4h)`)

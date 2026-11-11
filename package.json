@@ -17,7 +17,9 @@
     "@nuxt/ui": "^4.7.1",
     "@qdrant/js-client-rest": "^1.7.0",
     "@tanstack/table-core": "^8.21.3",
+    "@tiptap/core": "2.27.3",
     "@tiptap/extension-placeholder": "^2.2.4",
+    "@tiptap/pm": "2.27.3",
     "@tiptap/starter-kit": "^2.2.4",
     "@tiptap/vue-3": "^2.2.4",
     "@unovis/ts": "^1.6.5",
@@ -44,6 +46,7 @@
   "devDependencies": {
     "@nuxt/eslint": "^1.15.2",
     "@types/jsonwebtoken": "^9.0.0",
+    "@types/pdf-parse": "^1.1.5",
     "@types/pg": "^8.11.0",
     "@types/qrcode": "^1.5.0",
     "eslint": "^10.3.0",

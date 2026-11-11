@@ -109,7 +109,7 @@ export const createApplicationForm = async (tokens: any, jobTitle: string): Prom
 export const extractDriveFileId = (url: string): string | null => {
   if (!url || typeof url !== 'string') return null
   const driveMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/) || url.match(/[?&]id=([a-zA-Z0-9_-]+)/)
-  return driveMatch ? driveMatch[1] : null
+  return driveMatch?.[1] ?? null
 }
 
 /**

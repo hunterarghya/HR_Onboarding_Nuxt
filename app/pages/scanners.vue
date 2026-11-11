@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { WAStatus, WAGroup, Job, GoogleForm } from '~/types'
+import type { WAStatus, WAGroup, GoogleForm } from '~/types'
 
 const { apiFetch, token } = useApi()
 const toast = useToast()

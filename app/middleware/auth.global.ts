@@ -1,6 +1,5 @@
 export default defineNuxtRouteMiddleware(async (to) => {
   const token = useCookie('hr-token')
-  const config = useRuntimeConfig()
 
   // Check if a token was passed via URL query (Google OAuth callback)
   if (import.meta.client && to.query.token) {

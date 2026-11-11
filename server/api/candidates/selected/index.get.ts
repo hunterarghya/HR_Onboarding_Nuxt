@@ -9,11 +9,26 @@ export default defineEventHandler(async (event) => {
     const params: any[] = ['selected']
     let paramIndex = 2
 
-    if (offered_role) { q += ` AND offered_role = $${paramIndex++}`; params.push(offered_role) }
-    if (offered_location) { q += ` AND offered_location = $${paramIndex++}`; params.push(offered_location) }
-    if (dateFrom) { q += ` AND joining_date >= $${paramIndex++}`; params.push(dateFrom) }
-    if (dateTo) { q += ` AND joining_date <= $${paramIndex++}`; params.push(dateTo) }
-    if (offer_sent !== undefined && offer_sent !== '') { q += ` AND offer_sent = $${paramIndex++}`; params.push(offer_sent === 'true') }
+    if (offered_role) {
+      q += ` AND offered_role = $${paramIndex++}`
+      params.push(offered_role)
+    }
+    if (offered_location) {
+      q += ` AND offered_location = $${paramIndex++}`
+      params.push(offered_location)
+    }
+    if (dateFrom) {
+      q += ` AND joining_date >= $${paramIndex++}`
+      params.push(dateFrom)
+    }
+    if (dateTo) {
+      q += ` AND joining_date <= $${paramIndex++}`
+      params.push(dateTo)
+    }
+    if (offer_sent !== undefined && offer_sent !== '') {
+      q += ` AND offer_sent = $${paramIndex++}`
+      params.push(offer_sent === 'true')
+    }
 
     if (cursor) {
       const [cDate, cId] = (cursor as string).split('|')

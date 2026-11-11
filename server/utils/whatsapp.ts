@@ -21,17 +21,27 @@ const cleanupLocks = (dir: string): void => {
       if (fs.lstatSync(fullPath).isDirectory()) {
         cleanupLocks(fullPath)
       } else if (file === 'SingletonLock') {
-        try { fs.unlinkSync(fullPath) } catch (err) { }
+        try {
+          fs.unlinkSync(fullPath)
+        } catch {
+          // lock file already gone or in use; safe to ignore
+        }
       }
     }
-  } catch (e) { }
+  } catch {
+    // best-effort cleanup; a missing or unreadable dir is not an error
+  }
 }
 
 export const initWhatsApp = (): void => {
   if (initialized) return
   initialized = true
   console.log('--- WhatsApp: Initialization Sequence Started ---')
-  try { cleanupLocks(AUTH_PATH) } catch (err) { }
+  try {
+    cleanupLocks(AUTH_PATH)
+  } catch {
+    // best-effort cleanup
+  }
 
   client = new Client({
     authStrategy: new LocalAuth({ dataPath: AUTH_PATH }),
@@ -56,7 +66,12 @@ export const initWhatsApp = (): void => {
     }
   } as any)
 
-  client.on('qr', (qr: string) => { status = 'qr'; qrcode.toDataURL(qr, (err: any, url: string) => { qrCodeData = url }) })
+  client.on('qr', (qr: string) => {
+    status = 'qr'
+    qrcode.toDataURL(qr, (err: any, url: string) => {
+      qrCodeData = url
+    })
+  })
 
   client.on('ready', () => {
     status = 'ready'
@@ -76,13 +91,23 @@ export const initWhatsApp = (): void => {
             status = 'ready'
             console.log('--- WhatsApp: Nudge Successful! Force-Ready ---')
           }
-        } catch (e) { }
+        } catch {
+          // nudge is best-effort; the 'ready' event may still arrive
+        }
       }
     }, 15000)
   })
-  client.on('loading_screen', (percent: number, message: string) => { console.log(`--- WhatsApp Loading: ${percent}% - ${message} ---`) })
-  client.on('change_state', (state: string) => { console.log('--- WhatsApp State Change:', state) })
-  client.on('disconnected', () => { status = 'initializing'; initialized = false; setTimeout(() => initWhatsApp(), 5000) })
+  client.on('loading_screen', (percent: number, message: string) => {
+    console.log(`--- WhatsApp Loading: ${percent}% - ${message} ---`)
+  })
+  client.on('change_state', (state: string) => {
+    console.log('--- WhatsApp State Change:', state)
+  })
+  client.on('disconnected', () => {
+    status = 'initializing'
+    initialized = false
+    setTimeout(() => initWhatsApp(), 5000)
+  })
 
   client.initialize().catch((err: any) => {
     console.error('--- WhatsApp Init Error ---', err)
@@ -101,17 +126,17 @@ export const getGroups = async () => {
   try {
     console.log('--- WhatsApp: Fetching groups... ---')
     let chats = await client!.getChats()
-    let groups = chats.filter(chat => chat.isGroup)
+    let groups = chats.filter((chat: any) => chat.isGroup)
 
     if (groups.length === 0) {
       console.log('--- WhatsApp: No groups in memory, waiting 3s to retry... ---')
       await new Promise(r => setTimeout(r, 3000))
       chats = await client!.getChats()
-      groups = chats.filter(chat => chat.isGroup)
+      groups = chats.filter((chat: any) => chat.isGroup)
     }
 
     console.log(`--- WhatsApp: Found ${groups.length} groups ---`)
-    return groups.map(chat => ({ id: (chat.id as any)._serialized, name: chat.name }))
+    return groups.map((chat: any) => ({ id: (chat.id as any)._serialized, name: chat.name }))
   } catch (err) {
     console.error('--- WhatsApp Error Fetching Groups ---', err)
     return []

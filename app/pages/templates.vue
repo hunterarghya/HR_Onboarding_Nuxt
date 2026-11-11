@@ -46,7 +46,8 @@ const form = reactive({
   body: ''
 })
 
-const editor = ref<Editor | null>(null)
+// shallowRef, as tiptap's useEditor does: the vue-3 Editor tracks its own state reactively
+const editor = shallowRef<Editor | null>(null)
 
 // Variables for drag & drop
 const variables = [
@@ -82,7 +83,7 @@ const previewSubject = computed(() => {
   try {
     const template = Handlebars.compile(form.subject)
     return template(dummyData)
-  } catch (err) {
+  } catch {
     return form.subject
   }
 })
@@ -233,25 +234,16 @@ onBeforeUnmount(() => {
   }
 })
 
-const getBadgeColor = (type: string) => {
-  const map: Record<string, string> = {
-    rejection: 'error',
-    invite: 'primary',
-    offer: 'success',
-    custom: 'neutral'
-  }
-  return (map[type] || 'neutral') as any
-}
-
 const groupedTemplates = computed(() => {
-  const groups: Record<string, EmailTemplate[]> = {
+  const groups: Record<'rejection' | 'invite' | 'offer' | 'custom', EmailTemplate[]> = {
     rejection: [],
     invite: [],
     offer: [],
     custom: []
   }
   templates.value.forEach((t) => {
-    if (groups[t.type]) groups[t.type].push(t)
+    const group = groups[t.type as keyof typeof groups]
+    if (group) group.push(t)
     else groups.custom.push(t)
   })
   return groups
@@ -410,7 +402,7 @@ const groupedTemplates = computed(() => {
 
               <!-- Tiptap Editor Content -->
               <div class="flex-1 overflow-y-auto border border-default rounded-b-lg bg-[var(--ui-bg)]">
-                <editor-content :editor="editor" />
+                <editor-content :editor="editor ?? undefined" />
               </div>
             </div>
 

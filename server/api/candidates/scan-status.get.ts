@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     jwt.verify(token, process.env.JWT_SECRET || 'secret')
-  } catch (err) {
+  } catch {
     throw createError({ statusCode: 403, statusMessage: 'Invalid token' })
   }
 
@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
     `SELECT source_type, source_id, last_scanned_at FROM scan_timestamps ORDER BY last_scanned_at DESC`
   )
 
-  const status: Record<string, { lastScannedAt: string | null }> = {
+  const status: Record<'gmail' | 'whatsapp' | 'google_forms', { lastScannedAt: string | null }> = {
     gmail: { lastScannedAt: null },
     whatsapp: { lastScannedAt: null },
     google_forms: { lastScannedAt: null }

@@ -233,18 +233,6 @@ const statusItems = [
   { label: 'Selected', value: 'selected' }
 ]
 
-const statusColor = (status: string) => {
-  const map: Record<string, string> = {
-    applied: 'info',
-    shortlisted: 'success',
-    hold: 'warning',
-    rejected: 'error',
-    marked: 'purple',
-    selected: 'success'
-  }
-  return (map[status] || 'neutral') as any
-}
-
 const clearFilters = () => {
   Object.assign(filters, { role: 'all', source: 'all', status: 'all', scoreSort: 'newest', minScore: 0, maxScore: 100, name: '' })
   searchTerm.value = ''

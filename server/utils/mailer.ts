@@ -58,7 +58,10 @@ export const sendInterviewInvites = async (tokens: any, senderEmail: string, eve
   let sent = 0, failed = 0, skipped = 0
 
   for (const candidate of candidates.rows) {
-    if (!candidate.email) { skipped++; continue }
+    if (!candidate.email) {
+      skipped++
+      continue
+    }
 
     try {
       const data = {
@@ -111,7 +114,10 @@ export const sendOfferLetters = async (tokens: any, senderEmail: string, templat
   let sent = 0, failed = 0, skipped = 0
 
   for (const candidate of candidates.rows) {
-    if (!candidate.email) { skipped++; continue }
+    if (!candidate.email) {
+      skipped++
+      continue
+    }
 
     try {
       const data = {

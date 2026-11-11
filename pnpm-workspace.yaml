@@ -5,3 +5,8 @@ ignoredBuiltDependencies:
   - maplibre-gl
   - unrs-resolver
   - vue-demi
+
+# Resolve peers from each package's own ancestors, not the project root.
+# The template editor uses tiptap v2 while @nuxt/ui 4 bundles tiptap v3; root
+# resolution forced one core version on both and broke whichever side lost.
+resolvePeersFromWorkspaceRoot: false
