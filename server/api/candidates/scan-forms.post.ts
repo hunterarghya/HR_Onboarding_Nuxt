@@ -1,5 +1,6 @@
 import { requireUser } from '~~/server/core/auth/current-user'
 import { getAuthClientFromSession } from '~~/server/core/auth/google-session'
+import { downloadDriveFile, extractDriveFileId } from '~~/server/integrations/google/drive.client'
 
 let isScanningForms = false
 

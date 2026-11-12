@@ -1,15 +1,13 @@
-import { google } from 'googleapis'
-import type { GoogleAuthClient } from '~~/server/integrations/google/oauth'
+import { google, type gmail_v1 } from 'googleapis'
+import type { GoogleAuthClient } from './oauth'
 
-const getGmailService = (auth: GoogleAuthClient) => {
-  return google.gmail({ version: 'v1', auth })
-}
+const gmailFor = (auth: GoogleAuthClient) => google.gmail({ version: 'v1', auth })
 
-/**
- * Fetches emails from the inbox, optionally only those after a given date.
- */
-export const fetchEmails = async (auth: GoogleAuthClient, sinceDate: Date | null = null) => {
-  const gmail = getGmailService(auth)
+export type GmailMessage = gmail_v1.Schema$Message
+
+/** Inbox messages with attachments, optionally only those after `sinceDate` (max 50, full payloads). */
+export const listMessagesSince = async (auth: GoogleAuthClient, sinceDate: Date | null = null): Promise<GmailMessage[]> => {
+  const gmail = gmailFor(auth)
 
   const queryParts = ['has:attachment']
   if (sinceDate) {
@@ -41,11 +39,9 @@ export const fetchEmails = async (auth: GoogleAuthClient, sinceDate: Date | null
   return fullMessages
 }
 
-/**
- * Extracts raw attachments (PDFs) from a message parts.
- */
-export const getAttachments = async (auth: GoogleAuthClient, messageId: string, parts: any[]): Promise<Array<{ filename: string, data: string }>> => {
-  const gmail = getGmailService(auth)
+/** PDF attachments (raw base64) from a message's parts, walking nested multipart parts. */
+export const getPdfAttachments = async (auth: GoogleAuthClient, messageId: string, parts: any[]): Promise<Array<{ filename: string, data: string }>> => {
+  const gmail = gmailFor(auth)
   const attachments: Array<{ filename: string, data: string }> = []
 
   for (const part of parts) {
@@ -63,10 +59,15 @@ export const getAttachments = async (auth: GoogleAuthClient, messageId: string, 
         data: response.data.data! // Raw base64 from Gmail API
       })
     } else if (part.parts) {
-      const nested = await getAttachments(auth, messageId, part.parts)
+      const nested = await getPdfAttachments(auth, messageId, part.parts)
       attachments.push(...nested)
     }
   }
 
   return attachments
+}
+
+/** Sends an already-built message (see mime.ts) as the signed-in user. */
+export const sendRawMessage = async (auth: GoogleAuthClient, raw: string): Promise<void> => {
+  await gmailFor(auth).users.messages.send({ userId: 'me', requestBody: { raw } })
 }

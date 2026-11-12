@@ -1,5 +1,6 @@
 import { requireUser } from '~~/server/core/auth/current-user'
 import { getAuthClientFromSession } from '~~/server/core/auth/google-session'
+import { getPdfAttachments, listMessagesSince } from '~~/server/integrations/google/gmail.client'
 
 let isScanningMail = false
 
@@ -24,7 +25,7 @@ export default defineEventHandler(async (event) => {
     }
     console.log(`--- [Gmail] Scanning emails after: ${gmailLastScan.toISOString()} ---`)
 
-    const emails = await fetchEmails(auth, gmailLastScan)
+    const emails = await listMessagesSince(auth, gmailLastScan)
     for (const email of emails) {
       const payload = (email as any).payload
       if (!payload || !payload.parts) continue
@@ -36,7 +37,7 @@ export default defineEventHandler(async (event) => {
       const analysis = await analyzeEmail(subject, bodyText)
       if (analysis.isApplication) {
         console.log(`--- [Gmail] ✅ Application Found: "${subject}" ---`)
-        const gmailAttachments = await getAttachments(auth, (email as any).id, payload.parts)
+        const gmailAttachments = await getPdfAttachments(auth, (email as any).id, payload.parts)
         allAttachments.push(...gmailAttachments.map(a => ({
           ...a, source: 'Gmail', sender: senderEmail
         })))

@@ -1,15 +1,22 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  resolve: {
+    // the root alias Nuxt gives server code, so unit tests can import server modules directly
+    alias: { '~~': fileURLToPath(new URL('.', import.meta.url)) }
+  },
   test: {
     projects: [
       {
+        extends: true,
         test: {
           name: 'unit',
           include: ['test/unit/**/*.test.ts']
         }
       },
       {
+        extends: true,
         test: {
           name: 'api',
           include: ['test/api/**/*.test.ts'],

@@ -1,11 +1,10 @@
 /**
- * Google Forms Integration Utility
- * Creates application forms via the Google Forms API and fetches responses.
- * Downloads uploaded resume PDFs via the Google Drive API.
+ * Job application forms: the standard questions, creating a form for a job, reading its answers.
+ * Raw Google Forms / Drive calls live in integrations/google/{forms,drive}.client.ts.
  * Fully deterministic — no LLM agent involved.
  */
 
-import { google } from 'googleapis'
+import { batchUpdateForm, createForm, listResponses, type FormRequest } from '~~/server/integrations/google/forms.client'
 import type { GoogleAuthClient } from '~~/server/integrations/google/oauth'
 
 /**
@@ -19,21 +18,10 @@ export const createApplicationForm = async (auth: GoogleAuthClient, jobTitle: st
   formUrl: string
   questionMap: Record<string, string>
 }> => {
-  const forms = google.forms({ version: 'v1', auth })
-
   console.log(`--- [GoogleForms] Creating form for: ${jobTitle} ---`)
 
   // 1. Create a blank form
-  const createResponse = await forms.forms.create({
-    requestBody: {
-      info: {
-        title: `Job Application: ${jobTitle}`
-      }
-    }
-  })
-
-  const formId = createResponse.data.formId!
-  const formUrl = createResponse.data.responderUri!
+  const { formId, responderUri: formUrl } = await createForm(auth, `Job Application: ${jobTitle}`)
 
   console.log(`--- [GoogleForms] Form created: ${formId} ---`)
 
@@ -49,7 +37,7 @@ export const createApplicationForm = async (auth: GoogleAuthClient, jobTitle: st
   ]
 
   // Build batch update requests for questions
-  const requests: any[] = questionDefs.map((q, index) => ({
+  const requests: FormRequest[] = questionDefs.map((q, index) => ({
     createItem: {
       item: {
         title: q.title,
@@ -65,18 +53,11 @@ export const createApplicationForm = async (auth: GoogleAuthClient, jobTitle: st
   }))
 
   // 3. Add questions to the form
-  const batchResponse = await forms.forms.batchUpdate({
-    formId,
-    requestBody: {
-      requests,
-      includeFormInResponse: true
-    }
-  })
+  const updatedForm = await batchUpdateForm(auth, formId, requests)
 
   console.log(`--- [GoogleForms] ${requests.length} questions added ---`)
 
   // 4. Extract question IDs from the updated form
-  const updatedForm = batchResponse.data.form
   const items = updatedForm?.items || []
 
   const fieldNames = questionDefs.map(q => q.field)
@@ -94,15 +75,6 @@ export const createApplicationForm = async (auth: GoogleAuthClient, jobTitle: st
 }
 
 /**
- * Extracts a Google Drive file ID from a Drive share or view URL.
- */
-export const extractDriveFileId = (url: string): string | null => {
-  if (!url || typeof url !== 'string') return null
-  const driveMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/) || url.match(/[?&]id=([a-zA-Z0-9_-]+)/)
-  return driveMatch?.[1] ?? null
-}
-
-/**
  * Fetches responses from a Google Form, optionally filtered by timestamp.
  */
 export const fetchFormResponses = async (
@@ -110,17 +82,9 @@ export const fetchFormResponses = async (
   formId: string,
   sinceTimestamp?: Date | null
 ): Promise<any[]> => {
-  const forms = google.forms({ version: 'v1', auth })
-
-  const params: any = { formId }
-  if (sinceTimestamp) {
-    params.filter = `timestamp >= ${sinceTimestamp.toISOString()}`
-  }
-
   console.log(`--- [GoogleForms] Fetching responses for form ${formId} ---`)
 
-  const response = await forms.forms.responses.list(params)
-  const responses = response.data.responses || []
+  const responses = await listResponses(auth, formId, sinceTimestamp ? `timestamp >= ${sinceTimestamp.toISOString()}` : undefined)
 
   console.log(`--- [GoogleForms] Found ${responses.length} response(s) ---`)
   return responses
@@ -156,25 +120,4 @@ export const extractFileAnswer = (response: any, questionId: string): { fileId: 
     }
   }
   return null
-}
-
-/**
- * Downloads a file from Google Drive by file ID.
- * Returns the file content as a base64 string.
- */
-export const downloadDriveFile = async (auth: GoogleAuthClient, fileId: string): Promise<string> => {
-  const drive = google.drive({ version: 'v3', auth })
-
-  console.log(`--- [GoogleForms] Downloading file ${fileId} from Drive ---`)
-
-  const response = await drive.files.get(
-    { fileId, alt: 'media' },
-    { responseType: 'arraybuffer' }
-  )
-
-  const buffer = Buffer.from(response.data as ArrayBuffer)
-  const base64 = buffer.toString('base64')
-
-  console.log(`--- [GoogleForms] File downloaded (${buffer.length} bytes) ---`)
-  return base64
 }
