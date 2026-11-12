@@ -51,12 +51,12 @@ export const interviewEventsRepository = {
     return rows[0]!
   },
 
-  /** Insert used by calendar sync; a conflicting row is skipped. */
+  /** Insert used by calendar sync; an event already imported (same Google event id) is skipped (BUG-09). */
   async insertImported(e: NewInterviewEvent, db: Queryable = getPool()) {
     await db.query(
       `INSERT INTO interview_events (job_role_id, role, event_date, start_time, end_time, num_candidates, extra_candidates, interview_mode, venue_or_link, google_event_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-       ON CONFLICT DO NOTHING`,
+       ON CONFLICT (google_event_id) WHERE google_event_id IS NOT NULL DO NOTHING`,
       [e.job_role_id, e.role, e.event_date, e.start_time, e.end_time, e.num_candidates, e.extra_candidates, e.interview_mode, e.venue_or_link, e.google_event_id]
     )
   },

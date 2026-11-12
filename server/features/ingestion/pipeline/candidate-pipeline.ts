@@ -68,7 +68,7 @@ export const processAttachments = async (
           phone: parsed.phone?.substring(0, 45) ?? null,
           job_role_id: targetRole.id,
           role_applied: targetRole.role,
-          resume_content: resumeText.substring(0, 2000),
+          resume_content: resumeText, // all of it, so the resume can be scored again later (DATA-10)
           score,
           experience_years: parsed.experience_years,
           status: finalStatus,

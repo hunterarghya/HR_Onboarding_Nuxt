@@ -40,7 +40,7 @@ export const candidatesRepository = {
   /**
    * One page of candidates after `after` (fetches limit + 1 rows so the caller can tell whether more exist).
    * Newest first, or by score when scoreSort is set; unscored candidates sort as the lowest score (BUG-08).
-   * Times are compared to the millisecond, the precision the cursor carries.
+   * date_applied is stored to the millisecond, the precision the cursor carries.
    */
   async findPage(f: ListCandidatesFilters, after: CandidatesPosition | null, db: Queryable = getPool()) {
     let q = 'SELECT * FROM candidates WHERE 1=1'
@@ -73,7 +73,7 @@ export const candidatesRepository = {
     }
 
     const SCORE = 'COALESCE(score, -1)'
-    const AT = `date_trunc('milliseconds', date_applied)`
+    const AT = 'date_applied'
 
     if (after) {
       const at = `$${paramIndex}::timestamptz`, id = `$${paramIndex + 1}::int`, s = `$${paramIndex + 2}::int`

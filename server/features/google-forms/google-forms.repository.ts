@@ -1,4 +1,5 @@
 import { getPool, type Queryable } from '~~/server/core/db/pool'
+import { ConflictError } from '~~/server/core/errors/app-error'
 import type { GoogleFormRow } from '~~/server/database/types'
 
 export interface NewGoogleForm {
@@ -44,12 +45,20 @@ export const googleFormsRepository = {
     return rows.length > 0
   },
 
+  /** 409 if the job already has a form: two requests can pass the service's check at once (BUG-13). */
   async insert(form: NewGoogleForm, db: Queryable = getPool()) {
-    await db.query(
-      `INSERT INTO google_forms (form_id, form_url, form_title, job_role_id, question_map)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [form.formId, form.formUrl, form.formTitle, form.jobRoleId, JSON.stringify(form.questionMap)]
-    )
+    try {
+      await db.query(
+        `INSERT INTO google_forms (form_id, form_url, form_title, job_role_id, question_map)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [form.formId, form.formUrl, form.formTitle, form.jobRoleId, JSON.stringify(form.questionMap)]
+      )
+    } catch (err) {
+      if ((err as { constraint?: string }).constraint === 'google_forms_job_role_unique') {
+        throw new ConflictError('A form already exists for this job role')
+      }
+      throw err
+    }
   },
 
   async deleteByJobId(jobRoleId: number, db: Queryable = getPool()) {
