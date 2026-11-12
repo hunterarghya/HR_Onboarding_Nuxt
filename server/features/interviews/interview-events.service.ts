@@ -1,8 +1,9 @@
 import { NotFoundError, ValidationError } from '~~/server/core/errors/app-error'
+import { jobRolesRepository } from '../job-roles/job-roles.repository'
 import { deleteEvent, insertEvent } from '~~/server/integrations/google/calendar.client'
 import type { GoogleAuthClient } from '~~/server/integrations/google/oauth'
 import { toCalendarEvent } from './calendar-event.mapper'
-import { CREATE_EVENT_MESSAGE, type CreateEventInput } from './interviews.dto'
+import { OPEN_ROLE, type CreateEventInput } from './interviews.dto'
 import { interviewEventsRepository } from './interview-events.repository'
 
 export const interviewEventsService = {
@@ -10,24 +11,16 @@ export const interviewEventsService = {
 
   /** Saves an interview slot; unless sync_calendar is false it is also put on Google Calendar (best effort). */
   async create(auth: GoogleAuthClient, input: CreateEventInput) {
-    const { role, event_date, start_time, end_time, num_candidates, extra_candidates, interview_mode, venue_or_link, sync_calendar } = input
-    if (!role || !event_date || !start_time || !end_time) throw new ValidationError(null, CREATE_EVENT_MESSAGE)
+    const { sync_calendar, ...slot } = input
+    if (slot.role !== OPEN_ROLE && !(await jobRolesRepository.listRoleNames()).includes(slot.role)) {
+      throw new ValidationError([{ path: ['role'], message: 'Not a current job role' }], 'Unknown job role')
+    }
 
-    const mode = interview_mode || 'offline'
     let googleEventId: string | null = null
 
-    if (sync_calendar !== false) {
+    if (sync_calendar) {
       try {
-        const { resource, conferenceDataVersion } = toCalendarEvent({
-          role: String(role),
-          event_date: String(event_date),
-          start_time: String(start_time),
-          end_time: String(end_time),
-          num_candidates: num_candidates || 5,
-          extra_candidates: extra_candidates || 0,
-          interview_mode: mode,
-          venue_or_link: venue_or_link || ''
-        })
+        const { resource, conferenceDataVersion } = toCalendarEvent({ ...slot, venue_or_link: slot.venue_or_link ?? '' })
         googleEventId = await insertEvent(auth, resource, { conferenceDataVersion })
         console.log(`--- [Calendar] Created event: ${googleEventId} ---`)
       } catch (calErr) {
@@ -35,17 +28,7 @@ export const interviewEventsService = {
       }
     }
 
-    return interviewEventsRepository.insert({
-      role,
-      event_date,
-      start_time,
-      end_time,
-      num_candidates: num_candidates || 5,
-      extra_candidates: extra_candidates || 0,
-      interview_mode: mode,
-      venue_or_link: venue_or_link || null,
-      google_event_id: googleEventId
-    })
+    return interviewEventsRepository.insert({ ...slot, google_event_id: googleEventId })
   },
 
   /** Deletes the slot (and its assignments). The Google Calendar copy is removed best effort. */

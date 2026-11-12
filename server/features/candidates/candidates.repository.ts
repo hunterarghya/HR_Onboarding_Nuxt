@@ -31,6 +31,13 @@ export interface OfferFields {
 }
 
 export const candidatesRepository = {
+  /** Which of these ids exist. */
+  async existingIds(ids: number[], db: Queryable = getPool()) {
+    if (ids.length === 0) return []
+    const { rows } = await db.query<{ id: number }>('SELECT id FROM candidates WHERE id = ANY($1::int[])', [ids])
+    return rows.map(r => r.id)
+  },
+
   /**
    * One page of candidates after `after` (fetches limit + 1 rows so the caller can tell whether more exist).
    * Newest first, or by score when scoreSort is set; unscored candidates sort as the lowest score (BUG-08).

@@ -45,7 +45,8 @@ export const interviewAssignmentsRepository = {
    * Replaces an event's assignment list. New rows start with invite_sent = false, so re-assigning
    * resets invite state (BUG-04, kept until the behaviour-fix phase).
    */
-  async replaceForEvent(eventId: number, candidateIds: unknown[], db: Queryable = getPool()) {
+  /** Run it in a transaction: the old list is deleted before the new one is written. */
+  async replaceForEvent(eventId: number, candidateIds: number[], db: Queryable = getPool()) {
     await db.query('DELETE FROM interview_candidates WHERE event_id = $1', [eventId])
     if (candidateIds.length === 0) return
 

@@ -1,11 +1,10 @@
-import { NotFoundError } from '~~/server/core/errors/app-error'
+import { NotFoundError, ValidationError } from '~~/server/core/errors/app-error'
+import { withTransaction } from '~~/server/core/db/transaction'
 import { candidatesRepository } from '../candidates/candidates.repository'
 import { jobRolesRepository } from '../job-roles/job-roles.repository'
 import { interviewAssignmentsRepository } from './interview-assignments.repository'
 import { interviewEventsRepository } from './interview-events.repository'
-
-// 'Open Role' events take candidates whose applied role isn't one of the current jobs.
-const OPEN_ROLE = 'Open Role'
+import { OPEN_ROLE } from './interviews.dto'
 
 const getEventOrThrow = async (id: number) => {
   const event = await interviewEventsRepository.findById(id)
@@ -14,11 +13,20 @@ const getEventOrThrow = async (id: number) => {
 }
 
 export const interviewAssignmentsService = {
-  listForEvent: (eventId: number) => interviewAssignmentsRepository.listForEvent(eventId),
+  async listForEvent(eventId: number) {
+    await getEventOrThrow(eventId)
+    return interviewAssignmentsRepository.listForEvent(eventId)
+  },
 
-  /** Manual assignment: the list replaces whatever the event had. */
-  async replace(eventId: number, candidateIds: unknown[]) {
-    await interviewAssignmentsRepository.replaceForEvent(eventId, candidateIds)
+  /** Manual assignment: the list replaces whatever the event had, all at once. */
+  async replace(eventId: number, candidateIds: number[]) {
+    await getEventOrThrow(eventId)
+    const known = new Set(await candidatesRepository.existingIds(candidateIds))
+    const unknown = candidateIds.filter(id => !known.has(id))
+    if (unknown.length > 0) {
+      throw new ValidationError([{ path: ['candidate_ids'], message: `No such candidates: ${unknown.join(', ')}` }], 'Unknown candidates')
+    }
+    await withTransaction(client => interviewAssignmentsRepository.replaceForEvent(eventId, candidateIds, client))
     return candidateIds.length
   },
 
@@ -45,7 +53,7 @@ export const interviewAssignmentsService = {
       return { message: 'No eligible candidates found', count: 0 }
     }
 
-    await interviewAssignmentsRepository.replaceForEvent(eventId, candidateIds)
+    await withTransaction(client => interviewAssignmentsRepository.replaceForEvent(eventId, candidateIds, client))
     return { message: 'Candidates auto-assigned successfully', count: candidateIds.length }
   },
 
@@ -61,20 +69,22 @@ export const interviewAssignmentsService = {
     let candidateIndex = 0
     let totalAssigned = 0
 
-    for (const evt of events) {
-      const totalSlots = evt.num_candidates + (evt.extra_candidates || 0)
-      const candidatesForEvent: number[] = []
+    await withTransaction(async (client) => {
+      for (const evt of events) {
+        const totalSlots = evt.num_candidates + (evt.extra_candidates || 0)
+        const candidatesForEvent: number[] = []
 
-      while (candidatesForEvent.length < totalSlots && candidateIndex < allCandidates.length) {
-        candidatesForEvent.push(allCandidates[candidateIndex]!.id)
-        candidateIndex++
+        while (candidatesForEvent.length < totalSlots && candidateIndex < allCandidates.length) {
+          candidatesForEvent.push(allCandidates[candidateIndex]!.id)
+          candidateIndex++
+        }
+
+        if (candidatesForEvent.length === 0) continue
+
+        await interviewAssignmentsRepository.replaceForEvent(evt.id, candidatesForEvent, client)
+        totalAssigned += candidatesForEvent.length
       }
-
-      if (candidatesForEvent.length === 0) continue
-
-      await interviewAssignmentsRepository.replaceForEvent(evt.id, candidatesForEvent)
-      totalAssigned += candidatesForEvent.length
-    }
+    })
 
     return { message: `Auto-assigned ${totalAssigned} candidates across ${events.length} events` }
   }

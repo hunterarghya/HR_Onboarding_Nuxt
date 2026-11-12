@@ -2,14 +2,14 @@ import { getPool, type Queryable } from '~~/server/core/db/pool'
 import type { InterviewEventRow } from '~~/server/database/types'
 
 export interface NewInterviewEvent {
-  role: unknown
-  event_date: unknown
-  start_time: unknown
-  end_time: unknown
-  num_candidates: unknown
-  extra_candidates: unknown
-  interview_mode: unknown
-  venue_or_link: unknown
+  role: string
+  event_date: string
+  start_time: string
+  end_time: string
+  num_candidates: number
+  extra_candidates: number
+  interview_mode: string
+  venue_or_link: string | null
   google_event_id: string | null
 }
 
