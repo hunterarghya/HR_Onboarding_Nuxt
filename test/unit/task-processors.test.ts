@@ -5,6 +5,8 @@ const ingestion = { runGmailScan: vi.fn(), runFormsScan: vi.fn(), runWhatsappSca
 vi.mock('~~/server/features/ingestion/ingestion.service', () => ({ ingestionService: ingestion }))
 const calendarSync = { runSync: vi.fn() }
 vi.mock('~~/server/features/interviews/calendar-sync.service', () => ({ calendarSyncService: calendarSync }))
+const mail = { runEventInvites: vi.fn(), runAllInvites: vi.fn(), runOffers: vi.fn() }
+vi.mock('~~/server/features/mail/mail.service', () => ({ mailService: mail }))
 
 const { taskProcessors } = await import('../../server/features/tasks/task-processors')
 
@@ -32,6 +34,15 @@ describe('task processors', () => {
   it('calendar.sync → runSync(userId, progress)', async () => {
     await taskProcessors['calendar.sync']!({ userId: 4 }, ctx)
     expect(calendarSync.runSync).toHaveBeenCalledWith(4, ctx.reportProgress)
+  })
+
+  it('mail.* → the matching mail service run function', async () => {
+    await taskProcessors['mail.invites']!({ userId: 4, eventId: 9, templateId: 2 }, ctx)
+    await taskProcessors['mail.invitesAll']!({ userId: 4, templateId: 2 }, ctx)
+    await taskProcessors['mail.offers']!({ userId: 4, templateId: 3, candidateIds: [7, 8] }, ctx)
+    expect(mail.runEventInvites).toHaveBeenCalledWith(4, 9, 2, ctx.reportProgress)
+    expect(mail.runAllInvites).toHaveBeenCalledWith(4, 2, ctx.reportProgress)
+    expect(mail.runOffers).toHaveBeenCalledWith(4, 3, [7, 8], ctx.reportProgress)
   })
 
   it('a failing service fails the task (so BullMQ retries it)', async () => {

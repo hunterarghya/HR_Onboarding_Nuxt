@@ -346,17 +346,18 @@ const sendInvites = async () => {
     const url = mailModal.eventId
       ? `/mail/interview-invites/${mailModal.eventId}`
       : '/mail/interview-invites-all'
-    const res = await apiFetch<{ sent: number, failed: number, skipped: number }>(url, {
-      method: 'POST',
-      body: { templateId: mailModal.templateId }
-    })
+    // A background task: queued at once, then followed until every invite is handled
+    const res = await runTask<{ sent: number, failed: number, skipped: number }>(
+      () => apiFetch(url, { method: 'POST', body: { templateId: mailModal.templateId } }),
+      { taskIdOnConflict: mailModal.eventId ? `mail.invites.event.${mailModal.eventId}` : 'mail.invites.all' }
+    )
     toast.add({ title: 'Invites Sent', description: `Sent: ${res.sent}, Failed: ${res.failed}, Skipped: ${res.skipped}`, color: 'success' })
     mailOpen.value = false
     fetchEvents()
     if (mailModal.eventId) fetchAssignedCandidates(mailModal.eventId)
   } catch (err: any) {
     console.error('Mail error:', err)
-    toast.add({ title: 'Failed to send invites', description: err.data?.data?.details || err.message, color: 'error' })
+    toast.add({ title: 'Failed to send invites', description: err.data?.statusMessage || err.message, color: 'error' })
   } finally {
     mailModal.sending = false
   }
