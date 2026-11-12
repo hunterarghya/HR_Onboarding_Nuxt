@@ -4,7 +4,7 @@ import { embed } from '~~/server/integrations/embeddings/embedder'
 import { getQdrant } from '~~/server/integrations/qdrant/qdrant.client'
 
 // Job descriptions in Qdrant: one point per job (id = job id) with three named vectors.
-// Write failures are logged, not thrown, so a Qdrant outage never blocks job CRUD (BUG-11, Phase 5).
+// Failures are logged and thrown; job-roles.service turns them into retry tasks (BUG-11).
 
 const COLLECTION_NAME = config.qdrant.collection
 const VECTOR_SIZE = config.qdrant.vectorSize
@@ -30,6 +30,7 @@ export const jobVectorsRepository = {
       }
     } catch (err) {
       console.error('--- [Vector] Error initializing Qdrant collection:', (err as Error).message)
+      throw err
     }
   },
 
@@ -64,6 +65,7 @@ export const jobVectorsRepository = {
       console.log(`--- [Vector] Upserted JD: ${job.role} (id: ${job.id}) ---`)
     } catch (err) {
       console.error(`--- [Vector] Error upserting JD ${job.role}:`, (err as Error).message)
+      throw err
     }
   },
 
@@ -73,6 +75,7 @@ export const jobVectorsRepository = {
       console.log(`--- [Vector] Removed JD id: ${jobId} ---`)
     } catch (err) {
       console.error(`--- [Vector] Error removing JD ${jobId}:`, (err as Error).message)
+      throw err
     }
   },
 

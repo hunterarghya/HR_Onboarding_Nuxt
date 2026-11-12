@@ -7,6 +7,8 @@ const calendarSync = { runSync: vi.fn() }
 vi.mock('~~/server/features/interviews/calendar-sync.service', () => ({ calendarSyncService: calendarSync }))
 const mail = { runEventInvites: vi.fn(), runAllInvites: vi.fn(), runOffers: vi.fn() }
 vi.mock('~~/server/features/mail/mail.service', () => ({ mailService: mail }))
+const jobRoles = { resyncAllVectors: vi.fn(), syncJobVector: vi.fn(), removeJobVector: vi.fn() }
+vi.mock('~~/server/features/job-roles/job-roles.service', () => ({ jobRolesService: jobRoles }))
 
 const { taskProcessors } = await import('../../server/features/tasks/task-processors')
 
@@ -43,6 +45,20 @@ describe('task processors', () => {
     expect(mail.runEventInvites).toHaveBeenCalledWith(4, 9, 2, ctx.reportProgress)
     expect(mail.runAllInvites).toHaveBeenCalledWith(4, 2, ctx.reportProgress)
     expect(mail.runOffers).toHaveBeenCalledWith(4, 3, [7, 8], ctx.reportProgress)
+  })
+
+  it('vectors.* → job-roles index maintenance', async () => {
+    await taskProcessors['vectors.resyncAll']!({}, ctx)
+    await taskProcessors['vectors.syncJob']!({ jobId: 5 }, ctx)
+    await taskProcessors['vectors.removeJob']!({ jobId: 6 }, ctx)
+    expect(jobRoles.resyncAllVectors).toHaveBeenCalled()
+    expect(jobRoles.syncJobVector).toHaveBeenCalledWith(5)
+    expect(jobRoles.removeJobVector).toHaveBeenCalledWith(6)
+  })
+
+  it('registers a processor for every task name', async () => {
+    const { QUEUE_OF } = await import('../../server/core/tasks/queues')
+    expect(Object.keys(taskProcessors).sort()).toEqual(Object.keys(QUEUE_OF).sort())
   })
 
   it('a failing service fails the task (so BullMQ retries it)', async () => {

@@ -14,6 +14,7 @@ export interface TaskPayloads {
   'mail.invitesAll': { userId: number, templateId: number }
   'mail.offers': { userId: number, templateId: number, candidateIds: number[] }
   'vectors.syncJob': { jobId: number }
+  'vectors.removeJob': { jobId: number }
   'vectors.resyncAll': Record<string, never>
 }
 export type TaskName = keyof TaskPayloads
@@ -35,6 +36,7 @@ export const QUEUE_OF: Record<TaskName, QueueName> = {
   'mail.invitesAll': 'mail',
   'mail.offers': 'mail',
   'vectors.syncJob': 'background',
+  'vectors.removeJob': 'background',
   'vectors.resyncAll': 'background'
 }
 
