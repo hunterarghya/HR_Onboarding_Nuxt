@@ -8,6 +8,7 @@ defineProps<{
 const colorMode = useColorMode()
 const appConfig = useAppConfig()
 const sessionUser = useSessionUser()
+const companyNameDialog = useCompanyNameDialog()
 
 const colors = ['red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose']
 const neutrals = ['slate', 'gray', 'zinc', 'neutral', 'stone']
@@ -98,6 +99,12 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
       e.preventDefault()
     }
   }]
+}], [{
+  label: sessionUser.value?.company_name ? `Company: ${sessionUser.value.company_name}` : 'Set company name',
+  icon: 'i-lucide-building-2',
+  onSelect() {
+    companyNameDialog.value = true
+  }
 }], [{
   label: 'Log out',
   icon: 'i-lucide-log-out',

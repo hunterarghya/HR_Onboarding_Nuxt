@@ -5,6 +5,8 @@ import {
   PREVIEW_RAW_MESSAGE, PreviewRawTemplateBody, PreviewTemplateBody,
   SAVE_TEMPLATE_MESSAGE, SaveTemplateBody, TemplateIdParams
 } from './templates.dto'
+import { requireUser } from '~~/server/core/auth/current-user'
+import { profileService } from '../auth/profile.service'
 import { templatesService } from './templates.service'
 
 export const templatesController = {
@@ -36,10 +38,11 @@ export const templatesController = {
   preview: defineApiHandler(async (event) => {
     const { id } = parseParams(event, TemplateIdParams)
     const { sampleData } = await parseBody(event, PreviewTemplateBody)
-    return templatesService.preview(id, sampleData)
+    return templatesService.preview(id, await profileService.companyNameForPreview(requireUser(event).id), sampleData)
   }),
 
-  previewRaw: defineApiHandler(async event =>
-    templatesService.previewRaw(await parseBody(event, PreviewRawTemplateBody, PREVIEW_RAW_MESSAGE))
-  )
+  previewRaw: defineApiHandler(async (event) => {
+    const body = await parseBody(event, PreviewRawTemplateBody, PREVIEW_RAW_MESSAGE)
+    return templatesService.previewRaw(body, await profileService.companyNameForPreview(requireUser(event).id))
+  })
 }

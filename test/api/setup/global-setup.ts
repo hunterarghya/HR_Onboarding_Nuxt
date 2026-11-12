@@ -106,7 +106,7 @@ export default async function setup(project: TestProject) {
     DATABASE_URL: TEST_DATABASE_URL,
     JWT_SECRET: TEST_JWT_SECRET,
     TOKEN_ENCRYPTION_KEY: TEST_TOKEN_ENCRYPTION_KEY,
-    ALLOWED_EMAILS: 'smoke.tester@example.com,no-google@example.com',
+    ALLOWED_EMAIL_DOMAINS: 'example.com',
     GOOGLE_CLIENT_ID: TEST_GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET: 'smoke-test-client-secret',
     GOOGLE_REDIRECT_URI: `${baseURL}/auth/google/callback`,
@@ -159,7 +159,7 @@ export default async function setup(project: TestProject) {
       // The user every test session belongs to, with Google tokens that are fake: the server under test
       // has no network, so any Google call fails fast, exactly as with a revoked account.
       const { rows } = await db.query<{ id: number }>(
-        'INSERT INTO users (email, name, last_login_at) VALUES (\'smoke.tester@example.com\', \'Smoke Tester\', now()) RETURNING id'
+        'INSERT INTO users (email, name, company_name, last_login_at) VALUES (\'smoke.tester@example.com\', \'Smoke Tester\', \'Odysseus\', now()) RETURNING id'
       )
       testUserId = rows[0]!.id
       const far = new Date(Date.now() + 365 * 24 * 3600 * 1000)

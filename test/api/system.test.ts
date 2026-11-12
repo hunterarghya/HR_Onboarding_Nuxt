@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { api } from './helpers/http'
+import { db } from './helpers/db'
+import { api, expectError } from './helpers/http'
 import { userToken } from './helpers/tokens'
 import { TEST_GOOGLE_CLIENT_ID } from './setup/test-env'
 
@@ -65,7 +66,7 @@ describe('GET /api/auth/me', () => {
   it('returns the signed-in user from a Bearer token or the session cookie', async () => {
     const viaHeader = await api('GET', '/api/auth/me')
     expect(viaHeader.status).toBe(200)
-    expect(viaHeader.body).toEqual({ id: expect.any(Number), email: 'smoke.tester@example.com', name: 'Smoke Tester' })
+    expect(viaHeader.body).toEqual({ id: expect.any(Number), email: 'smoke.tester@example.com', name: 'Smoke Tester', company_name: 'Odysseus' })
 
     const viaCookie = await api('GET', '/api/auth/me', { token: null, headers: { cookie: `hr_session=${userToken()}` } })
     expect(viaCookie.body).toEqual(viaHeader.body)
@@ -74,6 +75,22 @@ describe('GET /api/auth/me', () => {
   it('rejects a missing or forged cookie', async () => {
     expect((await api('GET', '/api/auth/me', { token: null })).status).toBe(401)
     expect((await api('GET', '/api/auth/me', { token: null, headers: { cookie: 'hr_session=forged.jwt.value' } })).status).toBe(401)
+  })
+})
+
+describe('PATCH /api/auth/me', () => {
+  it('lets the HR set the company name their emails use', async () => {
+    const { rows } = await db().query('INSERT INTO users (email) VALUES (\'profile.edit@example.com\') RETURNING id')
+    const token = userToken({ email: 'profile.edit@example.com' }, rows[0].id)
+
+    const res = await api('PATCH', '/api/auth/me', { token, body: { company_name: '  Odysseus Labs  ' } })
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ email: 'profile.edit@example.com', company_name: 'Odysseus Labs' })
+    expect((await api('GET', '/api/auth/me', { token })).body.company_name).toBe('Odysseus Labs')
+  })
+
+  it('requires a non-empty company name (400)', async () => {
+    expectError(await api('PATCH', '/api/auth/me', { body: { company_name: '   ' } }), 400, 'company_name is required (1–255 characters)')
   })
 })
 

@@ -35,9 +35,9 @@ export const templatesService = {
   },
 
   /** Renders a saved template with the caller's data, or sample data for its type. */
-  async preview(id: number, sampleData?: Record<string, unknown> | null) {
+  async preview(id: number, companyName: string, sampleData?: Record<string, unknown> | null) {
     const template = await getOrThrow(id)
-    const data = sampleData || getDefaultSampleData(template.type)
+    const data = sampleData || getDefaultSampleData(template.type, companyName)
     return {
       subject: renderString(template.subject, data),
       body: renderString(template.body, data),
@@ -46,8 +46,8 @@ export const templatesService = {
   },
 
   /** Renders an unsaved template. Handlebars syntax errors are reported to the caller. */
-  previewRaw(input: PreviewRawTemplateInput) {
-    const data = input.sampleData || getDefaultSampleData(input.type || 'custom')
+  previewRaw(input: PreviewRawTemplateInput, companyName: string) {
+    const data = input.sampleData || getDefaultSampleData(input.type || 'custom', companyName)
     try {
       return {
         subject: renderString(input.subject || '', data),

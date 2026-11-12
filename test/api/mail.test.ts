@@ -61,6 +61,15 @@ describe('POST /api/mail/interview-invites-all', () => {
   })
 })
 
+describe('sending mail before setting a company name', () => {
+  it('is refused with a clear message (emails say "at {{company_name}}")', async () => {
+    const { rows } = await db().query('INSERT INTO users (email) VALUES (\'no-company@example.com\') ON CONFLICT (email) DO UPDATE SET company_name = NULL RETURNING id')
+    const token = userToken({ email: 'no-company@example.com' }, rows[0].id)
+    const res = await api('POST', '/api/mail/interview-invites-all', { token, body: { templateId: await templateId('invite') } })
+    expectError(res, 400, 'Set your company name (user menu) before sending emails')
+  })
+})
+
 describe('POST /api/mail/offer-letters', () => {
   itRequiresLogin('POST', '/api/mail/offer-letters', { templateId: 1, candidateIds: [1] })
 

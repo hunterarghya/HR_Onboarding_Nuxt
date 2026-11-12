@@ -6,7 +6,6 @@ const list = (value: string | undefined) => (value ?? '').split(',').map(s => s.
 // Each key is added by the commit that first reads it, so this schema never lists unused settings.
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  COMPANY_NAME: z.string().min(1).default('Ripplewalk'),
 
   DATABASE_URL: z.url(),
 
@@ -62,7 +61,6 @@ export const loadConfig = (source: Record<string, string | undefined>) => {
 
   return Object.freeze({
     env: env.NODE_ENV,
-    app: { companyName: env.COMPANY_NAME },
     db: { url: env.DATABASE_URL },
     auth: {
       jwtSecret: env.JWT_SECRET,

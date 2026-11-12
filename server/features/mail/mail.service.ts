@@ -11,6 +11,12 @@ import { templatesRepository } from '../templates/templates.repository'
 // Sends from the signed-in user's Gmail. Each candidate is sent at most once: the invite_sent /
 // offer_sent flag is set after a successful send, and flagged candidates are not picked again.
 
+/** Who sends: the signed-in HR's Gmail address and the company name their emails use. */
+export interface Sender {
+  email: string
+  companyName: string
+}
+
 const longDate = (d: Date) => new Date(d).toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
 const getTemplate = async (templateId: number) => {
@@ -20,7 +26,7 @@ const getTemplate = async (templateId: number) => {
 }
 
 /** Invites the uninvited candidates of one event. Throws (plain Error) if the template or event is missing. */
-const sendInvitesForEvent = async (auth: GoogleAuthClient, senderEmail: string, eventId: number, templateId: number) => {
+const sendInvitesForEvent = async (auth: GoogleAuthClient, sender: Sender, eventId: number, templateId: number) => {
   const template = await getTemplate(templateId)
 
   const event = await interviewEventsRepository.findById(eventId)
@@ -39,6 +45,7 @@ const sendInvitesForEvent = async (auth: GoogleAuthClient, senderEmail: string, 
     try {
       const data = {
         ...candidate,
+        company_name: sender.companyName,
         interview_date: event.event_date ? longDate(event.event_date) : '',
         interview_start_time: event.start_time?.slice(0, 5) || '',
         interview_end_time: event.end_time?.slice(0, 5) || '',
@@ -46,7 +53,7 @@ const sendInvitesForEvent = async (auth: GoogleAuthClient, senderEmail: string, 
         venue_or_link: event.venue_or_link || 'To be confirmed'
       }
 
-      const raw = buildRawEmail(candidate.email, senderEmail, renderString(template.subject, data), renderString(template.body, data))
+      const raw = buildRawEmail(candidate.email, sender.email, renderString(template.subject, data), renderString(template.body, data))
 
       await sendRawMessage(auth, raw)
       await interviewAssignmentsRepository.markInviteSent(candidate.ic_id)
@@ -63,9 +70,9 @@ const sendInvitesForEvent = async (auth: GoogleAuthClient, senderEmail: string, 
 }
 
 export const mailService = {
-  async sendInterviewInvites(auth: GoogleAuthClient, senderEmail: string, eventId: number, templateId: number) {
+  async sendInterviewInvites(auth: GoogleAuthClient, sender: Sender, eventId: number, templateId: number) {
     try {
-      return { message: 'Invites processed', ...await sendInvitesForEvent(auth, senderEmail, eventId, templateId) }
+      return { message: 'Invites processed', ...await sendInvitesForEvent(auth, sender, eventId, templateId) }
     } catch (err) {
       console.error('[Mail] Error sending invites:', err)
       throw new AppError(500, 'MAIL_SEND_FAILED', 'Failed to send invites', (err as Error).message)
@@ -73,13 +80,13 @@ export const mailService = {
   },
 
   /** Every event that still has uninvited candidates, one after another. */
-  async sendAllPendingInvites(auth: GoogleAuthClient, senderEmail: string, templateId: number) {
+  async sendAllPendingInvites(auth: GoogleAuthClient, sender: Sender, templateId: number) {
     try {
       const eventIds = await interviewEventsRepository.findIdsWithUnsentInvites()
 
       let totalSent = 0, totalFailed = 0, totalSkipped = 0
       for (const eventId of eventIds) {
-        const result = await sendInvitesForEvent(auth, senderEmail, eventId, templateId)
+        const result = await sendInvitesForEvent(auth, sender, eventId, templateId)
         totalSent += result.sent
         totalFailed += result.failed
         totalSkipped += result.skipped
@@ -97,7 +104,7 @@ export const mailService = {
   },
 
   /** Offer letters to the given candidates that are selected and haven't had one yet. */
-  async sendOfferLetters(auth: GoogleAuthClient, senderEmail: string, templateId: number, candidateIds: number[]) {
+  async sendOfferLetters(auth: GoogleAuthClient, sender: Sender, templateId: number, candidateIds: number[]) {
     try {
       const template = await getTemplate(templateId)
       const candidates = await candidatesRepository.findSelectedWithoutOffer(candidateIds)
@@ -113,10 +120,11 @@ export const mailService = {
         try {
           const data = {
             ...candidate,
+            company_name: sender.companyName,
             joining_date: candidate.joining_date ? longDate(candidate.joining_date) : ''
           }
 
-          const raw = buildRawEmail(candidate.email, senderEmail, renderString(template.subject, data), renderString(template.body, data))
+          const raw = buildRawEmail(candidate.email, sender.email, renderString(template.subject, data), renderString(template.body, data))
 
           await sendRawMessage(auth, raw)
           await candidatesRepository.markOfferSent(candidate.id)

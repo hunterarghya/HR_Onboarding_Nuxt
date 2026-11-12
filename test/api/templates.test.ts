@@ -85,7 +85,8 @@ describe('POST /api/templates/:id/preview', () => {
   it('renders a default template with built-in sample data for its type', async () => {
     const res = await api('POST', `/api/templates/${await defaultTemplateId('offer')}/preview`, { body: {} })
     expect(res.status).toBe(200)
-    expect(res.body.subject).toBe('Offer of Employment - Senior Backend Developer at Ripplewalk')
+    // {{company_name}} is the previewing HR's own company
+    expect(res.body.subject).toBe('Offer of Employment - Senior Backend Developer at Odysseus')
     expect(res.body.body).toContain('Ronit Sharma')
     expect(res.body.sampleData).toMatchObject({ offered_role: 'Senior Backend Developer' })
   })

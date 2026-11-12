@@ -3,9 +3,10 @@ import { requireUser } from '~~/server/core/auth/current-user'
 import { clearSessionCookie, setSessionCookie } from '~~/server/core/auth/session-cookie'
 import { ForbiddenError } from '~~/server/core/errors/app-error'
 import { defineApiHandler } from '~~/server/core/http/define-api-handler'
-import { parseQuery } from '~~/server/core/http/validate'
-import { GoogleCallbackQuery } from './auth.dto'
+import { parseBody, parseQuery } from '~~/server/core/http/validate'
+import { COMPANY_NAME_MESSAGE, GoogleCallbackQuery, UpdateProfileBody } from './auth.dto'
 import { authService } from './auth.service'
+import { profileService } from './profile.service'
 
 export const authController = {
   getGoogleAuthUrl: defineApiHandler(() => ({ url: authService.buildGoogleAuthUrl() })),
@@ -30,9 +31,13 @@ export const authController = {
   }),
 
   /** Who is signed in. The frontend's route guard calls this, since page scripts can't read the cookie. */
-  me: defineApiHandler((event) => {
-    const { id, email, name } = requireUser(event)
-    return { id, email, name: name ?? null }
+  me: defineApiHandler(event => profileService.get(requireUser(event).id)),
+
+  /** The HR sets the company name their emails use. */
+  updateMe: defineApiHandler(async (event) => {
+    const { id } = requireUser(event)
+    const { company_name } = await parseBody(event, UpdateProfileBody, COMPANY_NAME_MESSAGE)
+    return profileService.setCompanyName(id, company_name)
   }),
 
   /** Clears the session cookie. Public, so it also works once the session has expired. */
