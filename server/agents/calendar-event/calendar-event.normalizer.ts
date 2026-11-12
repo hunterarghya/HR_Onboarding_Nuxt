@@ -1,19 +1,26 @@
+import { z } from 'zod'
 import type { CalendarEvent } from '~~/server/integrations/google/calendar.client'
+import { llmFlag } from '../llm-json'
 
 // Deterministic clean-up of the model's extraction: role reconciliation, time fallback and the
 // UTC→IST shift, interview mode and venue. No LLM here, so it is unit-tested directly.
 
-/** The JSON the model is asked to return (see calendar-event.prompt.ts). Nothing is guaranteed: it is model output. */
-export interface CalendarExtraction {
-  is_activity?: unknown
-  matched_role?: string | null
-  date?: string
-  start_time?: string | null
-  end_time?: string | null
-  num_candidates?: unknown
-  interview_mode?: string
-  venue_or_link?: string
-}
+/**
+ * The JSON the model is asked to return (see calendar-event.prompt.ts). is_activity must be a yes/no;
+ * any other field the model gets wrong is dropped and filled from the calendar event or a default.
+ */
+export const CalendarExtractionSchema = z.object({
+  is_activity: llmFlag,
+  matched_role: z.string().max(255).nullish().catch(null),
+  date: z.iso.date().optional().catch(undefined),
+  start_time: z.string().nullish().catch(null),
+  end_time: z.string().nullish().catch(null),
+  num_candidates: z.coerce.number().int().min(1).max(500).optional().catch(undefined),
+  interview_mode: z.enum(['online', 'offline']).optional().catch(undefined),
+  venue_or_link: z.string().max(2000).optional().catch(undefined)
+})
+
+export type CalendarExtraction = z.output<typeof CalendarExtractionSchema>
 
 export interface InterviewEventDraft {
   role: string
@@ -47,8 +54,8 @@ export const sanitizeTime = (timeStr: string | undefined | null): string | null 
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
-/** Turns the model's raw JSON (already parsed, is_activity true) into an interview event, or null to skip. */
-export const normalizeCalendarExtraction = (calendarEvent: CalendarEvent, activeRoles: string[], result: CalendarExtraction): InterviewEventDraft | null => {
+/** Turns the model's checked answer (is_activity true, with a date) into an interview event, or null to skip. */
+export const normalizeCalendarExtraction = (calendarEvent: CalendarEvent, activeRoles: string[], result: CalendarExtraction & { date: string }): InterviewEventDraft | null => {
   const summary = calendarEvent.summary || ''
   const description = calendarEvent.description || ''
   const startDateTime = calendarEvent.start?.dateTime || calendarEvent.start?.date || ''
@@ -118,10 +125,10 @@ export const normalizeCalendarExtraction = (calendarEvent: CalendarEvent, active
 
   const finalResult: InterviewEventDraft = {
     role: finalRole,
-    event_date: result.date!,
+    event_date: result.date,
     start_time: istStart,
     end_time: istEnd,
-    num_candidates: parseInt(String(result.num_candidates)) || 5,
+    num_candidates: result.num_candidates ?? 5,
     extra_candidates: 0,
     interview_mode: interviewMode,
     venue_or_link: venueOrLink,
