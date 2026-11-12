@@ -48,8 +48,8 @@ describe('GET /api/templates/:id', () => {
     expectError(await api('GET', '/api/templates/999999'), 404, 'Template not found')
   })
 
-  it('crashes with 500 for a non-numeric id (VAL)', async () => {
-    expectError(await api('GET', '/api/templates/abc'), 500)
+  it('rejects a non-numeric id (400, was a 500 crash)', async () => {
+    expectError(await api('GET', '/api/templates/abc'), 400, 'Validation failed')
   })
 })
 
@@ -101,9 +101,9 @@ describe('POST /api/templates/:id/preview', () => {
     expectError(await api('POST', '/api/templates/999999/preview', { body: {} }), 404, 'Template not found')
   })
 
-  it('crashes with 500 when there is no body (VAL)', async () => {
+  it('rejects a request with no body (400, was a 500 crash)', async () => {
     const tpl = await createTemplate()
-    expectError(await api('POST', `/api/templates/${tpl.id}/preview`), 500)
+    expectError(await api('POST', `/api/templates/${tpl.id}/preview`), 400)
   })
 })
 

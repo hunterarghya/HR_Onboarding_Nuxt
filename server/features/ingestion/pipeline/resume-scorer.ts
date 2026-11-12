@@ -1,78 +1,11 @@
 /**
- * Vector Matching Service
- * Job descriptions in Qdrant + BAAI/bge-small-en-v1.5 embeddings for resume-to-JD matching.
- * The Qdrant client and the embedding model live in integrations/.
+ * Resume scoring: semantic match of a resume against the job descriptions in Qdrant
+ * (BAAI/bge-small-en-v1.5 embeddings), optionally weighted per section by the job's criteria_weights.
  */
 
-import { config } from '~~/server/config/env'
+import type { JobRoleRow } from '~~/server/database/types'
 import { embed } from '~~/server/integrations/embeddings/embedder'
-import { getQdrant } from '~~/server/integrations/qdrant/qdrant.client'
-
-const COLLECTION_NAME = config.qdrant.collection
-const VECTOR_SIZE = config.qdrant.vectorSize
-
-export const initCollection = async (): Promise<void> => {
-  try {
-    const collections = await getQdrant().getCollections()
-    const exists = collections.collections.some(c => c.name === COLLECTION_NAME)
-    if (!exists) {
-      await getQdrant().createCollection(COLLECTION_NAME, {
-        vectors: {
-          full: { size: VECTOR_SIZE, distance: 'Cosine' },
-          skills: { size: VECTOR_SIZE, distance: 'Cosine' },
-          experience: { size: VECTOR_SIZE, distance: 'Cosine' }
-        }
-      })
-      console.log(`--- [Vector] Created Qdrant collection: ${COLLECTION_NAME} ---`)
-    } else {
-      console.log(`--- [Vector] Qdrant collection already exists: ${COLLECTION_NAME} ---`)
-    }
-  } catch (err: any) {
-    console.error('--- [Vector] Error initializing Qdrant collection:', err.message)
-  }
-}
-
-export const upsertJobDescription = async (job: any): Promise<void> => {
-  try {
-    const fullText = `${job.role}. ${job.skills || ''}. ${job.qualification || ''}. ${job.experience || ''}. ${job.location || ''}`
-    const skillsText = job.skills || job.role
-    const experienceText = job.experience || 'Any experience'
-
-    const [fullVec, skillsVec, expVec] = await Promise.all([
-      embed(fullText),
-      embed(skillsText),
-      embed(experienceText)
-    ])
-
-    await getQdrant().upsert(COLLECTION_NAME, {
-      wait: true,
-      points: [{
-        id: job.id,
-        vector: { full: fullVec, skills: skillsVec, experience: expVec },
-        payload: {
-          role: job.role,
-          skills: job.skills,
-          experience: job.experience,
-          shortlist_mode: job.shortlist_mode,
-          min_score: job.min_score,
-          criteria_weights: job.criteria_weights || null
-        }
-      }]
-    })
-    console.log(`--- [Vector] Upserted JD: ${job.role} (id: ${job.id}) ---`)
-  } catch (err: any) {
-    console.error(`--- [Vector] Error upserting JD ${job.role}:`, err.message)
-  }
-}
-
-export const removeJobDescription = async (jobId: number): Promise<void> => {
-  try {
-    await getQdrant().delete(COLLECTION_NAME, { wait: true, points: [jobId] })
-    console.log(`--- [Vector] Removed JD id: ${jobId} ---`)
-  } catch (err: any) {
-    console.error(`--- [Vector] Error removing JD ${jobId}:`, err.message)
-  }
-}
+import { jobVectorsRepository } from '../../job-roles/job-vectors.repository'
 
 const toScore = (similarity: number): number => {
   return Math.round(Math.min(100, Math.max(0, similarity * 100)))
@@ -93,19 +26,14 @@ const cosineSimilarity = (a: number[], b: number[]): number => {
 export const matchResumeToJobs = async (
   resumeText: string,
   sections: { skills: string, projects: string, experience: string },
-  jobRoles: any[]
+  jobRoles: JobRoleRow[]
 ): Promise<{ target_role: string, score: number }> => {
   try {
     console.log('--- [Vector] Starting Match Process ---')
     const resumeVec = await embed(resumeText)
 
     // search() was removed from the client in 1.x; query() is its replacement
-    const { points: searchResult } = await getQdrant().query(COLLECTION_NAME, {
-      query: resumeVec,
-      using: 'full',
-      limit: 3,
-      with_payload: true
-    })
+    const searchResult = await jobVectorsRepository.searchByFullVector(resumeVec, 3)
 
     if (!searchResult || searchResult.length === 0) {
       console.log('--- [Vector] No matching job descriptions found in Qdrant. ---')
@@ -114,7 +42,7 @@ export const matchResumeToJobs = async (
 
     console.log('--- [Vector] Top 3 Semantic Matches: ---')
     searchResult.forEach((res, i) => {
-      console.log(`      ${i + 1}. ${(res.payload as any).role} (Score: ${toScore(res.score)}%)`)
+      console.log(`      ${i + 1}. ${res.payload!.role as string} (Score: ${toScore(res.score)}%)`)
     })
 
     const topMatch = searchResult[0]!
@@ -125,7 +53,7 @@ export const matchResumeToJobs = async (
       return { target_role: 'Open', score: toScore(topScore) }
     }
 
-    const targetRole = (topMatch.payload as any).role
+    const targetRole = topMatch.payload!.role as string
     const jobId = topMatch.id as number
 
     console.log(`--- [Vector] Selected Candidate Role: ${targetRole} ---`)
@@ -151,13 +79,9 @@ export const matchResumeToJobs = async (
         sectionEmbeddings.experience = await embed(sections.experience)
       }
 
-      const jobPoint = await getQdrant().retrieve(COLLECTION_NAME, {
-        ids: [jobId],
-        with_vector: true
-      })
+      const jobVectors = await jobVectorsRepository.retrieveVectors(jobId)
 
-      if (jobPoint && jobPoint.length > 0) {
-        const jobVectors = jobPoint[0]!.vector as Record<string, number[]>
+      if (jobVectors) {
         let weightedSum = 0
         let totalWeight = 0
 
@@ -200,8 +124,8 @@ export const matchResumeToJobs = async (
     }
 
     return { target_role: targetRole, score: finalScore }
-  } catch (err: any) {
-    console.error('--- [Vector] Error in matchResumeToJobs:', err.message)
+  } catch (err) {
+    console.error('--- [Vector] Error in matchResumeToJobs:', (err as Error).message)
     return { target_role: 'Open', score: 0 }
   }
 }

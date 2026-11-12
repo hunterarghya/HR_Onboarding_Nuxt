@@ -196,7 +196,7 @@ const handleSendOfferLetters = async () => {
     fetchSelectedCandidates()
   } catch (err: any) {
     console.error('Mail error:', err)
-    toast.add({ title: 'Failed to send emails', description: err.data?.details || err.message, color: 'error' })
+    toast.add({ title: 'Failed to send emails', description: err.data?.data?.details || err.message, color: 'error' })
   } finally {
     mailModal.sending = false
   }

@@ -8,3 +8,8 @@ export const getQdrant = (): QdrantClient => {
   client ??= new QdrantClient({ url: config.qdrant.url })
   return client
 }
+
+/** Throws if Qdrant can't be reached. */
+export const pingQdrant = async (): Promise<void> => {
+  await getQdrant().getCollections()
+}

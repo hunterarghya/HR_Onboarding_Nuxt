@@ -1,6 +1,6 @@
 import type { CalendarEvent } from '~~/server/integrations/google/calendar.client'
 import { getLlm, type LlmProvider } from '~~/server/integrations/llm'
-import { normalizeCalendarExtraction, type InterviewEventDraft } from './calendar-event.normalizer'
+import { normalizeCalendarExtraction, type CalendarExtraction, type InterviewEventDraft } from './calendar-event.normalizer'
 import { buildCalendarEventPrompt } from './calendar-event.prompt'
 
 /**
@@ -30,12 +30,12 @@ export const extractInterviewEvent = async (calendarEvent: CalendarEvent, active
 
     console.log(`[CalendarAgent] Raw ${llm.name} response: "${raw}"`)
 
-    let result: any
+    let result: CalendarExtraction
     try {
       result = JSON.parse(raw)
       console.log(`[CalendarAgent] Parsed JSON:`, JSON.stringify(result, null, 2))
-    } catch (parseErr: any) {
-      console.error(`[CalendarAgent] ❌ JSON Parse Failure: ${parseErr.message}`)
+    } catch (parseErr) {
+      console.error(`[CalendarAgent] ❌ JSON Parse Failure: ${(parseErr as Error).message}`)
       return null
     }
 
@@ -45,8 +45,8 @@ export const extractInterviewEvent = async (calendarEvent: CalendarEvent, active
     }
 
     return normalizeCalendarExtraction(calendarEvent, activeRoles, result)
-  } catch (err: any) {
-    console.error(`[CalendarAgent] ❌ Error calling ${llm.name}:`, err.message)
+  } catch (err) {
+    console.error(`[CalendarAgent] ❌ Error calling ${llm.name}:`, (err as Error).message)
     return null
   }
 }

@@ -1,11 +1,12 @@
 import jwt from 'jsonwebtoken'
 import { config } from '~~/server/config/env'
+import type { GoogleCredentials } from '~~/server/integrations/google/oauth'
 
 export interface SessionUser {
   email: string
   name?: string
   // TEMPORARY: Google OAuth tokens still ride in the session until they move server-side (SEC-01)
-  tokens?: Record<string, any>
+  tokens?: GoogleCredentials
 }
 
 export const signSession = (user: SessionUser): string =>

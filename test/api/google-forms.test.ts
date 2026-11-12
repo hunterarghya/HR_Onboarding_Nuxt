@@ -44,7 +44,7 @@ describe('POST /api/google-forms/create', () => {
     const job = await insertJob()
     const res = await api('POST', '/api/google-forms/create', { token: userToken(), body: { jobRoleId: job.id } })
     expectError(res, 500, 'Failed to create Google Form')
-    expect(res.body.data.error).toEqual(expect.any(String))
+    expect(res.body.data.details).toEqual(expect.any(String))
   })
 })
 
@@ -69,6 +69,10 @@ describe('DELETE /api/google-forms/:id', () => {
     const form = await insertForm({ job_role_id: job.id })
     const res = await api('DELETE', `/api/google-forms/${job.id}`, { token: userToken(), query: { type: 'job' } })
     expect(res.body).toEqual({ message: 'Form removed', formId: form.form_id })
+  })
+
+  it('rejects a non-numeric job id with ?type=job (400, was a 500 crash)', async () => {
+    expectError(await api('DELETE', '/api/google-forms/abc', { query: { type: 'job' } }), 400)
   })
 
   it('returns 404 when nothing matches', async () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { extractDriveFileId } from '../../server/integrations/google/drive.client'
 import { buildRawEmail } from '../../server/integrations/google/mime'
-import { extractFileAnswer, extractTextAnswer } from '../../server/utils/googleForms'
+import { extractFileAnswer, extractTextAnswer } from '../../server/features/ingestion/sources/form-answers'
 
 describe('buildRawEmail', () => {
   it('builds a base64url HTML message with the headers Gmail expects', () => {

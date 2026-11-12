@@ -3,6 +3,18 @@ import type { CalendarEvent } from '~~/server/integrations/google/calendar.clien
 // Deterministic clean-up of the model's extraction: role reconciliation, time fallback and the
 // UTC→IST shift, interview mode and venue. No LLM here, so it is unit-tested directly.
 
+/** The JSON the model is asked to return (see calendar-event.prompt.ts). Nothing is guaranteed: it is model output. */
+export interface CalendarExtraction {
+  is_activity?: unknown
+  matched_role?: string | null
+  date?: string
+  start_time?: string | null
+  end_time?: string | null
+  num_candidates?: unknown
+  interview_mode?: string
+  venue_or_link?: string
+}
+
 export interface InterviewEventDraft {
   role: string
   event_date: string
@@ -36,18 +48,19 @@ export const sanitizeTime = (timeStr: string | undefined | null): string | null 
 }
 
 /** Turns the model's raw JSON (already parsed, is_activity true) into an interview event, or null to skip. */
-export const normalizeCalendarExtraction = (calendarEvent: CalendarEvent, activeRoles: string[], result: any): InterviewEventDraft | null => {
+export const normalizeCalendarExtraction = (calendarEvent: CalendarEvent, activeRoles: string[], result: CalendarExtraction): InterviewEventDraft | null => {
   const summary = calendarEvent.summary || ''
   const description = calendarEvent.description || ''
   const startDateTime = calendarEvent.start?.dateTime || calendarEvent.start?.date || ''
   const endDateTime = calendarEvent.end?.dateTime || calendarEvent.end?.date || ''
 
   let finalRole: string | null = null
-  if (result.matched_role) {
-    finalRole = activeRoles.find(r => r.toLowerCase() === result.matched_role.toLowerCase()) || null
-    if (!finalRole && result.matched_role.toLowerCase() === 'open role') finalRole = 'Open Role'
+  const matchedRole = result.matched_role
+  if (matchedRole) {
+    finalRole = activeRoles.find(r => r.toLowerCase() === matchedRole.toLowerCase()) || null
+    if (!finalRole && matchedRole.toLowerCase() === 'open role') finalRole = 'Open Role'
     if (!finalRole) {
-      console.log(`[CalendarAgent] Role "${result.matched_role}" not in active list. Attempting partial match...`)
+      console.log(`[CalendarAgent] Role "${matchedRole}" not in active list. Attempting partial match...`)
       finalRole = activeRoles.find(r => summary.toLowerCase().includes(r.toLowerCase())) || null
     }
   }
@@ -89,7 +102,7 @@ export const normalizeCalendarExtraction = (calendarEvent: CalendarEvent, active
   const istStart = convertToIST(startTime)
   const istEnd = convertToIST(endTime)
 
-  const googleMeetLink = calendarEvent.hangoutLink || calendarEvent.conferenceData?.entryPoints?.find((e: any) => e.entryPointType === 'video')?.uri || ''
+  const googleMeetLink = calendarEvent.hangoutLink || calendarEvent.conferenceData?.entryPoints?.find(e => e.entryPointType === 'video')?.uri || ''
   const calendarLocation = calendarEvent.location || ''
 
   let interviewMode = result.interview_mode || 'offline'
@@ -105,10 +118,10 @@ export const normalizeCalendarExtraction = (calendarEvent: CalendarEvent, active
 
   const finalResult: InterviewEventDraft = {
     role: finalRole,
-    event_date: result.date,
+    event_date: result.date!,
     start_time: istStart,
     end_time: istEnd,
-    num_candidates: parseInt(result.num_candidates) || 5,
+    num_candidates: parseInt(String(result.num_candidates)) || 5,
     extra_candidates: 0,
     interview_mode: interviewMode,
     venue_or_link: venueOrLink,

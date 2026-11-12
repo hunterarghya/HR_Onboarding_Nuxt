@@ -8,6 +8,8 @@ export interface LlmProvider {
   readonly model: string
   /** Sends `prompt` in the provider's JSON mode and returns the raw JSON text the model produced. */
   generateJson(prompt: string): Promise<string>
+  /** Cheap reachability/credentials check for the health endpoint; throws LlmError if unusable. */
+  ping(timeoutMs: number): Promise<void>
 }
 
 export interface OllamaSettings {

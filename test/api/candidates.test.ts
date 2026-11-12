@@ -31,8 +31,9 @@ describe('GET /api/candidates', () => {
     expect(filtered.body.data.map((c: any) => c.name)).toEqual(['Mid Score'])
   })
 
-  it('crashes with 500 on a non-numeric limit (VAL)', async () => {
-    expectError(await api('GET', '/api/candidates', { query: { limit: 'abc' } }), 500, 'Error fetching candidates')
+  it('rejects non-numeric limit and score filters (400, were 500 crashes)', async () => {
+    expectError(await api('GET', '/api/candidates', { query: { limit: 'abc' } }), 400, 'Validation failed')
+    expectError(await api('GET', '/api/candidates', { query: { minScore: 'high' } }), 400, 'Validation failed')
   })
 })
 

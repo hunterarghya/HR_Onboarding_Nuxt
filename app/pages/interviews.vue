@@ -131,7 +131,7 @@ const handleSyncCalendar = async () => {
     console.error('Calendar sync error:', err)
     toast.add({
       title: 'Calendar Sync Failed',
-      description: err.data?.details || err.data?.statusMessage || err.message || 'Could not sync with Google Calendar',
+      description: err.data?.data?.details || err.data?.statusMessage || err.message || 'Could not sync with Google Calendar',
       color: 'error'
     })
   } finally {
@@ -353,7 +353,7 @@ const sendInvites = async () => {
     if (mailModal.eventId) fetchAssignedCandidates(mailModal.eventId)
   } catch (err: any) {
     console.error('Mail error:', err)
-    toast.add({ title: 'Failed to send invites', description: err.data?.details || err.message, color: 'error' })
+    toast.add({ title: 'Failed to send invites', description: err.data?.data?.details || err.message, color: 'error' })
   } finally {
     mailModal.sending = false
   }

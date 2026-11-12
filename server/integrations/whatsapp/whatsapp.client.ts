@@ -1,4 +1,4 @@
-import pkg from 'whatsapp-web.js'
+import pkg, { type Client as WAClient, type ClientOptions } from 'whatsapp-web.js'
 import qrcode from 'qrcode'
 import fs from 'fs'
 import path from 'path'
@@ -6,7 +6,16 @@ import { config } from '~~/server/config/env'
 
 const { Client, LocalAuth } = pkg
 
-let client: any = null
+/** A PDF found in a group chat (base64 data). */
+export interface WhatsAppPdf {
+  filename: string
+  data: string
+  sender: string
+  source: 'WhatsApp'
+  timestamp: Date
+}
+
+let client: WAClient | null = null
 let qrCodeData: string | null = null
 let status = 'initializing'
 let initialized = false
@@ -65,11 +74,11 @@ export const initWhatsApp = (): void => {
       headless: true,
       protocolTimeout: 180000
     }
-  } as any)
+  } as ClientOptions)
 
   client.on('qr', (qr: string) => {
     status = 'qr'
-    qrcode.toDataURL(qr, (err: any, url: string) => {
+    qrcode.toDataURL(qr, (_err: Error | null | undefined, url: string) => {
       qrCodeData = url
     })
   })
@@ -110,7 +119,7 @@ export const initWhatsApp = (): void => {
     setTimeout(() => initWhatsApp(), 5000)
   })
 
-  client.initialize().catch((err: any) => {
+  client.initialize().catch((err: unknown) => {
     console.error('--- WhatsApp Init Error ---', err)
     status = 'error'
   })
@@ -127,17 +136,17 @@ export const getGroups = async () => {
   try {
     console.log('--- WhatsApp: Fetching groups... ---')
     let chats = await client!.getChats()
-    let groups = chats.filter((chat: any) => chat.isGroup)
+    let groups = chats.filter(chat => chat.isGroup)
 
     if (groups.length === 0) {
       console.log('--- WhatsApp: No groups in memory, waiting 3s to retry... ---')
       await new Promise(r => setTimeout(r, 3000))
       chats = await client!.getChats()
-      groups = chats.filter((chat: any) => chat.isGroup)
+      groups = chats.filter(chat => chat.isGroup)
     }
 
     console.log(`--- WhatsApp: Found ${groups.length} groups ---`)
-    return groups.map((chat: any) => ({ id: (chat.id as any)._serialized, name: chat.name }))
+    return groups.map(chat => ({ id: chat.id._serialized, name: chat.name }))
   } catch (err) {
     console.error('--- WhatsApp Error Fetching Groups ---', err)
     return []
@@ -155,7 +164,7 @@ export const fetchPDFsFromGroup = async (groupId: string, sinceDate: Date | null
     const messages = await chat.fetchMessages({ limit: 100 })
     console.log(`--- WhatsApp: Found ${messages.length} messages. Checking media... ---`)
 
-    const attachments: any[] = []
+    const attachments: WhatsAppPdf[] = []
 
     for (const msg of messages) {
       if (sinceDate) {
@@ -178,7 +187,7 @@ export const fetchPDFsFromGroup = async (groupId: string, sinceDate: Date | null
               attachments.push({
                 filename: media.filename || 'resume.pdf',
                 data: media.data,
-                sender: (msg as any).author || msg.from,
+                sender: msg.author || msg.from,
                 source: 'WhatsApp',
                 timestamp: new Date(msg.timestamp * 1000)
               })
@@ -188,8 +197,8 @@ export const fetchPDFsFromGroup = async (groupId: string, sinceDate: Date | null
           } else {
             console.log(`--- WhatsApp: downloadMedia returned null or no data ---`)
           }
-        } catch (downloadErr: any) {
-          console.error(`--- WhatsApp: ❌ downloadMedia Error: ${downloadErr.message} ---`)
+        } catch (downloadErr) {
+          console.error(`--- WhatsApp: ❌ downloadMedia Error: ${(downloadErr as Error).message} ---`)
         }
       } else {
         // console.log(`--- WhatsApp: Message has no media ---`)

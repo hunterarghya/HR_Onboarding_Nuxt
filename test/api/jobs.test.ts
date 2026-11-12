@@ -26,8 +26,12 @@ describe('POST /api/jobs', () => {
     expect(res.body.salary).toBe('lots of money')
   })
 
-  it('crashes with 500 when role is missing (VAL: becomes 400 with DTOs)', async () => {
-    expectError(await api('POST', '/api/jobs', { body: { salary: '100' } }), 500, 'Internal Server Error')
+  it('rejects an empty deadline (400, was a 500 crash: VAL-01)', async () => {
+    expectError(await api('POST', '/api/jobs', { body: { role: 'Ops', deadline: '' } }), 400, 'Invalid date/time value')
+  })
+
+  it('rejects a job without a role (400, was a 500 crash)', async () => {
+    expectError(await api('POST', '/api/jobs', { body: { salary: '100' } }), 400, 'Validation failed')
   })
 })
 
@@ -68,8 +72,8 @@ describe('PATCH /api/jobs/:id', () => {
     expectError(await api('PATCH', '/api/jobs/999999', { body: { location: 'X' } }), 404, 'Job role not found')
   })
 
-  it('crashes with 500 for a non-numeric id (VAL)', async () => {
-    expectError(await api('PATCH', '/api/jobs/abc', { body: { location: 'X' } }), 500)
+  it('rejects a non-numeric id (400, was a 500 crash)', async () => {
+    expectError(await api('PATCH', '/api/jobs/abc', { body: { location: 'X' } }), 400)
   })
 })
 
