@@ -11,8 +11,8 @@ const slot = {
 }
 
 describe('toCalendarEvent', () => {
-  it('builds the title, description and IST times of an offline slot', () => {
-    const { resource, conferenceDataVersion } = toCalendarEvent({ ...slot, interview_mode: 'offline', venue_or_link: 'Office, Noida' })
+  it('builds the title, description and times (in the configured zone) of an offline slot', () => {
+    const { resource, conferenceDataVersion } = toCalendarEvent({ ...slot, interview_mode: 'offline', venue_or_link: 'Office, Noida' }, 'Asia/Kolkata')
     expect(conferenceDataVersion).toBeUndefined()
     expect(resource).toEqual({
       summary: 'Interview: Backend Developer',
@@ -24,14 +24,14 @@ describe('toCalendarEvent', () => {
   })
 
   it('requests a Meet link for an online slot without one', () => {
-    const { resource, conferenceDataVersion } = toCalendarEvent({ ...slot, extra_candidates: 0, interview_mode: 'online', venue_or_link: '' })
+    const { resource, conferenceDataVersion } = toCalendarEvent({ ...slot, extra_candidates: 0, interview_mode: 'online', venue_or_link: '' }, 'Asia/Kolkata')
     expect(conferenceDataVersion).toBe(1)
     expect(resource.conferenceData?.createRequest?.conferenceSolutionKey).toEqual({ type: 'hangoutsMeet' })
     expect(resource.description).toBe('Role: Backend Developer\nCandidates: 5\nMode: Online (Virtual)\nType: HR Interview Schedule')
   })
 
   it('keeps an existing online link instead of requesting one', () => {
-    const { resource, conferenceDataVersion } = toCalendarEvent({ ...slot, interview_mode: 'online', venue_or_link: 'https://meet.google.com/abc' })
+    const { resource, conferenceDataVersion } = toCalendarEvent({ ...slot, interview_mode: 'online', venue_or_link: 'https://meet.google.com/abc' }, 'Europe/London')
     expect(conferenceDataVersion).toBeUndefined()
     expect(resource.conferenceData).toBeUndefined()
     expect(resource.description).toContain('Meet Link: https://meet.google.com/abc')

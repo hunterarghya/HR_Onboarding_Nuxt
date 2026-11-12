@@ -5,10 +5,10 @@ import { CalendarExtractionSchema, normalizeCalendarExtraction, type InterviewEv
 import { buildCalendarEventPrompt } from './calendar-event.prompt'
 
 /**
- * Asks the LLM whether a calendar event is an interview and, if so, returns it as an
- * interview event draft. Returns null for non-interviews and on any model or parsing failure.
+ * Asks the LLM whether a calendar event is an interview and, if so, returns it as an interview event
+ * draft with times in `timeZone`. Returns null for non-interviews and on any model or parsing failure.
  */
-export const extractInterviewEvent = async (calendarEvent: CalendarEvent, activeRoles: string[], llm: LlmProvider = getLlm()): Promise<InterviewEventDraft | null> => {
+export const extractInterviewEvent = async (calendarEvent: CalendarEvent, activeRoles: string[], timeZone: string, llm: LlmProvider = getLlm()): Promise<InterviewEventDraft | null> => {
   const summary = calendarEvent.summary || ''
   const description = calendarEvent.description || ''
   const startDateTime = calendarEvent.start?.dateTime || calendarEvent.start?.date || ''
@@ -18,8 +18,8 @@ export const extractInterviewEvent = async (calendarEvent: CalendarEvent, active
   console.log(`[CalendarAgent] Event ID: ${calendarEvent.id}`)
   console.log(`[CalendarAgent] Summary/Title: "${summary}"`)
   console.log(`[CalendarAgent] Description: "${description}"`)
-  console.log(`[CalendarAgent] Start (UTC): ${startDateTime}`)
-  console.log(`[CalendarAgent] End (UTC): ${endDateTime}`)
+  console.log(`[CalendarAgent] Start: ${startDateTime}`)
+  console.log(`[CalendarAgent] End: ${endDateTime}`)
   console.log(`[CalendarAgent] Active roles to match: [${activeRoles.join(', ')}]`)
 
   const prompt = buildCalendarEventPrompt(calendarEvent, activeRoles)
@@ -39,12 +39,7 @@ export const extractInterviewEvent = async (calendarEvent: CalendarEvent, active
       console.log(`[CalendarAgent] ⏭️ SKIPPED: Agent said is_activity=false`)
       return null
     }
-    if (!result.date) {
-      console.log(`[CalendarAgent] ⏭️ SKIPPED: no valid date in the answer`)
-      return null
-    }
-
-    return normalizeCalendarExtraction(calendarEvent, activeRoles, { ...result, date: result.date })
+    return normalizeCalendarExtraction(calendarEvent, activeRoles, result, timeZone)
   } catch (err) {
     console.error(`[CalendarAgent] ❌ Error calling ${llm.name}:`, (err as Error).message)
     return null

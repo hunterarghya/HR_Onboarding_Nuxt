@@ -12,7 +12,7 @@ export const buildCalendarEventPrompt = (calendarEvent: CalendarEvent, activeRol
     
     Event Title: ${summary}
     Description: ${description}
-    Event Time (UTC): ${startDateTime} to ${endDateTime}
+    Event Time: ${startDateTime} to ${endDateTime}
     Location: ${calendarEvent.location || 'Not specified'}
     Conference/Meet Link: ${calendarEvent.hangoutLink || calendarEvent.conferenceData?.entryPoints?.[0]?.uri || 'None'}
 
@@ -25,7 +25,7 @@ export const buildCalendarEventPrompt = (calendarEvent: CalendarEvent, activeRol
     3. If the event IS an interview/hiring activity but NO role from the list matches, return matched_role as "Open Role".
     4. If the event is NOT related to interviews or hiring at all, return is_activity=false.
     5. Extract the date (YYYY-MM-DD).
-    6. Extract the start_time and end_time (HH:MM) EXACTLY as they appear in the UTC timestamp provided above. DO NOT convert them. The time MUST be in HH:MM format (e.g., "09:00", "14:30"). Never return text like "TBC" or "N/A".
+    6. Extract the start_time and end_time (HH:MM, 24-hour) of the interview. If the event time above has no time of day (an all-day event), take them from the title or description; return null if none is stated. Never return text like "TBC" or "N/A".
     7. Candidate Count: Look for ANY number associated with candidates. If no number is found, return 5 as default.
     8. Interview Mode: If the event has a Google Meet link, conference data, or mentions "online"/"virtual"/"remote", return "online". Otherwise return "offline".
     9. Venue or Link: If online return the URL, if offline return the address, if not found return empty string.

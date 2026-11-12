@@ -1,4 +1,5 @@
 import { extractInterviewEvent } from '~~/server/agents/calendar-event/calendar-event.agent'
+import { config } from '~~/server/config/env'
 import { AppError } from '~~/server/core/errors/app-error'
 import { enqueue } from '~~/server/core/tasks/queues'
 import type { TaskProgress } from '~~/server/core/tasks/task-status'
@@ -59,7 +60,7 @@ const runSync = async (auth: GoogleAuthClient, onProgress: (p: TaskProgress) => 
     await onProgress({ done: idx, total: toImport.length, stage: 'reading calendar events' })
     console.log(`\n[Sync] --- Processing event ${idx + 1}/${toImport.length}: "${calEvent.summary}" (${calEvent.id}) ---`)
 
-    const parsed = await extractInterviewEvent(calEvent, activeRoles)
+    const parsed = await extractInterviewEvent(calEvent, activeRoles, config.app.timeZone)
     if (!parsed) {
       console.log(`[Sync] ⏭️ SKIPPED (agent returned null — not an interview or missing data)`)
       skippedAgent++
