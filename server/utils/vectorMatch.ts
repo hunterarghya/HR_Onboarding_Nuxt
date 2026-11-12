@@ -1,41 +1,22 @@
 /**
  * Vector Matching Service
- * Uses Qdrant + BAAI/bge-small-en-v1.5 embeddings for resume-to-JD matching.
+ * Job descriptions in Qdrant + BAAI/bge-small-en-v1.5 embeddings for resume-to-JD matching.
+ * The Qdrant client and the embedding model live in integrations/.
  */
 
-import { QdrantClient } from '@qdrant/js-client-rest'
 import { config } from '~~/server/config/env'
+import { embed } from '~~/server/integrations/embeddings/embedder'
+import { getQdrant } from '~~/server/integrations/qdrant/qdrant.client'
 
-const QDRANT_URL = config.qdrant.url
-const COLLECTION_NAME = 'job_descriptions'
-const VECTOR_SIZE = 384
-
-const qdrant = new QdrantClient({ url: QDRANT_URL })
-
-let pipeline: any = null
-
-const getEmbeddingPipeline = async () => {
-  if (pipeline) return pipeline
-  console.log('--- [Vector] Loading embedding model: BAAI/bge-small-en-v1.5 ---')
-  const { pipeline: createPipeline } = await import('@xenova/transformers')
-  pipeline = await createPipeline('feature-extraction', 'Xenova/bge-small-en-v1.5')
-  console.log('--- [Vector] Embedding model loaded ---')
-  return pipeline
-}
-
-export const embed = async (text: string): Promise<number[]> => {
-  const pipe = await getEmbeddingPipeline()
-  const truncated = text.substring(0, 8000)
-  const output = await pipe(truncated, { pooling: 'mean', normalize: true })
-  return Array.from(output.data)
-}
+const COLLECTION_NAME = config.qdrant.collection
+const VECTOR_SIZE = config.qdrant.vectorSize
 
 export const initCollection = async (): Promise<void> => {
   try {
-    const collections = await qdrant.getCollections()
+    const collections = await getQdrant().getCollections()
     const exists = collections.collections.some(c => c.name === COLLECTION_NAME)
     if (!exists) {
-      await qdrant.createCollection(COLLECTION_NAME, {
+      await getQdrant().createCollection(COLLECTION_NAME, {
         vectors: {
           full: { size: VECTOR_SIZE, distance: 'Cosine' },
           skills: { size: VECTOR_SIZE, distance: 'Cosine' },
@@ -63,7 +44,7 @@ export const upsertJobDescription = async (job: any): Promise<void> => {
       embed(experienceText)
     ])
 
-    await qdrant.upsert(COLLECTION_NAME, {
+    await getQdrant().upsert(COLLECTION_NAME, {
       wait: true,
       points: [{
         id: job.id,
@@ -86,7 +67,7 @@ export const upsertJobDescription = async (job: any): Promise<void> => {
 
 export const removeJobDescription = async (jobId: number): Promise<void> => {
   try {
-    await qdrant.delete(COLLECTION_NAME, { wait: true, points: [jobId] })
+    await getQdrant().delete(COLLECTION_NAME, { wait: true, points: [jobId] })
     console.log(`--- [Vector] Removed JD id: ${jobId} ---`)
   } catch (err: any) {
     console.error(`--- [Vector] Error removing JD ${jobId}:`, err.message)
@@ -119,7 +100,7 @@ export const matchResumeToJobs = async (
     const resumeVec = await embed(resumeText)
 
     // search() was removed from the client in 1.x; query() is its replacement
-    const { points: searchResult } = await qdrant.query(COLLECTION_NAME, {
+    const { points: searchResult } = await getQdrant().query(COLLECTION_NAME, {
       query: resumeVec,
       using: 'full',
       limit: 3,
@@ -170,7 +151,7 @@ export const matchResumeToJobs = async (
         sectionEmbeddings.experience = await embed(sections.experience)
       }
 
-      const jobPoint = await qdrant.retrieve(COLLECTION_NAME, {
+      const jobPoint = await getQdrant().retrieve(COLLECTION_NAME, {
         ids: [jobId],
         with_vector: true
       })

@@ -43,7 +43,7 @@ export const loadConfig = (source: Record<string, string | undefined>) => {
     auth: { jwtSecret: env.JWT_SECRET },
     google: { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET, redirectUri: env.GOOGLE_REDIRECT_URI },
     ollama: { baseUrl: env.OLLAMA_BASE_URL, model: env.OLLAMA_MODEL },
-    qdrant: { url: env.QDRANT_URL },
+    qdrant: { url: env.QDRANT_URL, collection: 'job_descriptions', vectorSize: 384 },
     imagekit: { publicKey: env.IMAGEKIT_PUBLIC_KEY, privateKey: env.IMAGEKIT_PRIVATE_KEY, urlEndpoint: env.IMAGEKIT_URL_ENDPOINT },
     whatsapp: { executablePath: env.PUPPETEER_EXECUTABLE_PATH }
   })

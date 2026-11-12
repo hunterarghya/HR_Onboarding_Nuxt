@@ -1,3 +1,5 @@
+import { getGroups } from '~~/server/integrations/whatsapp/whatsapp.client'
+
 export default defineEventHandler(async () => {
   try {
     const groups = await getGroups()
