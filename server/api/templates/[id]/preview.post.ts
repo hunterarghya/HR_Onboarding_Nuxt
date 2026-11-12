@@ -1,3 +1,3 @@
-import { templatesController } from '~~/server/modules/templates/templates.controller'
+import { templatesController } from '~~/server/features/templates/templates.controller'
 
 export default templatesController.preview

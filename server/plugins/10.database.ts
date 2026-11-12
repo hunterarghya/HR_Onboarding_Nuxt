@@ -1,6 +1,6 @@
 import { closePool } from '~~/server/core/db/pool'
 import { bootstrapSchema } from '~~/server/database/schema'
-import { jobRolesService } from '~~/server/modules/job-roles/job-roles.service'
+import { jobRolesService } from '~~/server/features/job-roles/job-roles.service'
 
 export default defineNitroPlugin(async (nitroApp) => {
   console.log('[Plugin] Initializing database...')

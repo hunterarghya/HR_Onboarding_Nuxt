@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { toCalendarEvent } from '../../server/modules/interviews/calendar-event.mapper'
+import { toCalendarEvent } from '../../server/features/interviews/calendar-event.mapper'
 
 const slot = {
   role: 'Backend Developer',

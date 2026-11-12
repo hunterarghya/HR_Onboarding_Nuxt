@@ -1,3 +1,3 @@
-import { jobRolesController } from '~~/server/modules/job-roles/job-roles.controller'
+import { jobRolesController } from '~~/server/features/job-roles/job-roles.controller'
 
 export default jobRolesController.update

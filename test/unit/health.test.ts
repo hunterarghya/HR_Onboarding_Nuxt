@@ -8,7 +8,7 @@ vi.mock('~~/server/core/db/pool', () => ({ pingDatabase }))
 vi.mock('~~/server/integrations/qdrant/qdrant.client', () => ({ pingQdrant }))
 vi.mock('~~/server/integrations/llm', () => ({ getLlm: () => ({ name: 'groq', ping: llmPing }) }))
 
-const { healthService } = await import('../../server/modules/health/health.service')
+const { healthService } = await import('../../server/features/health/health.service')
 
 describe('healthService.check', () => {
   beforeEach(() => {

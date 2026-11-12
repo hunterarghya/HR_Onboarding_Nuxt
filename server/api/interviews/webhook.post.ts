@@ -1,3 +1,3 @@
-import { interviewsController } from '~~/server/modules/interviews/interviews.controller'
+import { interviewsController } from '~~/server/features/interviews/interviews.controller'
 
 export default interviewsController.calendarWebhook

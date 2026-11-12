@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decide, OPEN_TARGET } from '../../server/modules/ingestion/pipeline/shortlist-policy'
+import { decide, OPEN_TARGET } from '../../server/features/ingestion/pipeline/shortlist-policy'
 
 describe('shortlist policy', () => {
   it('keeps every resume for manual jobs as applied', () => {

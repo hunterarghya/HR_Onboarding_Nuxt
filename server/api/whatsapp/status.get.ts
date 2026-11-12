@@ -1,3 +1,3 @@
-import { whatsappController } from '~~/server/modules/whatsapp/whatsapp.controller'
+import { whatsappController } from '~~/server/features/whatsapp/whatsapp.controller'
 
 export default whatsappController.status

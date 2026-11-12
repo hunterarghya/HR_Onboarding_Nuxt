@@ -1,3 +1,3 @@
-import { mailController } from '~~/server/modules/mail/mail.controller'
+import { mailController } from '~~/server/features/mail/mail.controller'
 
 export default mailController.unsentInviteCounts
