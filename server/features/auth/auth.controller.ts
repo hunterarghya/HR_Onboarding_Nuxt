@@ -1,6 +1,7 @@
 import { defineEventHandler, sendRedirect } from 'h3'
 import { requireUser } from '~~/server/core/auth/current-user'
 import { clearSessionCookie, setSessionCookie } from '~~/server/core/auth/session-cookie'
+import { ForbiddenError } from '~~/server/core/errors/app-error'
 import { defineApiHandler } from '~~/server/core/http/define-api-handler'
 import { parseQuery } from '~~/server/core/http/validate'
 import { GoogleCallbackQuery } from './auth.dto'
@@ -19,6 +20,10 @@ export const authController = {
       setSessionCookie(event, await authService.completeGoogleLogin(code))
       return sendRedirect(event, '/')
     } catch (err) {
+      if (err instanceof ForbiddenError) {
+        console.warn('Sign-in refused: account not on the allowlist')
+        return sendRedirect(event, '/login?error=not_allowed')
+      }
       console.error('Error during Google callback:', err)
       return sendRedirect(event, `/login?error=auth_failed`)
     }

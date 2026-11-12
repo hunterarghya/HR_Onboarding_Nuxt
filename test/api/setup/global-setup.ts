@@ -106,6 +106,7 @@ export default async function setup(project: TestProject) {
     DATABASE_URL: TEST_DATABASE_URL,
     JWT_SECRET: TEST_JWT_SECRET,
     TOKEN_ENCRYPTION_KEY: TEST_TOKEN_ENCRYPTION_KEY,
+    ALLOWED_EMAILS: 'smoke.tester@example.com,no-google@example.com',
     GOOGLE_CLIENT_ID: TEST_GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET: 'smoke-test-client-secret',
     GOOGLE_REDIRECT_URI: `${baseURL}/auth/google/callback`,

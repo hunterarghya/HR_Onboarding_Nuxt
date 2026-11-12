@@ -22,6 +22,10 @@ describe('authentication on every route', () => {
     expectError(await api('GET', '/api/jobs', { token: tokenWithWrongSecret() }), 401, 'Invalid or expired session')
   })
 
+  it('rejects a valid session whose email is no longer on the allowlist', async () => {
+    expectError(await api('GET', '/api/jobs', { token: userToken({ email: 'outsider@elsewhere.com' }) }), 401, 'Invalid or expired session')
+  })
+
   it('rejects sessions from before Google tokens moved server-side', async () => {
     expectError(await api('GET', '/api/jobs', { token: legacyToken() }), 401, 'Invalid or expired session')
   })
