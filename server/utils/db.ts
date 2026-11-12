@@ -1,4 +1,5 @@
 import { getPool } from '~~/server/core/db/pool'
+import { jobVectorsRepository } from '~~/server/modules/job-roles/job-vectors.repository'
 
 // TEMPORARY alias so existing callers keep working; removed once every module uses getPool directly.
 export const usePool = getPool
@@ -127,10 +128,10 @@ export const initDb = async (): Promise<void> => {
     `)
 
     // Initialize Qdrant collection and sync existing jobs
-    await initCollection()
+    await jobVectorsRepository.ensureCollection()
     const existingJobs = await pool.query('SELECT * FROM job_roles')
     for (const job of existingJobs.rows) {
-      await upsertJobDescription(job)
+      await jobVectorsRepository.upsert(job)
     }
     console.log(`--- [Vector] Synced ${existingJobs.rows.length} jobs to Qdrant ---`)
   } catch (err) {
