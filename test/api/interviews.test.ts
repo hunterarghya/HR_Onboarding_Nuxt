@@ -83,6 +83,11 @@ describe('DELETE /api/interviews/events/:id', () => {
   it('returns 404 for an unknown id', async () => {
     expectError(await api('DELETE', '/api/interviews/events/999999', { token: userToken() }), 404, 'Event not found')
   })
+
+  it('rejects a non-numeric id (400, was a 500 crash)', async () => {
+    expectError(await api('DELETE', '/api/interviews/events/abc'), 400)
+    expectError(await api('POST', '/api/interviews/events/abc/candidates/manual', { body: { candidate_ids: [] } }), 400)
+  })
 })
 
 describe('event candidate assignment', () => {
