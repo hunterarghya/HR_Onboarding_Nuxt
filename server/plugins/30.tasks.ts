@@ -1,5 +1,6 @@
 import { config } from '~~/server/config/env'
 import { roleDuties } from '~~/server/core/app-role'
+import { closeRateLimit } from '~~/server/core/http/rate-limit'
 import { closeQueues, schedule } from '~~/server/core/tasks/queues'
 import { startWorkers, stopWorkers } from '~~/server/core/tasks/registry'
 import { taskProcessors } from '~~/server/features/tasks/task-processors'
@@ -17,5 +18,6 @@ export default defineNitroPlugin((nitroApp) => {
   nitroApp.hooks.hook('close', async () => {
     await stopWorkers()
     await closeQueues()
+    await closeRateLimit()
   })
 })

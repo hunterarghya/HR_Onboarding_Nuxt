@@ -123,6 +123,8 @@ export default async function setup(project: TestProject) {
     MAIL_SEND_INTERVAL_MS: '0',
     TASK_RETRY_DELAY_MS: '50',
     PUBLIC_BASE_URL: 'https://hr.example.com',
+    // the suite sends far more scans and mail requests than a person would; the limiter has its own tests
+    RATE_LIMIT_MULTIPLIER: '100',
     JWT_SECRET: TEST_JWT_SECRET,
     TOKEN_ENCRYPTION_KEY: TEST_TOKEN_ENCRYPTION_KEY,
     ALLOWED_EMAIL_DOMAINS: 'example.com',

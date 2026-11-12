@@ -20,6 +20,8 @@ const EnvSchema = z.object({
   // The https address this app is reachable on from the internet, e.g. https://hr.example.com (optional:
   // only Google Calendar push notifications need it)
   PUBLIC_BASE_URL: z.url({ protocol: /^https$/ }).optional(),
+  // Scales every request limit (sign-in, scans, mail…); 1 = the built-in limits
+  RATE_LIMIT_MULTIPLIER: z.coerce.number().positive().default(1),
   // The time zone interview times are written in (an IANA name such as Asia/Kolkata or Europe/London)
   TIME_ZONE: z.string().default('Asia/Kolkata').refine(isTimeZone, 'must be an IANA time zone, e.g. Asia/Kolkata'),
 
@@ -85,6 +87,7 @@ export const loadConfig = (source: Record<string, string | undefined>) => {
     env: env.NODE_ENV,
     app: { role: env.APP_ROLE, timeZone: env.TIME_ZONE, publicBaseUrl: env.PUBLIC_BASE_URL?.replace(/\/+$/, '') },
     redis: { url: env.REDIS_URL },
+    rateLimit: { multiplier: env.RATE_LIMIT_MULTIPLIER },
     tasks: { retryDelayMs: env.TASK_RETRY_DELAY_MS },
     mail: { sendIntervalMs: env.MAIL_SEND_INTERVAL_MS },
     db: { url: env.DATABASE_URL },
