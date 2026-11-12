@@ -214,6 +214,23 @@ export const candidatesRepository = {
     return rows.map(r => r.id)
   },
 
+  // ---- Offer letters
+
+  /** The given candidates that are selected and haven't been sent an offer yet. */
+  async findSelectedWithoutOffer(ids: number[], db: Queryable = getPool()) {
+    const placeholders = ids.map((_, i) => `$${i + 1}`).join(',')
+    const { rows } = await db.query<CandidateRow>(
+      `SELECT * FROM candidates
+     WHERE id IN (${placeholders}) AND status = 'selected' AND offer_sent = false`,
+      ids
+    )
+    return rows
+  },
+
+  async markOfferSent(id: number, db: Queryable = getPool()) {
+    await db.query('UPDATE candidates SET offer_sent = true WHERE id = $1', [id])
+  },
+
   async updateStatus(id: number, status: unknown, db: Queryable = getPool()) {
     await db.query('UPDATE candidates SET status = $1 WHERE id = $2', [status, id])
   },

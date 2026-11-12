@@ -19,6 +19,11 @@ describe('POST /api/mail/interview-invites/:eventId', () => {
     expectError(await api('POST', '/api/mail/interview-invites/1', { token: userToken(), body: {} }), 400, 'templateId is required')
   })
 
+  it('rejects non-numeric ids (400, were 500s)', async () => {
+    expectError(await api('POST', '/api/mail/interview-invites/1', { body: { templateId: 'abc' } }), 400)
+    expectError(await api('POST', '/api/mail/interview-invites/abc', { body: { templateId: 1 } }), 400)
+  })
+
   it('returns 500 with details for an unknown template', async () => {
     const evt = await insertEvent()
     const res = await api('POST', `/api/mail/interview-invites/${evt.id}`, { token: userToken(), body: { templateId: 999999 } })
