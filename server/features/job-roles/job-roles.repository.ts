@@ -1,6 +1,6 @@
 import { getPool, type Queryable } from '~~/server/core/db/pool'
 import type { JobRoleRow, JobRoleWithFormRow } from '~~/server/database/types'
-import type { CreateJobRoleInput, UpdateJobRoleInput } from './job-roles.dto'
+import { OPEN_POOL, OPEN_ROLE, type CreateJobRoleInput, type UpdateJobRoleInput } from './job-roles.dto'
 
 /** Columns a PATCH may change; anything else in the body is ignored. */
 export const UPDATABLE_FIELDS = [
@@ -55,6 +55,24 @@ export const jobRolesRepository = {
   async findAll(db: Queryable = getPool()) {
     const { rows } = await db.query<JobRoleRow>('SELECT * FROM job_roles')
     return rows
+  },
+
+  /** Names identify jobs to people; they're unique ignoring case and surrounding spaces. */
+  async findByRoleName(role: string, db: Queryable = getPool()) {
+    const { rows } = await db.query<JobRoleRow>('SELECT * FROM job_roles WHERE lower(btrim(role)) = lower(btrim($1))', [role])
+    return rows[0] ?? null
+  },
+
+  /** Copies a job's (new) name onto its candidates and events, which show it. */
+  async renameLinked(id: number, role: string, db: Queryable = getPool()) {
+    await db.query('UPDATE candidates SET role_applied = $1 WHERE job_role_id = $2', [role, id])
+    await db.query('UPDATE interview_events SET role = $1 WHERE job_role_id = $2', [role, id])
+  },
+
+  /** Before a job is deleted: its candidates move to the Open pool and its events become Open Role events. */
+  async releaseLinked(id: number, db: Queryable = getPool()) {
+    await db.query(`UPDATE candidates SET role_applied = $1, job_role_id = NULL WHERE job_role_id = $2`, [OPEN_POOL, id])
+    await db.query(`UPDATE interview_events SET role = $1, job_role_id = NULL WHERE job_role_id = $2`, [OPEN_ROLE, id])
   },
 
   async listRoleNames(db: Queryable = getPool()) {

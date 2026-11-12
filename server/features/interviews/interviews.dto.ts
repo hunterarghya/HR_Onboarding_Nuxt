@@ -7,8 +7,7 @@ const count = (min: number, fallback: number) =>
   z.preprocess(v => (v === '' || v === null ? undefined : v), z.number().int().min(min).max(500).default(fallback))
 
 export const INTERVIEW_MODES = ['offline', 'online'] as const
-/** Events for candidates whose applied role isn't one of the current jobs. */
-export const OPEN_ROLE = 'Open Role'
+export { OPEN_ROLE } from '../job-roles/job-roles.dto'
 
 export const EventIdParams = z.object({ id: z.coerce.number().int().positive() })
 export const EligibleParams = z.object({ eventId: z.coerce.number().int().positive() })

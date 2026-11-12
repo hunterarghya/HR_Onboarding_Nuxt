@@ -32,22 +32,16 @@ export const interviewAssignmentsService = {
 
   /** Candidates who could be put into this event, best score first. */
   async eligibleForEvent(eventId: number) {
-    const { role } = await getEventOrThrow(eventId)
-    if (role === OPEN_ROLE) {
-      return candidatesRepository.findEligibleOutsideRoles(await jobRolesRepository.listRoleNames())
-    }
-    return candidatesRepository.findEligibleForRole(role)
+    const event = await getEventOrThrow(eventId)
+    return candidatesRepository.findEligibleForJob(event.job_role_id)
   },
 
   /** Fills the event's slots (num + extra) with the best eligible candidates not in another event of the role. */
   async autoAssign(eventId: number) {
     const evt = await getEventOrThrow(eventId)
     const totalSlots = evt.num_candidates + (evt.extra_candidates || 0)
-    const excludeIds = await interviewAssignmentsRepository.candidateIdsInOtherEventsOfRole(evt.role, eventId)
-
-    const candidateIds = evt.role === OPEN_ROLE
-      ? await candidatesRepository.topEligibleIdsOutsideRoles(await jobRolesRepository.listRoleNames(), excludeIds, totalSlots)
-      : await candidatesRepository.topEligibleIdsForRole(evt.role, excludeIds, totalSlots)
+    const excludeIds = await interviewAssignmentsRepository.candidateIdsInOtherEventsOfJob(evt.job_role_id, eventId)
+    const candidateIds = await candidatesRepository.topEligibleIdsForJob(evt.job_role_id, excludeIds, totalSlots)
 
     if (candidateIds.length === 0) {
       return { message: 'No eligible candidates found', count: 0 }
@@ -59,12 +53,14 @@ export const interviewAssignmentsService = {
 
   /** Spreads a role's eligible candidates over its events in date order, best scores first. */
   async autoAssignAll(role: string) {
-    const events = await interviewEventsRepository.findByRole(role)
+    const isOpen = role.toLowerCase() === OPEN_ROLE.toLowerCase()
+    const job = isOpen ? null : await jobRolesRepository.findByRoleName(role)
+    const events = isOpen || job ? await interviewEventsRepository.findByJob(job?.id ?? null) : []
     if (events.length === 0) {
       return { message: 'No events found for this role', count: 0 }
     }
 
-    const allCandidates = await candidatesRepository.findEligibleIdsForRole(role)
+    const allCandidates = await candidatesRepository.findEligibleIdsForJob(job?.id ?? null)
 
     let candidateIndex = 0
     let totalAssigned = 0

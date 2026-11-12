@@ -30,13 +30,13 @@ export const interviewAssignmentsRepository = {
     return rows
   },
 
-  /** Candidates already placed in another event for the same role. */
-  async candidateIdsInOtherEventsOfRole(role: string, eventId: number, db: Queryable = getPool()) {
+  /** Candidates already placed in another event for the same job (null: another Open Role event). */
+  async candidateIdsInOtherEventsOfJob(jobRoleId: number | null, eventId: number, db: Queryable = getPool()) {
     const { rows } = await db.query<{ candidate_id: number }>(
       `SELECT ic.candidate_id FROM interview_candidates ic
        JOIN interview_events ie ON ie.id = ic.event_id
-       WHERE ie.role = $1 AND ic.event_id != $2`,
-      [role, eventId]
+       WHERE ie.job_role_id IS NOT DISTINCT FROM $1 AND ic.event_id != $2`,
+      [jobRoleId, eventId]
     )
     return rows.map(r => r.candidate_id)
   },

@@ -27,7 +27,7 @@ export const matchResumeToJobs = async (
   resumeText: string,
   sections: { skills: string, projects: string, experience: string },
   jobRoles: JobRoleRow[]
-): Promise<{ target_role: string, score: number }> => {
+): Promise<{ target_role: string, job_role_id: number | null, score: number }> => {
   try {
     console.log('--- [Vector] Starting Match Process ---')
     const resumeVec = await embed(resumeText)
@@ -37,7 +37,7 @@ export const matchResumeToJobs = async (
 
     if (!searchResult || searchResult.length === 0) {
       console.log('--- [Vector] No matching job descriptions found in Qdrant. ---')
-      return { target_role: 'Open', score: 0 }
+      return { target_role: 'Open', job_role_id: null, score: 0 }
     }
 
     console.log('--- [Vector] Top 3 Semantic Matches: ---')
@@ -50,7 +50,7 @@ export const matchResumeToJobs = async (
 
     if (topScore < 0.55) {
       console.log(`--- [Vector] Top score ${toScore(topScore)}% is below 55%. Assigning to "Open". ---`)
-      return { target_role: 'Open', score: toScore(topScore) }
+      return { target_role: 'Open', job_role_id: null, score: toScore(topScore) }
     }
 
     const targetRole = topMatch.payload!.role as string
@@ -123,9 +123,9 @@ export const matchResumeToJobs = async (
       console.log(`--- [Vector] No criteria weights for ${targetRole}. Using Full Score: ${finalScore}% ---`)
     }
 
-    return { target_role: targetRole, score: finalScore }
+    return { target_role: targetRole, job_role_id: jobId, score: finalScore }
   } catch (err) {
     console.error('--- [Vector] Error in matchResumeToJobs:', (err as Error).message)
-    return { target_role: 'Open', score: 0 }
+    return { target_role: 'Open', job_role_id: null, score: 0 }
   }
 }

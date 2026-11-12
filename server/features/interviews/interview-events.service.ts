@@ -11,10 +11,13 @@ export const interviewEventsService = {
 
   /** Saves an interview slot; unless sync_calendar is false it is also put on Google Calendar (best effort). */
   async create(auth: GoogleAuthClient, input: CreateEventInput) {
-    const { sync_calendar, ...slot } = input
-    if (slot.role !== OPEN_ROLE && !(await jobRolesRepository.listRoleNames()).includes(slot.role)) {
+    const { sync_calendar, role: roleName, ...rest } = input
+    const isOpen = roleName.toLowerCase() === OPEN_ROLE.toLowerCase()
+    const job = isOpen ? null : await jobRolesRepository.findByRoleName(roleName)
+    if (!isOpen && !job) {
       throw new ValidationError([{ path: ['role'], message: 'Not a current job role' }], 'Unknown job role')
     }
+    const slot = { ...rest, job_role_id: job?.id ?? null, role: job?.role ?? OPEN_ROLE }
 
     let googleEventId: string | null = null
 

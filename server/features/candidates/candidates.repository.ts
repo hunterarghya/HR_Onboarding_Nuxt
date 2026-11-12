@@ -18,6 +18,7 @@ export interface ResumeCandidateInsert extends ResumeCandidateUpdate {
   name: string
   email: string
   phone: string
+  job_role_id: number | null
   role_applied: string
   resume_content: string
   experience_years: number | null
@@ -155,95 +156,46 @@ export const candidatesRepository = {
 
   // ---- Interview eligibility: candidates in an open pipeline status ('shortlisted', 'applied', 'marked')
 
-  async findEligibleForRole(role: string, db: Queryable = getPool()) {
+  // A job id of null means the Open pool (and "Open Role" events), which also fixes BUG-05.
+
+  async findEligibleForJob(jobRoleId: number | null, db: Queryable = getPool()) {
     const { rows } = await db.query<CandidateRow>(
-      `SELECT * FROM candidates WHERE role_applied = $1 AND status IN ('shortlisted', 'applied', 'marked') ORDER BY score DESC`,
-      [role]
+      `SELECT * FROM candidates WHERE job_role_id IS NOT DISTINCT FROM $1 AND status IN ('shortlisted', 'applied', 'marked') ORDER BY score DESC NULLS LAST`,
+      [jobRoleId]
     )
     return rows
   },
 
-  /** For "Open Role" events: eligible candidates whose role isn't one of `activeRoles`. */
-  async findEligibleOutsideRoles(activeRoles: string[], db: Queryable = getPool()) {
-    if (activeRoles.length === 0) {
-      const { rows } = await db.query<CandidateRow>(
-        `SELECT * FROM candidates WHERE status IN ('shortlisted', 'applied', 'marked') ORDER BY score DESC`
-      )
-      return rows
-    }
-    const placeholders = activeRoles.map((_, i) => `$${i + 1}`).join(',')
-    const { rows } = await db.query<CandidateRow>(
-      `SELECT * FROM candidates
-           WHERE status IN ('shortlisted', 'applied', 'marked')
-             AND (role_applied IS NULL OR role_applied NOT IN (${placeholders}))
-           ORDER BY score DESC`,
-      activeRoles
-    )
-    return rows
-  },
-
-  /** Ids and scores of a role's eligible candidates, best first. */
-  async findEligibleIdsForRole(role: string, db: Queryable = getPool()) {
+  /** Ids and scores of a job's eligible candidates, best first. */
+  async findEligibleIdsForJob(jobRoleId: number | null, db: Queryable = getPool()) {
     const { rows } = await db.query<{ id: number, score: number | null }>(
       `SELECT id, score FROM candidates
-       WHERE role_applied = $1
+       WHERE job_role_id IS NOT DISTINCT FROM $1
          AND status IN ('shortlisted', 'applied', 'marked')
-       ORDER BY score DESC`,
-      [role]
+       ORDER BY score DESC NULLS LAST`,
+      [jobRoleId]
     )
     return rows
   },
 
-  /** Top `limit` eligible candidate ids for a role, skipping `excludeIds`. */
-  async topEligibleIdsForRole(role: string, excludeIds: number[], limit: number, db: Queryable = getPool()) {
-    let query = `
-        SELECT id FROM candidates
-        WHERE role_applied = $1
-          AND status IN ('shortlisted', 'applied', 'marked')`
-    const params: unknown[] = [role]
-    let paramIdx = 2
-
-    if (excludeIds.length > 0) {
-      query += ` AND id != ALL($${paramIdx}::int[])`
-      params.push(excludeIds)
-      paramIdx++
-    }
-    query += ` ORDER BY score DESC LIMIT $${paramIdx}`
-    params.push(limit)
-
-    const { rows } = await db.query<{ id: number }>(query, params)
-    return rows.map(r => r.id)
-  },
-
-  /**
-   * "Open Role" variant: candidates whose role isn't one of `activeRoles`.
-   * With no active roles this builds `NOT IN ()` and fails (BUG-05, kept until the behaviour-fix phase).
-   */
-  async topEligibleIdsOutsideRoles(activeRoles: string[], excludeIds: number[], limit: number, db: Queryable = getPool()) {
-    let query = `
-        SELECT id FROM candidates
-        WHERE status IN ('shortlisted', 'applied', 'marked')
-          AND (role_applied IS NULL OR role_applied NOT IN (${activeRoles.map((_, i) => `$${i + 1}`).join(',')}))`
-    const params: unknown[] = [...activeRoles]
-    let paramIdx = activeRoles.length + 1
-
-    if (excludeIds.length > 0) {
-      query += ` AND id != ALL($${paramIdx}::int[])`
-      params.push(excludeIds)
-      paramIdx++
-    }
-    query += ` ORDER BY score DESC LIMIT $${paramIdx}`
-    params.push(limit)
-
-    const { rows } = await db.query<{ id: number }>(query, params)
+  /** Top `limit` eligible candidate ids for a job, skipping `excludeIds`. */
+  async topEligibleIdsForJob(jobRoleId: number | null, excludeIds: number[], limit: number, db: Queryable = getPool()) {
+    const { rows } = await db.query<{ id: number }>(
+      `SELECT id FROM candidates
+       WHERE job_role_id IS NOT DISTINCT FROM $1
+         AND status IN ('shortlisted', 'applied', 'marked')
+         AND id != ALL($2::int[])
+       ORDER BY score DESC NULLS LAST LIMIT $3`,
+      [jobRoleId, excludeIds, limit]
+    )
     return rows.map(r => r.id)
   },
 
   // ---- Resume intake (ingestion pipeline)
 
-  /** Same person for the same role = same email + role_applied ('N/A' emails collide: DATA-01). */
-  async findIdByEmailAndRole(email: string, role: string, db: Queryable = getPool()) {
-    const { rows } = await db.query<{ id: number }>('SELECT id FROM candidates WHERE email = $1 AND role_applied = $2', [email, role])
+  /** Same person for the same job = same email + job ('N/A' emails collide: DATA-01). */
+  async findIdByEmailAndJob(email: string, jobRoleId: number | null, db: Queryable = getPool()) {
+    const { rows } = await db.query<{ id: number }>('SELECT id FROM candidates WHERE email = $1 AND job_role_id IS NOT DISTINCT FROM $2', [email, jobRoleId])
     return rows[0]?.id ?? null
   },
 
@@ -256,9 +208,9 @@ export const candidatesRepository = {
 
   async insertFromResume(c: ResumeCandidateInsert, db: Queryable = getPool()) {
     await db.query(
-      `INSERT INTO candidates (name, email, phone, role_applied, resume_content, score, experience_years, status, resume_url, applied_through, current_location, current_ctc)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-      [c.name, c.email, c.phone, c.role_applied, c.resume_content, c.score, c.experience_years, c.status, c.resume_url, c.applied_through, c.current_location, c.current_ctc]
+      `INSERT INTO candidates (name, email, phone, job_role_id, role_applied, resume_content, score, experience_years, status, resume_url, applied_through, current_location, current_ctc)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      [c.name, c.email, c.phone, c.job_role_id, c.role_applied, c.resume_content, c.score, c.experience_years, c.status, c.resume_url, c.applied_through, c.current_location, c.current_ctc]
     )
   },
 

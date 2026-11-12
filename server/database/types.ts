@@ -29,6 +29,8 @@ export type CandidateStatus = typeof CANDIDATE_STATUSES[number]
 
 export interface CandidateRow {
   id: number
+  /** The job applied for; null = the "Open" pool (role_applied is then "Open") */
+  job_role_id: number | null
   name: string | null
   email: string | null
   phone: string | null
@@ -58,6 +60,8 @@ export interface ScanTimestampRow {
 
 export interface InterviewEventRow {
   id: number
+  /** The job interviewed for; null = an "Open Role" event */
+  job_role_id: number | null
   role: string
   event_date: string
   start_time: string

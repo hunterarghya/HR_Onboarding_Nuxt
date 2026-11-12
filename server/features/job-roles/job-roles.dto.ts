@@ -1,5 +1,10 @@
 import { z } from 'zod'
 
+/** Shown for candidates that match no job, and for interview events that aren't for a particular job. */
+export const OPEN_POOL = 'Open'
+export const OPEN_ROLE = 'Open Role'
+const RESERVED_ROLE_NAMES = [OPEN_POOL.toLowerCase(), OPEN_ROLE.toLowerCase()]
+
 // Strict: unknown fields are rejected, every field has a type and a range (VAL-01/02).
 // Number inputs send '' when emptied, so '' means "not set" for optional numbers and text.
 
@@ -11,7 +16,8 @@ const optionalNumber = (schema: z.ZodNumber) => z.union([schema, z.literal('')])
 export const CRITERIA = ['skills', 'projects', 'experience'] as const
 
 const fields = {
-  role: z.string().trim().min(1).max(255),
+  role: z.string().trim().min(1).max(255)
+    .refine(r => !RESERVED_ROLE_NAMES.includes(r.toLowerCase()), 'This name is reserved for candidates and events without a job'),
   /** Annual amounts, in the company's currency */
   salary_min: optionalNumber(z.number().nonnegative().max(1e12)),
   salary_max: optionalNumber(z.number().nonnegative().max(1e12)),

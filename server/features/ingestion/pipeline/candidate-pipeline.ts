@@ -40,10 +40,11 @@ export const processAttachments = async (
       const parsed = parseResume(resumeText)
       console.log(`--- [Parser] Extracted: ${parsed.name}, ${parsed.email}, ${parsed.phone} ---`)
 
-      const { target_role, score } = await matchResumeToJobs(resumeText, parsed.sections, jobRoles)
+      const { target_role, job_role_id, score } = await matchResumeToJobs(resumeText, parsed.sections, jobRoles)
       console.log(`--- [Vector] Match: ${target_role} (score: ${score}) ---`)
 
-      const targetRole = jobRoles.find(r => r.role === target_role) ?? OPEN_TARGET
+      // by id: the index may still hold a job's old name for a moment after a rename
+      const targetRole = jobRoles.find(r => r.id === job_role_id) ?? OPEN_TARGET
       const { accept, status: finalStatus, minScoreRequired } = decide(targetRole, score)
 
       if (accept) {
@@ -53,7 +54,7 @@ export const processAttachments = async (
         const safePhone = (parsed.phone || 'N/A').substring(0, 45)
         const safeLocation = (parsed.current_location || 'N/A').substring(0, 250)
 
-        const existingId = await candidatesRepository.findIdByEmailAndRole(finalEmail, targetRole.role)
+        const existingId = await candidatesRepository.findIdByEmailAndJob(finalEmail, targetRole.id)
         const ikUrl = await uploadResume(attachment.data, attachment.filename)
 
         if (existingId !== null) {
@@ -66,6 +67,7 @@ export const processAttachments = async (
             name: safeName,
             email: finalEmail,
             phone: safePhone,
+            job_role_id: targetRole.id,
             role_applied: targetRole.role,
             resume_content: resumeText.substring(0, 2000),
             score,

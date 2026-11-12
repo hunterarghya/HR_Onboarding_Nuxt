@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { api, expectError } from './helpers/http'
-import { db, insertForm, insertJob, resetDb } from './helpers/db'
+import { assignCandidate, db, insertCandidate, insertEvent, insertForm, insertJob, resetDb } from './helpers/db'
 import { waitForTask } from './helpers/tasks'
 
 beforeAll(resetDb)
@@ -137,5 +137,53 @@ describe('DELETE /api/jobs/:id', () => {
   it('also returns 200 for an unknown id (no existence check today)', async () => {
     const res = await api('DELETE', '/api/jobs/999999')
     expect(res.status).toBe(200)
+  })
+
+  it('keeps the job\'s candidates and events, moved to Open', async () => {
+    const job = await insertJob({ role: 'Short Lived' })
+    const c = await insertCandidate({ role_applied: 'Short Lived' })
+    const e = await insertEvent({ role: 'Short Lived' })
+    await api('DELETE', `/api/jobs/${job.id}`)
+    const { rows: [cand] } = await db().query('SELECT job_role_id, role_applied FROM candidates WHERE id = $1', [c.id])
+    const { rows: [evt] } = await db().query('SELECT job_role_id, role FROM interview_events WHERE id = $1', [e.id])
+    expect(cand).toEqual({ job_role_id: null, role_applied: 'Open' })
+    expect(evt).toEqual({ job_role_id: null, role: 'Open Role' })
+  })
+})
+
+describe('job names', () => {
+  it('renaming a job keeps its candidates and events with it (BUG-10)', async () => {
+    const job = await insertJob({ role: 'Old Name' })
+    const c = await insertCandidate({ name: 'Linked', role_applied: 'Old Name', score: 77 })
+    const e = await insertEvent({ role: 'Old Name' })
+    await assignCandidate(e.id, c.id)
+
+    expect((await api('PATCH', `/api/jobs/${job.id}`, { body: { role: 'New Name' } })).status).toBe(200)
+
+    const { rows: [cand] } = await db().query('SELECT job_role_id, role_applied FROM candidates WHERE id = $1', [c.id])
+    expect(cand).toEqual({ job_role_id: job.id, role_applied: 'New Name' })
+    const events = await api('GET', '/api/interviews/events')
+    expect(events.body.find((x: { id: number }) => x.id === e.id)).toMatchObject({ role: 'New Name', job_role_id: job.id })
+    // still eligible for the job's events, and still filtered under the job's (new) name
+    const eligible = await api('GET', `/api/interviews/eligible-candidates/${e.id}`)
+    expect(eligible.body.map((x: { name: string }) => x.name)).toContain('Linked')
+    const listed = await api('GET', '/api/candidates', { query: { role: 'New Name' } })
+    expect(listed.body.data.map((x: { name: string }) => x.name)).toContain('Linked')
+  })
+
+  it('refuses a second job with the same name, ignoring case and spaces (409)', async () => {
+    await insertJob({ role: 'Unique Role' })
+    expectError(await api('POST', '/api/jobs', { body: { role: '  unique role ' } }), 409, 'A job named "Unique Role" already exists')
+    const other = await insertJob({ role: 'Another Role' })
+    expectError(await api('PATCH', `/api/jobs/${other.id}`, { body: { role: 'UNIQUE ROLE' } }), 409)
+  })
+
+  it('lets a job keep its own name on update', async () => {
+    const job = await insertJob({ role: 'Steady Role' })
+    expect((await api('PATCH', `/api/jobs/${job.id}`, { body: { role: 'steady role' } })).status).toBe(200)
+  })
+
+  it.each(['Open', 'open role'])('reserves "%s" for candidates and events without a job (400)', async (role) => {
+    expectError(await api('POST', '/api/jobs', { body: { role } }), 400, 'Validation failed')
   })
 })

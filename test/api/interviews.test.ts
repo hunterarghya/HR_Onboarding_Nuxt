@@ -233,10 +233,11 @@ describe('event candidate assignment', () => {
       expectError(await api('POST', '/api/interviews/events/999999/candidates/auto'), 404, 'Event not found')
     })
 
-    it('crashes with 500 for an "Open Role" event when no job roles exist (BUG-05)', async () => {
-      await db().query('DELETE FROM job_roles')
+    it('fills an "Open Role" event from the Open pool, even with no jobs at all (was a 500: BUG-05)', async () => {
+      await db().query('DELETE FROM job_roles') // the candidates' job links become NULL: the Open pool
       const evt = await insertEvent({ role: 'Open Role' })
-      expectError(await api('POST', `/api/interviews/events/${evt.id}/candidates/auto`), 500)
+      const res = await api('POST', `/api/interviews/events/${evt.id}/candidates/auto`)
+      expect(res.body).toEqual({ message: 'Candidates auto-assigned successfully', count: 2 })
     })
   })
 
