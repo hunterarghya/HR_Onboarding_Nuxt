@@ -76,7 +76,7 @@ export const interviewEventsRepository = {
 
   /** Per event: how many assigned candidates haven't been invited yet (COUNTs come back as strings). */
   async unsentInviteCounts(db: Queryable = getPool()) {
-    const { rows } = await db.query<{ event_id: number, event_date: Date, unsent_count: string, total_count: string }>(
+    const { rows } = await db.query<{ event_id: number, event_date: string, unsent_count: string, total_count: string }>(
       `SELECT ie.id as event_id, ie.event_date,
               COUNT(ic.id) FILTER (WHERE ic.invite_sent = false) as unsent_count,
               COUNT(ic.id) as total_count

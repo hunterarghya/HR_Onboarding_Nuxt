@@ -1,25 +1,27 @@
 import { NotFoundError } from '~~/server/core/errors/app-error'
-import type { ListCandidatesFilters, ListSelectedFilters, UpdateStatusInput } from './candidates.dto'
+import { decodeCursor, encodeCursor } from '~~/server/core/http/cursor'
+import { CandidatesCursor, SelectedCursor, type CandidatesPosition, type ListCandidatesFilters, type ListSelectedFilters, type SelectedPosition, type UpdateStatusInput } from './candidates.dto'
 import { candidatesRepository } from './candidates.repository'
 
 /** Splits the limit + 1 rows a repository returned into a page and whether more exist. */
-const toPage = <T>(rows: T[], limit: number, cursorOf: (last: T) => string) => {
+const toPage = <T>(rows: T[], limit: number, cursorOf: (last: T) => unknown) => {
   const hasNextPage = rows.length > limit
   const data = hasNextPage ? rows.slice(0, limit) : rows
-  const nextCursor = hasNextPage ? cursorOf(data[data.length - 1]!) : null
+  const nextCursor = hasNextPage ? encodeCursor(cursorOf(data[data.length - 1]!)) : null
   return { data, nextCursor, hasNextPage }
 }
 
 export const candidatesService = {
   async list(filters: ListCandidatesFilters) {
-    const rows = await candidatesRepository.findPage(filters)
-    return toPage(rows, filters.limit, last => `${last.score}|${last.date_applied.toISOString()}|${last.id}`)
+    const after = filters.cursor ? decodeCursor(filters.cursor, CandidatesCursor) : null
+    const rows = await candidatesRepository.findPage(filters, after)
+    return toPage(rows, filters.limit, (last): CandidatesPosition => ({ score: last.score, at: last.date_applied.toISOString(), id: last.id }))
   },
 
   async listSelected(filters: ListSelectedFilters) {
-    const rows = await candidatesRepository.findSelectedPage(filters)
-    return toPage(rows, filters.limit, last =>
-      `${last.joining_date ? new Date(last.joining_date).toISOString().split('T')[0] : ''}|${last.id}`)
+    const after = filters.cursor ? decodeCursor(filters.cursor, SelectedCursor) : null
+    const rows = await candidatesRepository.findSelectedPage(filters, after)
+    return toPage(rows, filters.limit, (last): SelectedPosition => ({ date: last.joining_date, id: last.id }))
   },
 
   async selectedFilters() {
@@ -28,7 +30,7 @@ export const candidatesService = {
     return { roles, locations }
   },
 
-  /** "selected" also records the offer, and needs every offer field. Unknown ids are a no-op (unchanged). */
+  /** "selected" also records the offer, and needs every offer field. */
   async updateStatus(id: number, input: UpdateStatusInput) {
     const updated = input.status === 'selected'
       ? await candidatesRepository.updateStatusWithOffer(id, input.status, input)

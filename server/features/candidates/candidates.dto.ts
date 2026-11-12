@@ -1,33 +1,44 @@
 import { z } from 'zod'
 import { CANDIDATE_STATUSES, type CandidateStatus } from '~~/server/database/types'
 
-// Phase 3: same inputs as today; malformed numbers that used to crash the query now return 400.
+// Query strings: empty values mean "no filter"; anything malformed is a 400.
 
-const optionalNumber = z.union([z.literal(''), z.coerce.number().int()]).optional()
+const limit = z.coerce.number().int().min(1).max(100).default(10)
+const cursor = z.string().max(500).optional()
+const text = z.string().trim().max(255).optional()
+const score = z.union([z.literal(''), z.coerce.number().int().min(0).max(100)]).optional()
+const optionalDate = z.union([z.literal(''), z.iso.date()]).optional()
+
+export const SCORE_SORTS = ['newest', 'highToLow', 'lowToHigh'] as const
 
 export const CandidateIdParams = z.object({ id: z.coerce.number().int().positive() })
 
 export const ListCandidatesQuery = z.object({
-  limit: z.coerce.number().int().nonnegative().default(10),
-  cursor: z.string().optional(),
-  role: z.string().optional(),
-  status: z.string().optional(),
-  source: z.string().optional(),
-  name: z.string().optional(),
-  minScore: optionalNumber,
-  maxScore: optionalNumber,
-  scoreSort: z.string().optional()
+  limit,
+  cursor,
+  role: text,
+  status: z.union([z.literal(''), z.enum(CANDIDATE_STATUSES)]).optional(),
+  source: text,
+  name: text,
+  minScore: score,
+  maxScore: score,
+  scoreSort: z.enum(SCORE_SORTS).default('newest')
 })
 
 export const ListSelectedQuery = z.object({
-  limit: z.coerce.number().int().nonnegative().default(10),
-  cursor: z.string().optional(),
-  offered_role: z.string().optional(),
-  offered_location: z.string().optional(),
-  dateFrom: z.string().optional(),
-  dateTo: z.string().optional(),
-  offer_sent: z.string().optional()
+  limit,
+  cursor,
+  offered_role: text,
+  offered_location: text,
+  dateFrom: optionalDate,
+  dateTo: optionalDate,
+  offer_sent: z.enum(['', 'true', 'false']).optional()
 })
+
+/** Where the previous page of candidates ended (score null = unscored, which sorts lowest). */
+export const CandidatesCursor = z.object({ score: z.number().int().nullable(), at: z.iso.datetime(), id: z.number().int().positive() }).strict()
+/** Where the previous page of selected candidates ended (date null = no joining date yet, which sorts last). */
+export const SelectedCursor = z.object({ date: z.iso.date().nullable(), id: z.number().int().positive() }).strict()
 
 /**
  * A status change. "selected" also records the offer, so it needs every offer field (VAL-03);
@@ -47,4 +58,6 @@ export const UpdateStatusBody = z.discriminatedUnion('status', [
 
 export type ListCandidatesFilters = z.infer<typeof ListCandidatesQuery>
 export type ListSelectedFilters = z.infer<typeof ListSelectedQuery>
+export type CandidatesPosition = z.infer<typeof CandidatesCursor>
+export type SelectedPosition = z.infer<typeof SelectedCursor>
 export type UpdateStatusInput = z.infer<typeof UpdateStatusBody>

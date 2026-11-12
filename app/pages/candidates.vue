@@ -586,7 +586,7 @@ onMounted(() => {
                   {{ c.offered_role }}
                 </td>
                 <td class="py-3 px-3">
-                  {{ c.joining_date ? new Date(c.joining_date).toLocaleDateString() : '—' }}
+                  {{ c.joining_date ? new Date(c.joining_date + 'T00:00:00').toLocaleDateString() : '—' }}
                 </td>
                 <td class="py-3 px-3">
                   {{ formatAmount(c.offered_salary) }}

@@ -28,7 +28,8 @@ export interface Sender {
 type ReportProgress = (progress: TaskProgress) => Promise<void>
 const noProgress: ReportProgress = async () => {}
 
-const longDate = (d: Date) => new Date(d).toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+/** "2030-03-01" → "Friday, 1 March 2030" (the calendar day itself, whatever the server's time zone) */
+const longDate = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })
 
 /** 1500000 → "15,00,000" */
 const amount = (v: number | null | undefined) => v == null ? '' : v.toLocaleString('en-IN', { maximumFractionDigits: 2 })

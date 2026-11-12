@@ -1,4 +1,4 @@
-// Row shapes as node-postgres returns them (TIMESTAMP and DATE columns arrive as Date, BIGINT counts as strings).
+// Row shapes as node-postgres returns them (TIMESTAMP columns arrive as Date, DATE as "YYYY-MM-DD", NUMERIC as number, BIGINT counts as strings).
 // Mirrors the tables created by server/database/migrations.
 
 export interface JobRoleRow {
@@ -45,7 +45,7 @@ export interface CandidateRow {
   offered_role: string | null
   offered_salary: number | null
   offered_location: string | null
-  joining_date: Date | null
+  joining_date: string | null
   offer_sent: boolean | null
 }
 
@@ -59,7 +59,7 @@ export interface ScanTimestampRow {
 export interface InterviewEventRow {
   id: number
   role: string
-  event_date: Date
+  event_date: string
   start_time: string
   end_time: string
   num_candidates: number

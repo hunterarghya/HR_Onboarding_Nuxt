@@ -1,6 +1,6 @@
 import { getPool, type Queryable } from '~~/server/core/db/pool'
 import type { CandidateRow, CandidateStatus } from '~~/server/database/types'
-import type { ListCandidatesFilters, ListSelectedFilters } from './candidates.dto'
+import type { CandidatesPosition, ListCandidatesFilters, ListSelectedFilters, SelectedPosition } from './candidates.dto'
 
 export type SelectedCandidateRow = Pick<CandidateRow,
   'id' | 'name' | 'email' | 'phone' | 'offered_role' | 'offered_salary' | 'offered_location' | 'joining_date' | 'status' | 'offer_sent'>
@@ -32,10 +32,11 @@ export interface OfferFields {
 
 export const candidatesRepository = {
   /**
-   * One page of candidates (fetches limit + 1 rows so the caller can tell whether more exist).
-   * Cursor: "score|date_applied ISO|id". Newest first, or by score when scoreSort is set.
+   * One page of candidates after `after` (fetches limit + 1 rows so the caller can tell whether more exist).
+   * Newest first, or by score when scoreSort is set; unscored candidates sort as the lowest score (BUG-08).
+   * Times are compared to the millisecond, the precision the cursor carries.
    */
-  async findPage(f: ListCandidatesFilters, db: Queryable = getPool()) {
+  async findPage(f: ListCandidatesFilters, after: CandidatesPosition | null, db: Queryable = getPool()) {
     let q = 'SELECT * FROM candidates WHERE 1=1'
     const params: unknown[] = []
     let paramIndex = 1
@@ -65,28 +66,26 @@ export const candidatesRepository = {
       params.push(f.maxScore)
     }
 
-    if (f.cursor) {
-      const [cScore, cTime, cId] = f.cursor.split('|')
-      const scoreVal = parseInt(cScore!)
+    const SCORE = 'COALESCE(score, -1)'
+    const AT = `date_trunc('milliseconds', date_applied)`
 
-      if (f.scoreSort === 'highToLow') {
-        q += ` AND (score < $${paramIndex} OR (score = $${paramIndex} AND (date_applied < $${paramIndex + 1} OR (date_applied = $${paramIndex + 1} AND id < $${paramIndex + 2}))))`
-        params.push(scoreVal, cTime, cId)
-        paramIndex += 3
-      } else if (f.scoreSort === 'lowToHigh') {
-        q += ` AND (score > $${paramIndex} OR (score = $${paramIndex} AND (date_applied < $${paramIndex + 1} OR (date_applied = $${paramIndex + 1} AND id < $${paramIndex + 2}))))`
-        params.push(scoreVal, cTime, cId)
-        paramIndex += 3
-      } else {
-        q += ` AND (date_applied < $${paramIndex} OR (date_applied = $${paramIndex} AND id < $${paramIndex + 1}))`
-        params.push(cTime, cId)
-        paramIndex += 2
+    if (after) {
+      const at = `$${paramIndex}::timestamptz`, id = `$${paramIndex + 1}::int`, s = `$${paramIndex + 2}::int`
+      const newerTie = `(${AT} < ${at} OR (${AT} = ${at} AND id < ${id}))`
+      params.push(after.at, after.id)
+      paramIndex += 2
+      if (f.scoreSort === 'newest') q += ` AND ${newerTie}`
+      else {
+        const beyond = f.scoreSort === 'highToLow' ? '<' : '>'
+        q += ` AND (${SCORE} ${beyond} ${s} OR (${SCORE} = ${s} AND ${newerTie}))`
+        params.push(after.score ?? -1)
+        paramIndex += 1
       }
     }
 
-    let orderBy = 'ORDER BY date_applied DESC, id DESC'
-    if (f.scoreSort === 'highToLow') orderBy = 'ORDER BY score DESC, date_applied DESC, id DESC'
-    else if (f.scoreSort === 'lowToHigh') orderBy = 'ORDER BY score ASC, date_applied DESC, id DESC'
+    let orderBy = `ORDER BY ${AT} DESC, id DESC`
+    if (f.scoreSort === 'highToLow') orderBy = `ORDER BY ${SCORE} DESC, ${AT} DESC, id DESC`
+    else if (f.scoreSort === 'lowToHigh') orderBy = `ORDER BY ${SCORE} ASC, ${AT} DESC, id DESC`
 
     q += ` ${orderBy} LIMIT $${paramIndex}`
     params.push(f.limit + 1)
@@ -95,8 +94,8 @@ export const candidatesRepository = {
     return rows
   },
 
-  /** One page of selected candidates by joining date (limit + 1 rows). Cursor: "YYYY-MM-DD|id". */
-  async findSelectedPage(f: ListSelectedFilters, db: Queryable = getPool()) {
+  /** One page of selected candidates by joining date after `after` (limit + 1 rows); no date yet sorts last. */
+  async findSelectedPage(f: ListSelectedFilters, after: SelectedPosition | null, db: Queryable = getPool()) {
     let q = 'SELECT id, name, email, phone, offered_role, offered_salary, offered_location, joining_date, status, offer_sent FROM candidates WHERE status = $1'
     const params: unknown[] = ['selected']
     let paramIndex = 2
@@ -122,14 +121,15 @@ export const candidatesRepository = {
       params.push(f.offer_sent === 'true')
     }
 
-    if (f.cursor) {
-      const [cDate, cId] = f.cursor.split('|')
-      q += ` AND (joining_date > $${paramIndex} OR (joining_date = $${paramIndex} AND id > $${paramIndex + 1}))`
-      params.push(cDate, cId)
+    const DATE = `COALESCE(joining_date, 'infinity'::date)`
+    if (after) {
+      const d = `COALESCE($${paramIndex}::date, 'infinity'::date)`
+      q += ` AND (${DATE} > ${d} OR (${DATE} = ${d} AND id > $${paramIndex + 1}))`
+      params.push(after.date, after.id)
       paramIndex += 2
     }
 
-    q += ` ORDER BY joining_date ASC, id ASC LIMIT $${paramIndex}`
+    q += ` ORDER BY ${DATE} ASC, id ASC LIMIT $${paramIndex}`
     params.push(f.limit + 1)
 
     const { rows } = await db.query<SelectedCandidateRow>(q, params)
