@@ -1,20 +1,23 @@
 import jwt from 'jsonwebtoken'
 import { config } from '~~/server/config/env'
-import type { GoogleCredentials } from '~~/server/integrations/google/oauth'
 
+/** Who is signed in. Google tokens are never part of the session (they stay in the database). */
 export interface SessionUser {
+  id: number
   email: string
   name?: string
-  // TEMPORARY: Google OAuth tokens still ride in the session until they move server-side (SEC-01)
-  tokens?: GoogleCredentials
 }
 
 export const signSession = (user: SessionUser): string =>
-  jwt.sign(user, config.auth.jwtSecret, { expiresIn: '24h' })
+  jwt.sign({ email: user.email, name: user.name }, config.auth.jwtSecret, { subject: String(user.id), expiresIn: '24h' })
 
-/** Throws if the token is malformed, expired or signed with another secret. */
+/** Throws if the token is malformed, expired, signed with another secret, or from before user ids existed. */
 export const verifySession = (token: string): SessionUser => {
   const payload = jwt.verify(token, config.auth.jwtSecret)
   if (typeof payload !== 'object' || typeof payload.email !== 'string') throw new Error('Malformed session')
-  return { email: payload.email, name: payload.name, tokens: payload.tokens }
+
+  const id = Number(payload.sub)
+  if (!Number.isInteger(id) || id <= 0) throw new Error('Malformed session')
+
+  return { id, email: payload.email, name: typeof payload.name === 'string' ? payload.name : undefined }
 }

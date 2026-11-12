@@ -1,8 +1,8 @@
 import { readBody } from 'h3'
 import { requireUser } from '~~/server/core/auth/current-user'
-import { getAuthClientFromSession } from '~~/server/core/auth/google-session'
 import { defineApiHandler } from '~~/server/core/http/define-api-handler'
 import { parseBody } from '~~/server/core/http/validate'
+import { googleAuthService } from '../auth/google-auth.service'
 import { ScanFormsBody, ScanWhatsappBody, selectedFormIds } from './ingestion.dto'
 import { ingestionService } from './ingestion.service'
 
@@ -18,7 +18,7 @@ export const ingestionController = {
   scanGmail: defineApiHandler(async (event) => {
     ingestionService.assertGmailIdle()
     const user = requireUser(event)
-    return ingestionService.scanGmail(getAuthClientFromSession(user), user.email)
+    return ingestionService.scanGmail(await googleAuthService.getAuthClientForUser(user.id), user.email)
   }),
 
   scanForms: defineApiHandler(async (event) => {
@@ -27,7 +27,7 @@ export const ingestionController = {
     const raw = await readBody(event).catch(() => ({}))
     const parsed = ScanFormsBody.safeParse(raw)
     const formIds = parsed.success ? selectedFormIds(parsed.data) : []
-    return ingestionService.scanForms(getAuthClientFromSession(user), user.email, formIds)
+    return ingestionService.scanForms(await googleAuthService.getAuthClientForUser(user.id), user.email, formIds)
   }),
 
   scanStatus: defineApiHandler(() => ingestionService.getScanStatus())

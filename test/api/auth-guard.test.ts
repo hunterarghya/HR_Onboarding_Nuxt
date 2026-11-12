@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { listRoutes } from '../helpers/routes'
 import { api, expectError } from './helpers/http'
-import { expiredToken, tokenWithWrongSecret } from './helpers/tokens'
+import { db } from './helpers/db'
+import { expiredToken, legacyToken, tokenWithWrongSecret, userToken } from './helpers/tokens'
 
 // Mirrors server/core/auth/public-routes.ts on purpose: adding a public route must be a visible,
 // two-file change. /auth/google/callback is outside /api (it's the OAuth redirect target).
@@ -19,6 +20,18 @@ describe('authentication on every route', () => {
   it('rejects expired and foreign tokens alike', async () => {
     expectError(await api('GET', '/api/jobs', { token: expiredToken() }), 401, 'Invalid or expired session')
     expectError(await api('GET', '/api/jobs', { token: tokenWithWrongSecret() }), 401, 'Invalid or expired session')
+  })
+
+  it('rejects sessions from before Google tokens moved server-side', async () => {
+    expectError(await api('GET', '/api/jobs', { token: legacyToken() }), 401, 'Invalid or expired session')
+  })
+
+  it('asks a user without stored Google credentials to sign in again', async () => {
+    const { rows } = await db().query('INSERT INTO users (email) VALUES (\'no-google@example.com\') ON CONFLICT (email) DO UPDATE SET name = NULL RETURNING id')
+    const token = userToken({ email: 'no-google@example.com' }, rows[0].id)
+    expectError(await api('POST', '/api/interviews/sync-calendar', { token }), 401, 'Google account not connected. Please sign in again.')
+    // optional Google extras just skip: the job is still created
+    expect((await api('POST', '/api/jobs', { token, body: { role: 'No Google' } })).status).toBe(201)
   })
 
   it('cannot be dodged with path tricks', async () => {
