@@ -69,7 +69,7 @@ const handleGenerateForm = async (job: Job) => {
     console.error('Error generating Google Form:', err)
     toast.add({
       title: 'Failed to generate form',
-      description: err?.data?.statusMessage || err?.data?.data?.error || err?.message || 'Please check your Google account connection',
+      description: err?.data?.statusMessage || err?.data?.data?.details || err?.message || 'Please check your Google account connection',
       color: 'error'
     })
   } finally {

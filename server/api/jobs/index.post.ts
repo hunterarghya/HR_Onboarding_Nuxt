@@ -1,5 +1,6 @@
 import { requireUser } from '~~/server/core/auth/current-user'
 import { getAuthClientFromSession } from '~~/server/core/auth/google-session'
+import { googleFormsService } from '~~/server/modules/google-forms/google-forms.service'
 
 export default defineEventHandler(async (event) => {
   const userData = requireUser(event)
@@ -19,19 +20,10 @@ export default defineEventHandler(async (event) => {
 
     // Attempt to auto-create Google Form if user has valid Google OAuth tokens
     if (userData.tokens) {
-      try {
-        const { formId, formUrl, questionMap } = await createApplicationForm(getAuthClientFromSession(userData), newJob.role)
-        await pool.query(
-          `INSERT INTO google_forms (form_id, form_url, form_title, job_role_id, question_map)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [formId, formUrl, `Job Application: ${newJob.role}`, newJob.id, JSON.stringify(questionMap)]
-        )
-        newJob.form_url = formUrl
-        newJob.google_form_id = formId
-        console.log(`--- [GoogleForms] Auto-created form for job ${newJob.id}: ${formUrl} ---`)
-      } catch (formErr: any) {
-        console.warn('--- [GoogleForms] Could not auto-generate form on job creation ---', formErr?.message || formErr)
-        // Non-blocking: job creation still succeeds
+      const form = await googleFormsService.tryCreateForJob(getAuthClientFromSession(userData), newJob)
+      if (form) {
+        newJob.form_url = form.formUrl
+        newJob.google_form_id = form.formId
       }
     }
 
