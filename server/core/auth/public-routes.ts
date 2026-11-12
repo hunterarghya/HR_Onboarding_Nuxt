@@ -2,6 +2,7 @@
 const PUBLIC_ROUTES = new Set([
   'GET /api/health',
   'GET /api/auth/google',
+  'POST /api/auth/logout', // must work with an expired session too
   'POST /api/interviews/webhook' // Google Calendar push notifications carry no session
 ])
 

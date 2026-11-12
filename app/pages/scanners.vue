@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { WAStatus, WAGroup, GoogleForm } from '~/types'
 
-const { apiFetch, token } = useApi()
+const { apiFetch } = useApi()
 const toast = useToast()
 
 // --- Email Scanner State ---
@@ -39,8 +39,7 @@ const handleMailScan = async () => {
   scanningMail.value = true
   try {
     const response = await apiFetch<{ message: string, count: number }>('/candidates/scan-mail', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token.value}` }
+      method: 'POST'
     })
     toast.add({ title: 'Email Scan Complete', description: `${response.count} candidate(s) found`, color: 'success' })
     await fetchScanStatus()
@@ -74,8 +73,7 @@ const handleWAScan = async () => {
   try {
     const response = await apiFetch<{ message: string, count: number }>('/candidates/scan', {
       method: 'POST',
-      body: { whatsappGroupIds: selectedGroups.value },
-      headers: { Authorization: `Bearer ${token.value}` }
+      body: { whatsappGroupIds: selectedGroups.value }
     })
     toast.add({ title: 'WhatsApp Scan Complete', description: `${response.count} candidate(s) found`, color: 'success' })
   } catch (err) {
@@ -135,8 +133,7 @@ const handleFormsScan = async () => {
     }
     const response = await apiFetch<{ message: string, count: number }>('/candidates/scan-forms', {
       method: 'POST',
-      body,
-      headers: { Authorization: `Bearer ${token.value}` }
+      body
     })
     toast.add({ title: 'Forms Scan Complete', description: `${response.count} candidate(s) found`, color: 'success' })
     await fetchScanStatus()

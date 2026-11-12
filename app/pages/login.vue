@@ -4,7 +4,15 @@ definePageMeta({
 })
 
 const loading = ref(false)
-const error = ref('')
+
+// The server sends people back here with ?error=<reason> when sign-in doesn't work out
+const ERROR_MESSAGES: Record<string, string> = {
+  auth_failed: 'Sign-in with Google failed. Please try again.',
+  not_allowed: 'This Google account is not allowed to use this app. Ask an administrator to add it.'
+}
+const route = useRoute()
+const reason = typeof route.query.error === 'string' ? route.query.error : ''
+const error = ref(reason ? (ERROR_MESSAGES[reason] ?? 'Sign-in failed. Please try again.') : '')
 
 const handleLogin = async () => {
   loading.value = true

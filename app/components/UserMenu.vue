@@ -7,21 +7,20 @@ defineProps<{
 
 const colorMode = useColorMode()
 const appConfig = useAppConfig()
-const token = useCookie('hr-token')
+const sessionUser = useSessionUser()
 
 const colors = ['red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose']
 const neutrals = ['slate', 'gray', 'zinc', 'neutral', 'stone']
 
-const user = ref({
-  name: 'HR Admin',
-  avatar: {
-    icon: 'i-lucide-user',
-    alt: 'HR Admin'
-  }
+const user = computed(() => {
+  const name = sessionUser.value?.name || sessionUser.value?.email || 'HR Admin'
+  return { name, avatar: { icon: 'i-lucide-user', alt: name } }
 })
 
-const handleLogout = () => {
-  token.value = null
+const handleLogout = async () => {
+  // The session cookie is httpOnly, so only the server can clear it
+  await $fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
+  sessionUser.value = null
   if (import.meta.client) {
     window.location.href = `/login`
   }

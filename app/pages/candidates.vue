@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Candidate, Job, PaginatedResponse, EmailTemplate } from '~/types'
 
-const { apiFetch, token } = useApi()
+const { apiFetch } = useApi()
 const toast = useToast()
 
 const candidates = ref<Candidate[]>([])
@@ -188,8 +188,7 @@ const handleSendOfferLetters = async () => {
     const candidateIds = selectedCandidates.value.map(c => c.id)
     const res = await apiFetch<{ sent: number, failed: number, skipped: number }>('/mail/offer-letters', {
       method: 'POST',
-      body: { templateId: mailModal.selectedTemplateId, candidateIds },
-      headers: { Authorization: `Bearer ${token.value}` }
+      body: { templateId: mailModal.selectedTemplateId, candidateIds }
     })
     toast.add({ title: 'Offer letters sent', description: `Sent: ${res.sent}, Failed: ${res.failed}, Skipped: ${res.skipped}`, color: 'success' })
     mailOpen.value = false

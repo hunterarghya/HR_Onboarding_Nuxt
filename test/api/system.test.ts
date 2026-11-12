@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { api } from './helpers/http'
+import { userToken } from './helpers/tokens'
 import { TEST_GOOGLE_CLIENT_ID } from './setup/test-env'
 
 describe('GET /api/health', () => {
@@ -57,5 +58,44 @@ describe('GET /api/whatsapp/groups', () => {
     const res = await api('GET', '/api/whatsapp/groups')
     expect(res.status).toBe(200)
     expect(res.body).toEqual([])
+  })
+})
+
+describe('GET /api/auth/me', () => {
+  it('returns the signed-in user from a Bearer token or the session cookie', async () => {
+    const viaHeader = await api('GET', '/api/auth/me')
+    expect(viaHeader.status).toBe(200)
+    expect(viaHeader.body).toEqual({ id: expect.any(Number), email: 'smoke.tester@example.com', name: 'Smoke Tester' })
+
+    const viaCookie = await api('GET', '/api/auth/me', { token: null, headers: { cookie: `hr_session=${userToken()}` } })
+    expect(viaCookie.body).toEqual(viaHeader.body)
+  })
+
+  it('rejects a missing or forged cookie', async () => {
+    expect((await api('GET', '/api/auth/me', { token: null })).status).toBe(401)
+    expect((await api('GET', '/api/auth/me', { token: null, headers: { cookie: 'hr_session=forged.jwt.value' } })).status).toBe(401)
+  })
+})
+
+describe('POST /api/auth/logout', () => {
+  it('clears the httpOnly session cookie, even without a session', async () => {
+    const res = await api('POST', '/api/auth/logout', { token: null })
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ message: 'Signed out' })
+    expect(res.headers.get('set-cookie')).toMatch(/^hr_session=;.*Max-Age=0/)
+  })
+})
+
+describe('pages behind the session cookie (server-side rendering)', () => {
+  it('sends a visitor without a session to /login', async () => {
+    const res = await api('GET', '/', { token: null })
+    expect(res.status).toBe(302)
+    expect(res.headers.get('location')).toBe('/login')
+  })
+
+  it('renders the app for a signed-in visitor (the guard forwards the cookie to /api/auth/me)', async () => {
+    const res = await api('GET', '/', { token: null, headers: { cookie: `hr_session=${userToken()}` } })
+    expect(res.status).toBe(200)
+    expect(res.body).toContain('<html')
   })
 })

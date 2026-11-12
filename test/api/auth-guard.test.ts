@@ -6,7 +6,7 @@ import { expiredToken, legacyToken, tokenWithWrongSecret, userToken } from './he
 
 // Mirrors server/core/auth/public-routes.ts on purpose: adding a public route must be a visible,
 // two-file change. /auth/google/callback is outside /api (it's the OAuth redirect target).
-const PUBLIC = new Set(['GET /api/health', 'GET /api/auth/google', 'POST /api/interviews/webhook', 'GET /auth/google/callback'])
+const PUBLIC = new Set(['GET /api/health', 'GET /api/auth/google', 'POST /api/auth/logout', 'POST /api/interviews/webhook', 'GET /auth/google/callback'])
 
 const protectedRoutes = listRoutes()
   .filter(r => !PUBLIC.has(r.title))
