@@ -2,6 +2,7 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { api, expectError } from './helpers/http'
 import { itRequiresLogin, userToken } from './helpers/auth'
 import { assignCandidate, db, insertCandidate, insertEvent, insertJob, resetDb } from './helpers/db'
+import { runTask, startTask, waitForTask } from './helpers/tasks'
 
 const assignedIds = async (eventId: number) => {
   const { rows } = await db().query('SELECT candidate_id FROM interview_candidates WHERE event_id = $1 ORDER BY candidate_id', [eventId])
@@ -12,17 +13,18 @@ describe('POST /api/interviews/sync-calendar', () => {
   beforeAll(resetDb)
   itRequiresLogin('POST', '/api/interviews/sync-calendar')
 
-  it('aborts when there are no job roles', async () => {
-    const res = await api('POST', '/api/interviews/sync-calendar', { token: userToken() })
-    expect(res.status).toBe(200)
-    expect(res.body).toEqual({ message: 'No active job roles found', imported: 0 })
+  it('runs as a task; with no job roles it completes without importing', async () => {
+    const taskId = await startTask('POST', '/api/interviews/sync-calendar')
+    expect(taskId).toBe('calendar.sync')
+    const outcome = await waitForTask(taskId)
+    expect(outcome).toMatchObject({ state: 'completed', result: { message: 'No active job roles found', imported: 0 } })
   })
 
-  it('returns 500 with details when Google is unreachable', async () => {
+  it('fails the task with the reason when Google is unreachable', async () => {
     await insertJob()
-    const res = await api('POST', '/api/interviews/sync-calendar', { token: userToken() })
-    expectError(res, 500, 'Calendar sync failed')
-    expect(res.body.data.details).toEqual(expect.any(String))
+    const outcome = await runTask('POST', '/api/interviews/sync-calendar')
+    expect(outcome.state).toBe('failed')
+    expect(outcome.error).toMatch(/^Calendar sync failed: /)
   })
 })
 

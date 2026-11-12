@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // Processors are thin: payload in, one service call out. The services are faked here.
 const ingestion = { runGmailScan: vi.fn(), runFormsScan: vi.fn(), runWhatsappScan: vi.fn() }
 vi.mock('~~/server/features/ingestion/ingestion.service', () => ({ ingestionService: ingestion }))
+const calendarSync = { runSync: vi.fn() }
+vi.mock('~~/server/features/interviews/calendar-sync.service', () => ({ calendarSyncService: calendarSync }))
 
 const { taskProcessors } = await import('../../server/features/tasks/task-processors')
 
@@ -25,6 +27,11 @@ describe('task processors', () => {
   it('scan.whatsapp → runWhatsappScan(userId, groupIds, progress)', async () => {
     await taskProcessors['scan.whatsapp']!({ userId: 4, groupIds: ['g@g.us'] }, ctx)
     expect(ingestion.runWhatsappScan).toHaveBeenCalledWith(4, ['g@g.us'], ctx.reportProgress)
+  })
+
+  it('calendar.sync → runSync(userId, progress)', async () => {
+    await taskProcessors['calendar.sync']!({ userId: 4 }, ctx)
+    expect(calendarSync.runSync).toHaveBeenCalledWith(4, ctx.reportProgress)
   })
 
   it('a failing service fails the task (so BullMQ retries it)', async () => {

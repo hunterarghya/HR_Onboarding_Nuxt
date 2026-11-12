@@ -63,7 +63,12 @@ export const interviewsController = {
     return interviewAssignmentsService.eligibleForEvent(eventId)
   }),
 
-  syncCalendar: defineApiHandler(async event => calendarSyncService.sync(await googleAuth(event))),
+  /** 202 { taskId }: the sync runs as a background task (GET /api/tasks/:taskId). */
+  syncCalendar: defineApiHandler(async (event) => {
+    const task = await calendarSyncService.enqueueSync(requireUser(event).id)
+    setResponseStatus(event, 202)
+    return task
+  }),
 
   registerWebhook: defineApiHandler(async (event) => {
     const auth = await googleAuth(event)
