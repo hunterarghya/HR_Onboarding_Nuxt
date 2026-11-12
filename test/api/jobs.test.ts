@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { api, expectError } from './helpers/http'
 import { db, insertForm, insertJob, resetDb } from './helpers/db'
+import { waitForTask } from './helpers/tasks'
 
 beforeAll(resetDb)
 
@@ -32,6 +33,28 @@ describe('POST /api/jobs', () => {
 
   it('rejects a job without a role (400, was a 500 crash)', async () => {
     expectError(await api('POST', '/api/jobs', { body: { salary: '100' } }), 400, 'Validation failed')
+  })
+})
+
+describe('job description indexing when Qdrant is down (BUG-11)', () => {
+  // The smoke environment has no Qdrant, so every index attempt fails
+  it('still creates the job and retries the indexing as a background task', async () => {
+    const res = await api('POST', '/api/jobs', { body: { role: 'Indexing Probe' } })
+    expect(res.status).toBe(201)
+    const outcome = await waitForTask(`vectors.job.${res.body.id}`)
+    expect(outcome).toMatchObject({ state: 'failed', attempts: 3 })
+  })
+
+  it('retries removing a deleted job from the index', async () => {
+    const job = await insertJob()
+    expect((await api('DELETE', `/api/jobs/${job.id}`)).status).toBe(200)
+    const outcome = await waitForTask(`vectors.remove.${job.id}`)
+    expect(outcome.state).toBe('failed')
+  })
+
+  it('re-indexes all jobs in the background at boot instead of before serving', async () => {
+    const outcome = await waitForTask('vectors.resyncAll')
+    expect(outcome.state).toBe('failed') // no Qdrant here; with Qdrant it completes with { indexed }
   })
 })
 

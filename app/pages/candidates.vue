@@ -2,6 +2,7 @@
 import type { Candidate, Job, PaginatedResponse, EmailTemplate } from '~/types'
 
 const { apiFetch } = useApi()
+const { runTask } = useTask()
 const toast = useToast()
 
 const candidates = ref<Candidate[]>([])
@@ -186,16 +187,17 @@ const handleSendOfferLetters = async () => {
   mailModal.sending = true
   try {
     const candidateIds = selectedCandidates.value.map(c => c.id)
-    const res = await apiFetch<{ sent: number, failed: number, skipped: number }>('/mail/offer-letters', {
-      method: 'POST',
-      body: { templateId: mailModal.selectedTemplateId, candidateIds }
-    })
+    // A background task: queued at once, then followed until every letter is handled
+    const res = await runTask<{ sent: number, failed: number, skipped: number }>(
+      () => apiFetch('/mail/offer-letters', { method: 'POST', body: { templateId: mailModal.selectedTemplateId, candidateIds } }),
+      { taskIdOnConflict: 'mail.offers' }
+    )
     toast.add({ title: 'Offer letters sent', description: `Sent: ${res.sent}, Failed: ${res.failed}, Skipped: ${res.skipped}`, color: 'success' })
     mailOpen.value = false
     fetchSelectedCandidates()
   } catch (err: any) {
     console.error('Mail error:', err)
-    toast.add({ title: 'Failed to send emails', description: err.data?.data?.details || err.message, color: 'error' })
+    toast.add({ title: 'Failed to send emails', description: err.data?.statusMessage || err.message, color: 'error' })
   } finally {
     mailModal.sending = false
   }

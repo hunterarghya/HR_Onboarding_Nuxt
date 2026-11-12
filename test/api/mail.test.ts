@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { api, expectError } from './helpers/http'
 import { itRequiresLogin, userToken } from './helpers/auth'
 import { assignCandidate, db, insertCandidate, insertEvent, resetDb } from './helpers/db'
+import { runTask, startTask, waitForTask } from './helpers/tasks'
 
 beforeEach(resetDb)
 
@@ -10,6 +11,7 @@ const templateId = async (type: string): Promise<number> => {
   return rows[0].id
 }
 
+// Bulk mail is a background task: 202 { taskId }, then the counts come from GET /api/tasks/:id.
 // Sending real mail needs Gmail; these cover every path that stops before (or survives) the Gmail call.
 
 describe('POST /api/mail/interview-invites/:eventId', () => {
@@ -24,11 +26,10 @@ describe('POST /api/mail/interview-invites/:eventId', () => {
     expectError(await api('POST', '/api/mail/interview-invites/abc', { body: { templateId: 1 } }), 400)
   })
 
-  it('returns 500 with details for an unknown template', async () => {
+  it('rejects an unknown template or event before queueing anything (404)', async () => {
     const evt = await insertEvent()
-    const res = await api('POST', `/api/mail/interview-invites/${evt.id}`, { token: userToken(), body: { templateId: 999999 } })
-    expectError(res, 500, 'Failed to send invites')
-    expect(res.body.data.details).toBe('Template not found')
+    expectError(await api('POST', `/api/mail/interview-invites/${evt.id}`, { body: { templateId: 999999 } }), 404, 'Template not found')
+    expectError(await api('POST', '/api/mail/interview-invites/999999', { body: { templateId: await templateId('invite') } }), 404, 'Event not found')
   })
 
   it('skips candidates without email and counts Gmail failures', async () => {
@@ -36,9 +37,11 @@ describe('POST /api/mail/interview-invites/:eventId', () => {
     await assignCandidate(evt.id, (await insertCandidate({ email: null })).id)
     await assignCandidate(evt.id, (await insertCandidate()).id)
     await assignCandidate(evt.id, (await insertCandidate()).id, true)
-    const res = await api('POST', `/api/mail/interview-invites/${evt.id}`, { token: userToken(), body: { templateId: await templateId('invite') } })
-    expect(res.status).toBe(200)
-    expect(res.body).toEqual({ message: 'Invites processed', sent: 0, failed: 1, skipped: 1, total: 2 })
+    const taskId = await startTask('POST', `/api/mail/interview-invites/${evt.id}`, { templateId: await templateId('invite') })
+    expect(taskId).toBe(`mail.invites.event.${evt.id}`)
+    const outcome = await waitForTask(taskId)
+    expect(outcome).toMatchObject({ state: 'completed', result: { message: 'Invites processed', sent: 0, failed: 1, skipped: 1, total: 2 } })
+    expect(outcome.progress).toMatchObject({ done: 2, total: 2 })
   })
 })
 
@@ -55,9 +58,17 @@ describe('POST /api/mail/interview-invites-all', () => {
     await assignCandidate(e1.id, (await insertCandidate({ email: null })).id)
     await assignCandidate(e2.id, (await insertCandidate({ email: null })).id)
     await assignCandidate(e2.id, (await insertCandidate()).id, true)
-    const res = await api('POST', '/api/mail/interview-invites-all', { token: userToken(), body: { templateId: await templateId('invite') } })
-    expect(res.status).toBe(200)
-    expect(res.body).toEqual({ message: 'Bulk invites processed', sent: 0, failed: 0, skipped: 2, eventsProcessed: 2 })
+    const outcome = await runTask('POST', '/api/mail/interview-invites-all', { templateId: await templateId('invite') })
+    expect(outcome.result).toEqual({ message: 'Bulk invites processed', sent: 0, failed: 0, skipped: 2, eventsProcessed: 2 })
+  })
+})
+
+describe('sending mail before setting a company name', () => {
+  it('is refused with a clear message (emails say "at {{company_name}}")', async () => {
+    const { rows } = await db().query('INSERT INTO users (email) VALUES (\'no-company@example.com\') ON CONFLICT (email) DO UPDATE SET company_name = NULL RETURNING id')
+    const token = userToken({ email: 'no-company@example.com' }, rows[0].id)
+    const res = await api('POST', '/api/mail/interview-invites-all', { token, body: { templateId: await templateId('invite') } })
+    expectError(res, 400, 'Set your company name (user menu) before sending emails')
   })
 })
 
@@ -74,12 +85,10 @@ describe('POST /api/mail/offer-letters', () => {
     const withEmail = await insertCandidate({ status: 'selected' })
     const alreadySent = await insertCandidate({ status: 'selected', offer_sent: true })
     const notSelected = await insertCandidate()
-    const res = await api('POST', '/api/mail/offer-letters', {
-      token: userToken(),
-      body: { templateId: await templateId('offer'), candidateIds: [noEmail.id, withEmail.id, alreadySent.id, notSelected.id] }
+    const outcome = await runTask('POST', '/api/mail/offer-letters', {
+      templateId: await templateId('offer'), candidateIds: [noEmail.id, withEmail.id, alreadySent.id, notSelected.id]
     })
-    expect(res.status).toBe(200)
-    expect(res.body).toEqual({ message: 'Offer letters processed', sent: 0, failed: 1, skipped: 1, total: 2 })
+    expect(outcome.result).toEqual({ message: 'Offer letters processed', sent: 0, failed: 1, skipped: 1, total: 2 })
   })
 })
 

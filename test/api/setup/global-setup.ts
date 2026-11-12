@@ -18,7 +18,8 @@ import { join, resolve } from 'node:path'
 import pg from 'pg'
 import { encrypt } from '../../../server/core/crypto'
 import type { TestProject } from 'vitest/node'
-import { TEST_DATABASE_URL, TEST_GOOGLE_CLIENT_ID, TEST_JWT_SECRET, TEST_TOKEN_ENCRYPTION_KEY, UNREACHABLE_URL } from './test-env'
+import { Queue } from 'bullmq'
+import { TEST_DATABASE_URL, TEST_GOOGLE_CLIENT_ID, TEST_JWT_SECRET, TEST_REDIS_URL, TEST_TOKEN_ENCRYPTION_KEY, UNREACHABLE_URL } from './test-env'
 
 declare module 'vitest' {
   export interface ProvidedContext {
@@ -69,6 +70,19 @@ const recreateDatabase = async () => {
   }
 }
 
+/** Empties the test task queues, so a previous run's tasks never leak into this one. */
+const resetQueues = async () => {
+  const url = new URL(TEST_REDIS_URL)
+  const db = Number(url.pathname.slice(1) || 0)
+  if (db === 0) throw new Error('Refusing to clear Redis database 0: point TEST_REDIS_URL at a test database, e.g. /15')
+  const connection = { host: url.hostname, port: Number(url.port || 6379), db, password: url.password || undefined }
+  for (const name of ['scans', 'mail', 'background']) {
+    const queue = new Queue(name, { connection })
+    await queue.obliterate({ force: true })
+    await queue.close()
+  }
+}
+
 const getFreePort = () => new Promise<number>((resolvePort, reject) => {
   const srv = createServer()
   srv.once('error', reject)
@@ -90,6 +104,7 @@ const waitFor = async (what: string, check: () => Promise<boolean>, timeoutMs: n
 export default async function setup(project: TestProject) {
   if (TARGET === 'build') ensureBuild()
   await recreateDatabase()
+  await resetQueues()
 
   const port = await getFreePort()
   const baseURL = `http://127.0.0.1:${port}`
@@ -104,9 +119,12 @@ export default async function setup(project: TestProject) {
     HOST: '127.0.0.1',
     PORT: String(port),
     DATABASE_URL: TEST_DATABASE_URL,
+    REDIS_URL: TEST_REDIS_URL,
+    MAIL_SEND_INTERVAL_MS: '0',
+    TASK_RETRY_DELAY_MS: '50',
     JWT_SECRET: TEST_JWT_SECRET,
     TOKEN_ENCRYPTION_KEY: TEST_TOKEN_ENCRYPTION_KEY,
-    ALLOWED_EMAILS: 'smoke.tester@example.com,no-google@example.com',
+    ALLOWED_EMAIL_DOMAINS: 'example.com',
     GOOGLE_CLIENT_ID: TEST_GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET: 'smoke-test-client-secret',
     GOOGLE_REDIRECT_URI: `${baseURL}/auth/google/callback`,
@@ -159,7 +177,7 @@ export default async function setup(project: TestProject) {
       // The user every test session belongs to, with Google tokens that are fake: the server under test
       // has no network, so any Google call fails fast, exactly as with a revoked account.
       const { rows } = await db.query<{ id: number }>(
-        'INSERT INTO users (email, name, last_login_at) VALUES (\'smoke.tester@example.com\', \'Smoke Tester\', now()) RETURNING id'
+        'INSERT INTO users (email, name, company_name, last_login_at) VALUES (\'smoke.tester@example.com\', \'Smoke Tester\', \'Odysseus\', now()) RETURNING id'
       )
       testUserId = rows[0]!.id
       const far = new Date(Date.now() + 365 * 24 * 3600 * 1000)

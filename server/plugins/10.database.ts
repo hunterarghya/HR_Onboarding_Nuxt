@@ -1,4 +1,3 @@
-import { config } from '~~/server/config/env'
 import { closePool, getPool } from '~~/server/core/db/pool'
 import { loadMigrations } from '~~/server/database/migration-files'
 import { runMigrations } from '~~/server/database/migrator'
@@ -12,8 +11,9 @@ export default defineNitroPlugin(async (nitroApp) => {
     const applied = await runMigrations(getPool(), await loadMigrations())
     console.log(applied.length > 0 ? `Database migrations applied: ${applied.join(', ')}` : 'Database schema up to date')
 
-    await seedDefaultTemplates(config.app.companyName)
-    await jobRolesService.resyncAllVectors()
+    await seedDefaultTemplates()
+    // Re-index job descriptions in the background; the server answers requests meanwhile
+    await jobRolesService.queueResyncAllVectors()
   } catch (err) {
     // The server keeps running so /api/health can report the database problem
     console.error('Error initializing database:', err)

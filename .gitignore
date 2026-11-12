@@ -53,3 +53,6 @@ whatsapp-auth/
 
 # Local guide documentation
 guide_docs/
+
+# Local task-queue guide (BullMQ playbook)
+queue_guide/

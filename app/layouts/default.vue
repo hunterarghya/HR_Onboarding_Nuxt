@@ -83,5 +83,7 @@ const groups = computed(() => [{
     <UDashboardSearch :groups="groups" />
 
     <slot />
+
+    <CompanyNameModal />
   </UDashboardGroup>
 </template>

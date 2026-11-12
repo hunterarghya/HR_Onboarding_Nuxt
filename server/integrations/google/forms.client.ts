@@ -21,8 +21,14 @@ export const batchUpdateForm = async (auth: GoogleAuthClient, formId: string, re
   return res.data.form
 }
 
-/** Form responses, optionally narrowed by a Forms API filter such as `timestamp >= …`. */
+/** Form responses (all pages), optionally narrowed by a Forms API filter such as `timestamp >= …`. */
 export const listResponses = async (auth: GoogleAuthClient, formId: string, filter?: string): Promise<FormResponse[]> => {
-  const res = await formsFor(auth).forms.responses.list(filter ? { formId, filter } : { formId })
-  return res.data.responses || []
+  const responses: FormResponse[] = []
+  let pageToken: string | undefined
+  do {
+    const res = await formsFor(auth).forms.responses.list({ formId, pageToken, ...(filter ? { filter } : {}) })
+    responses.push(...(res.data.responses || []))
+    pageToken = res.data.nextPageToken || undefined
+  } while (pageToken)
+  return responses
 }

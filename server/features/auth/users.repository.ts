@@ -4,6 +4,8 @@ export interface UserRow {
   id: number
   email: string
   name: string | null
+  /** Entered by the HR; used in their outgoing emails */
+  company_name: string | null
   created_at: Date
   last_login_at: Date | null
 }
@@ -22,6 +24,11 @@ export const usersRepository = {
 
   async findById(id: number, db: Queryable = getPool()) {
     const { rows } = await db.query<UserRow>('SELECT * FROM users WHERE id = $1', [id])
+    return rows[0] ?? null
+  },
+
+  async updateCompanyName(id: number, companyName: string, db: Queryable = getPool()) {
+    const { rows } = await db.query<UserRow>('UPDATE users SET company_name = $1 WHERE id = $2 RETURNING *', [companyName, id])
     return rows[0] ?? null
   }
 }

@@ -7,6 +7,7 @@
 import { uploadResume } from '~~/server/integrations/imagekit/imagekit.client'
 import { candidatesRepository } from '../../candidates/candidates.repository'
 import { jobRolesRepository } from '../../job-roles/job-roles.repository'
+import type { TaskProgress } from '~~/server/core/tasks/task-status'
 import type { RawAttachment } from '../ingestion.types'
 import { extractPdfText } from './pdf-text'
 import { parseResume } from './resume-parser'
@@ -19,13 +20,17 @@ import { decide, OPEN_TARGET } from './shortlist-policy'
  *
  * @returns Number of candidates successfully processed
  */
-export const processAttachments = async (attachments: RawAttachment[]): Promise<number> => {
+export const processAttachments = async (
+  attachments: RawAttachment[],
+  onProgress: (progress: TaskProgress) => Promise<void> = async () => {}
+): Promise<number> => {
   const jobRoles = await jobRolesRepository.findAll()
 
   console.log(`--- [Processor] Processing ${attachments.length} attachment(s) ---`)
   let candidatesFound = 0
 
-  for (const attachment of attachments) {
+  for (const [index, attachment] of attachments.entries()) {
+    await onProgress({ done: index, total: attachments.length, stage: 'processing resumes' })
     try {
       console.log(`--- [Process] Handling: ${attachment.filename} (${attachment.source}) ---`)
 
@@ -84,5 +89,6 @@ export const processAttachments = async (attachments: RawAttachment[]): Promise<
     }
   }
 
+  await onProgress({ done: attachments.length, total: attachments.length, stage: 'processing resumes' })
   return candidatesFound
 }

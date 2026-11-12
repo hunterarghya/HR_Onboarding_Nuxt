@@ -58,6 +58,7 @@ services:
       - PORT=3000
       - HOST=0.0.0.0
       - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
     depends_on:
       postgres:
         condition: service_healthy

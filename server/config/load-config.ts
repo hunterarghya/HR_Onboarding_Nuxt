@@ -6,9 +6,16 @@ const list = (value: string | undefined) => (value ?? '').split(',').map(s => s.
 // Each key is added by the commit that first reads it, so this schema never lists unused settings.
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  COMPANY_NAME: z.string().min(1).default('Ripplewalk'),
+  // all: web + task workers + WhatsApp in one process. web: HTTP only (enqueues). worker: workers + WhatsApp.
+  APP_ROLE: z.enum(['all', 'web', 'worker']).default('all'),
 
   DATABASE_URL: z.url(),
+  // Background task queues (BullMQ). A path selects the Redis database, e.g. redis://localhost:6379/0
+  REDIS_URL: z.url().default('redis://localhost:6379'),
+  // Pause between two emails of a bulk send, to stay well inside Gmail's sending limits
+  MAIL_SEND_INTERVAL_MS: z.coerce.number().int().min(0).default(200),
+  // First retry delay of a failed background task; each further retry waits twice as long
+  TASK_RETRY_DELAY_MS: z.coerce.number().int().min(0).default(5_000),
 
   JWT_SECRET: z.string().min(32, 'must be at least 32 characters (e.g. `openssl rand -hex 32`)'),
   // Encrypts Google tokens at rest. Changing it makes stored tokens unreadable (users sign in again).
@@ -62,7 +69,10 @@ export const loadConfig = (source: Record<string, string | undefined>) => {
 
   return Object.freeze({
     env: env.NODE_ENV,
-    app: { companyName: env.COMPANY_NAME },
+    app: { role: env.APP_ROLE },
+    redis: { url: env.REDIS_URL },
+    tasks: { retryDelayMs: env.TASK_RETRY_DELAY_MS },
+    mail: { sendIntervalMs: env.MAIL_SEND_INTERVAL_MS },
     db: { url: env.DATABASE_URL },
     auth: {
       jwtSecret: env.JWT_SECRET,

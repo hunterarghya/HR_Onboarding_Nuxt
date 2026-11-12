@@ -51,6 +51,7 @@ const editor = shallowRef<Editor | null>(null)
 
 // Variables for drag & drop
 const variables = [
+  { id: 'company_name', label: 'Company Name', format: '{{company_name}}' },
   { id: 'name', label: 'Candidate Name', format: '{{name}}' },
   { id: 'role_applied', label: 'Role Applied', format: '{{role_applied}}' },
   { id: 'offered_role', label: 'Offered Role', format: '{{offered_role}}' },
@@ -64,7 +65,11 @@ const variables = [
   { id: 'venue_or_link', label: 'Venue or Link', format: '{{venue_or_link}}' }
 ]
 
+const sessionUser = useSessionUser()
+
 const dummyData = {
+  // the HR's own company, as in the emails they send
+  company_name: sessionUser.value?.company_name || 'Your Company',
   name: 'John Doe',
   role_applied: 'Senior Frontend Engineer',
   offered_role: 'Lead Frontend Engineer',

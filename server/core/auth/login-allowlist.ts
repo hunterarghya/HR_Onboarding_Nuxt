@@ -1,5 +1,5 @@
 export interface LoginAllowlist {
-  /** e.g. ['ripplewalk.com']: anyone with an address at these domains */
+  /** e.g. ['odysseus.example']: anyone with an address at these domains */
   domains: string[]
   /** e.g. ['hr.lead@gmail.com']: these exact addresses */
   emails: string[]

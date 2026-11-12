@@ -109,9 +109,9 @@ describe('GET /api/candidates/scan-status', () => {
     const res = await api('GET', '/api/candidates/scan-status', { token: userToken() })
     expect(res.status).toBe(200)
     expect(res.body).toEqual({
-      gmail: { lastScannedAt: expect.any(String) },
-      whatsapp: { lastScannedAt: expect.any(String) },
-      google_forms: { lastScannedAt: null }
+      gmail: { lastScannedAt: expect.any(String), running: false },
+      whatsapp: { lastScannedAt: expect.any(String), running: false },
+      google_forms: { lastScannedAt: null, running: false }
     })
     expect(new Date(res.body.whatsapp.lastScannedAt).getUTCDate()).toBe(5)
   })

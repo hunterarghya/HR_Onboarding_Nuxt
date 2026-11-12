@@ -51,8 +51,8 @@ describe('loadConfig', () => {
   it('requires a login allowlist and normalises it', () => {
     expect(() => loadConfig({ ...validEnv, ALLOWED_EMAIL_DOMAINS: undefined })).toThrow(/ALLOWED_EMAILS/)
     expect(() => loadConfig({ ...validEnv, ALLOWED_EMAIL_DOMAINS: ' , ' })).toThrow(/ALLOWED_EMAILS/)
-    const config = loadConfig({ ...validEnv, ALLOWED_EMAIL_DOMAINS: 'Ripplewalk.com, ', ALLOWED_EMAILS: ' Lead@Gmail.com' })
-    expect(config.auth.allowlist).toEqual({ domains: ['ripplewalk.com'], emails: ['lead@gmail.com'] })
+    const config = loadConfig({ ...validEnv, ALLOWED_EMAIL_DOMAINS: 'Odysseus.Example, ', ALLOWED_EMAILS: ' Lead@Gmail.com' })
+    expect(config.auth.allowlist).toEqual({ domains: ['odysseus.example'], emails: ['lead@gmail.com'] })
   })
 
   it('rejects an unknown LLM provider', () => {

@@ -1,7 +1,10 @@
 import { extractInterviewEvent } from '~~/server/agents/calendar-event/calendar-event.agent'
 import { AppError } from '~~/server/core/errors/app-error'
+import { enqueue } from '~~/server/core/tasks/queues'
+import type { TaskProgress } from '~~/server/core/tasks/task-status'
 import { listCalendars, listEvents, watchEvents } from '~~/server/integrations/google/calendar.client'
 import type { GoogleAuthClient } from '~~/server/integrations/google/oauth'
+import { googleAuthService } from '../auth/google-auth.service'
 import { jobRolesRepository } from '../job-roles/job-roles.repository'
 import { interviewEventsRepository } from './interview-events.repository'
 
@@ -34,7 +37,7 @@ const fetchRecentCalendarEvents = async (auth: GoogleAuthClient) => {
   return items
 }
 
-const runSync = async (auth: GoogleAuthClient) => {
+const runSync = async (auth: GoogleAuthClient, onProgress: (p: TaskProgress) => Promise<void>) => {
   const activeRoles = await jobRolesRepository.listRoleNames()
   console.log(`[Sync] Active roles from DB (${activeRoles.length}):`, activeRoles)
 
@@ -72,6 +75,7 @@ const runSync = async (auth: GoogleAuthClient) => {
   let skippedAgent = 0
 
   for (let idx = 0; idx < calendarEvents.length; idx++) {
+    await onProgress({ done: idx, total: calendarEvents.length, stage: 'reading calendar events' })
     const calEvent = calendarEvents[idx]!
     console.log(`\n[Sync] --- Processing event ${idx + 1}/${calendarEvents.length}: "${calEvent.summary}" (${calEvent.id}) ---`)
 
@@ -112,18 +116,30 @@ const runSync = async (auth: GoogleAuthClient) => {
   return { message: `Calendar sync complete`, imported }
 }
 
+export const CALENDAR_SYNC_TASK_ID = 'calendar.sync'
+
 export const calendarSyncService = {
-  /** Imports interview events from the user's Google Calendar, using the calendar-event agent. */
-  async sync(auth: GoogleAuthClient) {
+  /** Queues a sync (409 while one is queued or running); the Google connection is checked first. */
+  async enqueueSync(userId: number) {
+    await googleAuthService.getAuthClientForUser(userId)
+    return enqueue('calendar.sync', { userId }, { taskId: CALENDAR_SYNC_TASK_ID, conflictMessage: 'Calendar sync already in progress' })
+  },
+
+  /**
+   * Task calendar.sync: imports interview events from the user's Google Calendar, using the
+   * calendar-event agent (one LLM call per new event, so this can take minutes).
+   */
+  async runSync(userId: number, onProgress: (p: TaskProgress) => Promise<void> = async () => {}) {
     console.log(`\n\n╔══════════════════════════════════════════════════════╗`)
     console.log(`║           CALENDAR SYNC STARTED                      ║`)
     console.log(`╚══════════════════════════════════════════════════════╝`)
 
     try {
-      return await runSync(auth)
+      return await runSync(await googleAuthService.getAuthClientForUser(userId), onProgress)
     } catch (err) {
       console.error('[Sync] ❌ FATAL ERROR during sync:', err)
-      throw new AppError(500, 'CALENDAR_SYNC_FAILED', 'Calendar sync failed', (err as Error).message)
+      // the task fails with the reason, and is retried
+      throw new Error(`Calendar sync failed: ${(err as Error).message}`, { cause: err })
     }
   },
 

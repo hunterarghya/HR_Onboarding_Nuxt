@@ -1,7 +1,9 @@
 // Placeholder values for previewing a template, by template type.
 
-export const getDefaultSampleData = (type: string): Record<string, unknown> => {
+/** `companyName` is the previewing HR's own ("Your Company" until they set one). */
+export const getDefaultSampleData = (type: string, companyName: string): Record<string, unknown> => {
   const base = {
+    company_name: companyName,
     name: 'Ronit Sharma',
     email: 'ronit.sharma@email.com',
     phone: '+91 98765 43210',
@@ -17,7 +19,7 @@ export const getDefaultSampleData = (type: string): Record<string, unknown> => {
     interview_start_time: '2:00 PM',
     interview_end_time: '5:00 PM',
     interview_mode: 'Offline (In-Person)',
-    venue_or_link: 'Ripplewalk Office, 4th Floor, Sector 62, Noida'
+    venue_or_link: 'Head Office, 4th Floor'
   }
 
   const offer = {

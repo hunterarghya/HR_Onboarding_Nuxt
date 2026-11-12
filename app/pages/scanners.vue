@@ -2,14 +2,23 @@
 import type { WAStatus, WAGroup, GoogleForm } from '~/types'
 
 const { apiFetch } = useApi()
+const { runTask, waitForTask } = useTask()
 const toast = useToast()
 
 // --- Email Scanner State ---
 const scanningMail = ref(false)
+const mailProgress = ref<TaskProgress | null>(null)
+const setMailProgress = (p: TaskProgress) => {
+  mailProgress.value = p
+}
 const mailLastScanned = ref<string | null>(null)
 
 // --- WhatsApp State ---
 const scanningWA = ref(false)
+const waProgress = ref<TaskProgress | null>(null)
+const setWAProgress = (p: TaskProgress) => {
+  waProgress.value = p
+}
 const waStatus = ref<WAStatus>({ status: 'not connected', qrCodeData: null })
 const waGroups = ref<WAGroup[]>([])
 const selectedGroups = ref<string[]>([])
@@ -17,6 +26,10 @@ const showQR = ref(false)
 
 // --- Google Forms State ---
 const scanningForms = ref(false)
+const formsProgress = ref<TaskProgress | null>(null)
+const setFormsProgress = (p: TaskProgress) => {
+  formsProgress.value = p
+}
 const formsLastScanned = ref<string | null>(null)
 const googleForms = ref<GoogleForm[]>([])
 const selectedFormIds = ref<Set<string>>(new Set())
@@ -26,30 +39,41 @@ let statusInterval: ReturnType<typeof setInterval> | null = null
 // --- Fetch scan status ---
 const fetchScanStatus = async () => {
   try {
-    const status = await apiFetch<Record<string, { lastScannedAt: string | null }>>('/candidates/scan-status')
+    const status = await apiFetch<Record<string, { lastScannedAt: string | null, running: boolean }>>('/candidates/scan-status')
     mailLastScanned.value = status.gmail?.lastScannedAt || null
     formsLastScanned.value = status.google_forms?.lastScannedAt || null
+    // A scan started earlier (another tab, before a reload) is still running: follow it
+    if (status.gmail?.running && !scanningMail.value) followMailScan()
+    if (status.whatsapp?.running && !scanningWA.value) followWAScan()
+    if (status.google_forms?.running && !scanningForms.value) followFormsScan()
   } catch (err) {
     console.error('Error fetching scan status:', err)
   }
 }
 
 // --- Email Scanner ---
-const handleMailScan = async () => {
+type ScanResult = { message: string, count: number }
+
+// Each scan is a background task: start it (or follow the one already running), then wait for its result
+const trackMailScan = async (task: Promise<ScanResult>) => {
   scanningMail.value = true
+  mailProgress.value = null
   try {
-    const response = await apiFetch<{ message: string, count: number }>('/candidates/scan-mail', {
-      method: 'POST'
-    })
+    const response = await task
     toast.add({ title: 'Email Scan Complete', description: `${response.count} candidate(s) found`, color: 'success' })
     await fetchScanStatus()
   } catch (err) {
     console.error('Error scanning emails:', err)
-    toast.add({ title: 'Email scan failed', description: 'Check logs.', color: 'error' })
+    toast.add({ title: 'Email scan failed', description: (err as Error).message || 'Check logs.', color: 'error' })
   } finally {
     scanningMail.value = false
   }
 }
+const handleMailScan = () => trackMailScan(runTask<ScanResult>(
+  () => apiFetch('/candidates/scan-mail', { method: 'POST' }),
+  { taskIdOnConflict: 'scan.gmail', onProgress: setMailProgress }
+))
+const followMailScan = () => trackMailScan(waitForTask<ScanResult>('scan.gmail', setMailProgress))
 
 // --- WhatsApp ---
 const fetchWAStatus = async () => {
@@ -68,21 +92,24 @@ const fetchWAGroups = async () => {
   }
 }
 
-const handleWAScan = async () => {
+const trackWAScan = async (task: Promise<ScanResult>) => {
   scanningWA.value = true
+  waProgress.value = null
   try {
-    const response = await apiFetch<{ message: string, count: number }>('/candidates/scan', {
-      method: 'POST',
-      body: { whatsappGroupIds: selectedGroups.value }
-    })
+    const response = await task
     toast.add({ title: 'WhatsApp Scan Complete', description: `${response.count} candidate(s) found`, color: 'success' })
   } catch (err) {
     console.error('Error scanning:', err)
-    toast.add({ title: 'WhatsApp scan failed', description: 'Check logs.', color: 'error' })
+    toast.add({ title: 'WhatsApp scan failed', description: (err as Error).message || 'Check logs.', color: 'error' })
   } finally {
     scanningWA.value = false
   }
 }
+const handleWAScan = () => trackWAScan(runTask<ScanResult>(
+  () => apiFetch('/candidates/scan', { method: 'POST', body: { whatsappGroupIds: selectedGroups.value } }),
+  { taskIdOnConflict: 'scan.whatsapp', onProgress: setWAProgress }
+))
+const followWAScan = () => trackWAScan(waitForTask<ScanResult>('scan.whatsapp', setWAProgress))
 
 const getStatusColor = computed(() => {
   switch (waStatus.value.status) {
@@ -124,26 +151,31 @@ const isFormSelected = (formId: string) => {
   return selectedFormIds.value.size === 0 || selectedFormIds.value.has(formId)
 }
 
-const handleFormsScan = async () => {
+const trackFormsScan = async (task: Promise<ScanResult>) => {
   scanningForms.value = true
+  formsProgress.value = null
   try {
-    const body: { formIds?: string[] } = {}
-    if (selectedFormIds.value.size > 0) {
-      body.formIds = Array.from(selectedFormIds.value)
-    }
-    const response = await apiFetch<{ message: string, count: number }>('/candidates/scan-forms', {
-      method: 'POST',
-      body
-    })
+    const response = await task
     toast.add({ title: 'Forms Scan Complete', description: `${response.count} candidate(s) found`, color: 'success' })
     await fetchScanStatus()
   } catch (err) {
     console.error('Error scanning forms:', err)
-    toast.add({ title: 'Forms scan failed', description: 'Check logs.', color: 'error' })
+    toast.add({ title: 'Forms scan failed', description: (err as Error).message || 'Check logs.', color: 'error' })
   } finally {
     scanningForms.value = false
   }
 }
+const handleFormsScan = () => {
+  const body: { formIds?: string[] } = {}
+  if (selectedFormIds.value.size > 0) {
+    body.formIds = Array.from(selectedFormIds.value)
+  }
+  return trackFormsScan(runTask<ScanResult>(
+    () => apiFetch('/candidates/scan-forms', { method: 'POST', body }),
+    { taskIdOnConflict: 'scan.forms', onProgress: setFormsProgress }
+  ))
+}
+const followFormsScan = () => trackFormsScan(waitForTask<ScanResult>('scan.forms', setFormsProgress))
 
 const copyToClipboard = async (text: string) => {
   try {
@@ -225,7 +257,7 @@ onUnmounted(() => {
                 @click="handleMailScan"
               >
                 <UIcon v-if="!scanningMail" name="i-lucide-mail-search" class="size-5" />
-                {{ scanningMail ? 'Scanning Emails...' : 'Scan Emails' }}
+                {{ scanningMail ? `Scanning Emails... ${formatTaskProgress(mailProgress)}` : 'Scan Emails' }}
               </UButton>
             </div>
 
@@ -301,7 +333,7 @@ onUnmounted(() => {
                 @click="handleWAScan"
               >
                 <UIcon v-if="!scanningWA" name="i-lucide-search" class="size-5" />
-                {{ scanningWA ? 'Scanning...' : 'Scan WhatsApp' }}
+                {{ scanningWA ? `Scanning... ${formatTaskProgress(waProgress)}` : 'Scan WhatsApp' }}
               </UButton>
             </div>
 
@@ -341,7 +373,7 @@ onUnmounted(() => {
                 @click="handleFormsScan"
               >
                 <UIcon v-if="!scanningForms" name="i-lucide-file-search" class="size-5" />
-                {{ scanningForms ? 'Scanning Forms...' : (selectedFormIds.size > 0 ? `Scan ${selectedFormIds.size} Form(s)` : 'Scan All Forms') }}
+                {{ scanningForms ? `Scanning Forms... ${formatTaskProgress(formsProgress)}` : (selectedFormIds.size > 0 ? `Scan ${selectedFormIds.size} Form(s)` : 'Scan All Forms') }}
               </UButton>
             </div>
 

@@ -3,6 +3,7 @@ import { addMonths, subMonths, format, startOfMonth, endOfMonth, eachDayOfInterv
 import type { InterviewEvent, Job, UnsentCount, EmailTemplate } from '~/types'
 
 const { apiFetch } = useApi()
+const { runTask } = useTask()
 const toast = useToast()
 
 // Calendar sync state
@@ -117,9 +118,11 @@ const handleCreateEvent = async () => {
 const handleSyncCalendar = async () => {
   syncingCalendar.value = true
   try {
-    const res = await apiFetch<{ message: string, imported: number }>('/interviews/sync-calendar', {
-      method: 'POST'
-    })
+    // A background task: start it (or follow the sync already running) and wait for the result
+    const res = await runTask<{ message: string, imported: number }>(
+      () => apiFetch('/interviews/sync-calendar', { method: 'POST' }),
+      { taskIdOnConflict: 'calendar.sync' }
+    )
     lastSyncTime.value = new Date().toLocaleTimeString()
     toast.add({
       title: 'Google Calendar Synced',
@@ -131,7 +134,7 @@ const handleSyncCalendar = async () => {
     console.error('Calendar sync error:', err)
     toast.add({
       title: 'Calendar Sync Failed',
-      description: err.data?.data?.details || err.data?.statusMessage || err.message || 'Could not sync with Google Calendar',
+      description: err.data?.statusMessage || err.message || 'Could not sync with Google Calendar',
       color: 'error'
     })
   } finally {
@@ -343,17 +346,18 @@ const sendInvites = async () => {
     const url = mailModal.eventId
       ? `/mail/interview-invites/${mailModal.eventId}`
       : '/mail/interview-invites-all'
-    const res = await apiFetch<{ sent: number, failed: number, skipped: number }>(url, {
-      method: 'POST',
-      body: { templateId: mailModal.templateId }
-    })
+    // A background task: queued at once, then followed until every invite is handled
+    const res = await runTask<{ sent: number, failed: number, skipped: number }>(
+      () => apiFetch(url, { method: 'POST', body: { templateId: mailModal.templateId } }),
+      { taskIdOnConflict: mailModal.eventId ? `mail.invites.event.${mailModal.eventId}` : 'mail.invites.all' }
+    )
     toast.add({ title: 'Invites Sent', description: `Sent: ${res.sent}, Failed: ${res.failed}, Skipped: ${res.skipped}`, color: 'success' })
     mailOpen.value = false
     fetchEvents()
     if (mailModal.eventId) fetchAssignedCandidates(mailModal.eventId)
   } catch (err: any) {
     console.error('Mail error:', err)
-    toast.add({ title: 'Failed to send invites', description: err.data?.data?.details || err.message, color: 'error' })
+    toast.add({ title: 'Failed to send invites', description: err.data?.statusMessage || err.message, color: 'error' })
   } finally {
     mailModal.sending = false
   }
