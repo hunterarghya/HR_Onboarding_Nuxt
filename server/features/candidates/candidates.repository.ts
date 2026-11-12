@@ -1,41 +1,48 @@
 import { getPool, type Queryable } from '~~/server/core/db/pool'
-import type { CandidateRow } from '~~/server/database/types'
-import type { ListCandidatesFilters, ListSelectedFilters } from './candidates.dto'
+import type { CandidateRow, CandidateStatus } from '~~/server/database/types'
+import type { CandidatesPosition, ListCandidatesFilters, ListSelectedFilters, SelectedPosition } from './candidates.dto'
 
 export type SelectedCandidateRow = Pick<CandidateRow,
   'id' | 'name' | 'email' | 'phone' | 'offered_role' | 'offered_salary' | 'offered_location' | 'joining_date' | 'status' | 'offer_sent'>
 
-export interface ResumeCandidateUpdate {
+/** A candidate as read from a resume. Unknown details are null, never "N/A" (DATA-04). */
+export interface ResumeCandidate {
   score: number
   resume_url: string | null
   applied_through: string
-  current_location: string
-  current_ctc: string
-  status: string
-}
-
-export interface ResumeCandidateInsert extends ResumeCandidateUpdate {
+  current_location: string | null
+  current_ctc: number | null
+  status: CandidateStatus
   name: string
-  email: string
-  phone: string
+  email: string | null
+  phone: string | null
+  job_role_id: number | null
   role_applied: string
   resume_content: string
-  experience_level: string
+  experience_years: number | null
 }
 
 export interface OfferFields {
-  offered_role: unknown
-  offered_salary: unknown
-  offered_location: unknown
-  joining_date: unknown
+  offered_role: string
+  offered_salary: number
+  offered_location: string
+  joining_date: string
 }
 
 export const candidatesRepository = {
+  /** Which of these ids exist. */
+  async existingIds(ids: number[], db: Queryable = getPool()) {
+    if (ids.length === 0) return []
+    const { rows } = await db.query<{ id: number }>('SELECT id FROM candidates WHERE id = ANY($1::int[])', [ids])
+    return rows.map(r => r.id)
+  },
+
   /**
-   * One page of candidates (fetches limit + 1 rows so the caller can tell whether more exist).
-   * Cursor: "score|date_applied ISO|id". Newest first, or by score when scoreSort is set.
+   * One page of candidates after `after` (fetches limit + 1 rows so the caller can tell whether more exist).
+   * Newest first, or by score when scoreSort is set; unscored candidates sort as the lowest score (BUG-08).
+   * date_applied is stored to the millisecond, the precision the cursor carries.
    */
-  async findPage(f: ListCandidatesFilters, db: Queryable = getPool()) {
+  async findPage(f: ListCandidatesFilters, after: CandidatesPosition | null, db: Queryable = getPool()) {
     let q = 'SELECT * FROM candidates WHERE 1=1'
     const params: unknown[] = []
     let paramIndex = 1
@@ -65,28 +72,26 @@ export const candidatesRepository = {
       params.push(f.maxScore)
     }
 
-    if (f.cursor) {
-      const [cScore, cTime, cId] = f.cursor.split('|')
-      const scoreVal = parseInt(cScore!)
+    const SCORE = 'COALESCE(score, -1)'
+    const AT = 'date_applied'
 
-      if (f.scoreSort === 'highToLow') {
-        q += ` AND (score < $${paramIndex} OR (score = $${paramIndex} AND (date_applied < $${paramIndex + 1} OR (date_applied = $${paramIndex + 1} AND id < $${paramIndex + 2}))))`
-        params.push(scoreVal, cTime, cId)
-        paramIndex += 3
-      } else if (f.scoreSort === 'lowToHigh') {
-        q += ` AND (score > $${paramIndex} OR (score = $${paramIndex} AND (date_applied < $${paramIndex + 1} OR (date_applied = $${paramIndex + 1} AND id < $${paramIndex + 2}))))`
-        params.push(scoreVal, cTime, cId)
-        paramIndex += 3
-      } else {
-        q += ` AND (date_applied < $${paramIndex} OR (date_applied = $${paramIndex} AND id < $${paramIndex + 1}))`
-        params.push(cTime, cId)
-        paramIndex += 2
+    if (after) {
+      const at = `$${paramIndex}::timestamptz`, id = `$${paramIndex + 1}::int`, s = `$${paramIndex + 2}::int`
+      const newerTie = `(${AT} < ${at} OR (${AT} = ${at} AND id < ${id}))`
+      params.push(after.at, after.id)
+      paramIndex += 2
+      if (f.scoreSort === 'newest') q += ` AND ${newerTie}`
+      else {
+        const beyond = f.scoreSort === 'highToLow' ? '<' : '>'
+        q += ` AND (${SCORE} ${beyond} ${s} OR (${SCORE} = ${s} AND ${newerTie}))`
+        params.push(after.score ?? -1)
+        paramIndex += 1
       }
     }
 
-    let orderBy = 'ORDER BY date_applied DESC, id DESC'
-    if (f.scoreSort === 'highToLow') orderBy = 'ORDER BY score DESC, date_applied DESC, id DESC'
-    else if (f.scoreSort === 'lowToHigh') orderBy = 'ORDER BY score ASC, date_applied DESC, id DESC'
+    let orderBy = `ORDER BY ${AT} DESC, id DESC`
+    if (f.scoreSort === 'highToLow') orderBy = `ORDER BY ${SCORE} DESC, ${AT} DESC, id DESC`
+    else if (f.scoreSort === 'lowToHigh') orderBy = `ORDER BY ${SCORE} ASC, ${AT} DESC, id DESC`
 
     q += ` ${orderBy} LIMIT $${paramIndex}`
     params.push(f.limit + 1)
@@ -95,8 +100,8 @@ export const candidatesRepository = {
     return rows
   },
 
-  /** One page of selected candidates by joining date (limit + 1 rows). Cursor: "YYYY-MM-DD|id". */
-  async findSelectedPage(f: ListSelectedFilters, db: Queryable = getPool()) {
+  /** One page of selected candidates by joining date after `after` (limit + 1 rows); no date yet sorts last. */
+  async findSelectedPage(f: ListSelectedFilters, after: SelectedPosition | null, db: Queryable = getPool()) {
     let q = 'SELECT id, name, email, phone, offered_role, offered_salary, offered_location, joining_date, status, offer_sent FROM candidates WHERE status = $1'
     const params: unknown[] = ['selected']
     let paramIndex = 2
@@ -122,14 +127,15 @@ export const candidatesRepository = {
       params.push(f.offer_sent === 'true')
     }
 
-    if (f.cursor) {
-      const [cDate, cId] = f.cursor.split('|')
-      q += ` AND (joining_date > $${paramIndex} OR (joining_date = $${paramIndex} AND id > $${paramIndex + 1}))`
-      params.push(cDate, cId)
+    const DATE = `COALESCE(joining_date, 'infinity'::date)`
+    if (after) {
+      const d = `COALESCE($${paramIndex}::date, 'infinity'::date)`
+      q += ` AND (${DATE} > ${d} OR (${DATE} = ${d} AND id > $${paramIndex + 1}))`
+      params.push(after.date, after.id)
       paramIndex += 2
     }
 
-    q += ` ORDER BY joining_date ASC, id ASC LIMIT $${paramIndex}`
+    q += ` ORDER BY ${DATE} ASC, id ASC LIMIT $${paramIndex}`
     params.push(f.limit + 1)
 
     const { rows } = await db.query<SelectedCandidateRow>(q, params)
@@ -148,111 +154,66 @@ export const candidatesRepository = {
 
   // ---- Interview eligibility: candidates in an open pipeline status ('shortlisted', 'applied', 'marked')
 
-  async findEligibleForRole(role: string, db: Queryable = getPool()) {
+  // A job id of null means the Open pool (and "Open Role" events), which also fixes BUG-05.
+
+  async findEligibleForJob(jobRoleId: number | null, db: Queryable = getPool()) {
     const { rows } = await db.query<CandidateRow>(
-      `SELECT * FROM candidates WHERE role_applied = $1 AND status IN ('shortlisted', 'applied', 'marked') ORDER BY score DESC`,
-      [role]
+      `SELECT * FROM candidates WHERE job_role_id IS NOT DISTINCT FROM $1 AND status IN ('shortlisted', 'applied', 'marked') ORDER BY score DESC NULLS LAST`,
+      [jobRoleId]
     )
     return rows
   },
 
-  /** For "Open Role" events: eligible candidates whose role isn't one of `activeRoles`. */
-  async findEligibleOutsideRoles(activeRoles: string[], db: Queryable = getPool()) {
-    if (activeRoles.length === 0) {
-      const { rows } = await db.query<CandidateRow>(
-        `SELECT * FROM candidates WHERE status IN ('shortlisted', 'applied', 'marked') ORDER BY score DESC`
-      )
-      return rows
-    }
-    const placeholders = activeRoles.map((_, i) => `$${i + 1}`).join(',')
-    const { rows } = await db.query<CandidateRow>(
-      `SELECT * FROM candidates
-           WHERE status IN ('shortlisted', 'applied', 'marked')
-             AND (role_applied IS NULL OR role_applied NOT IN (${placeholders}))
-           ORDER BY score DESC`,
-      activeRoles
-    )
-    return rows
-  },
-
-  /** Ids and scores of a role's eligible candidates, best first. */
-  async findEligibleIdsForRole(role: string, db: Queryable = getPool()) {
+  /** Ids and scores of a job's eligible candidates, best first. */
+  async findEligibleIdsForJob(jobRoleId: number | null, db: Queryable = getPool()) {
     const { rows } = await db.query<{ id: number, score: number | null }>(
       `SELECT id, score FROM candidates
-       WHERE role_applied = $1
+       WHERE job_role_id IS NOT DISTINCT FROM $1
          AND status IN ('shortlisted', 'applied', 'marked')
-       ORDER BY score DESC`,
-      [role]
+       ORDER BY score DESC NULLS LAST`,
+      [jobRoleId]
     )
     return rows
   },
 
-  /** Top `limit` eligible candidate ids for a role, skipping `excludeIds`. */
-  async topEligibleIdsForRole(role: string, excludeIds: number[], limit: number, db: Queryable = getPool()) {
-    let query = `
-        SELECT id FROM candidates
-        WHERE role_applied = $1
-          AND status IN ('shortlisted', 'applied', 'marked')`
-    const params: unknown[] = [role]
-    let paramIdx = 2
-
-    if (excludeIds.length > 0) {
-      query += ` AND id != ALL($${paramIdx}::int[])`
-      params.push(excludeIds)
-      paramIdx++
-    }
-    query += ` ORDER BY score DESC LIMIT $${paramIdx}`
-    params.push(limit)
-
-    const { rows } = await db.query<{ id: number }>(query, params)
-    return rows.map(r => r.id)
-  },
-
-  /**
-   * "Open Role" variant: candidates whose role isn't one of `activeRoles`.
-   * With no active roles this builds `NOT IN ()` and fails (BUG-05, kept until the behaviour-fix phase).
-   */
-  async topEligibleIdsOutsideRoles(activeRoles: string[], excludeIds: number[], limit: number, db: Queryable = getPool()) {
-    let query = `
-        SELECT id FROM candidates
-        WHERE status IN ('shortlisted', 'applied', 'marked')
-          AND (role_applied IS NULL OR role_applied NOT IN (${activeRoles.map((_, i) => `$${i + 1}`).join(',')}))`
-    const params: unknown[] = [...activeRoles]
-    let paramIdx = activeRoles.length + 1
-
-    if (excludeIds.length > 0) {
-      query += ` AND id != ALL($${paramIdx}::int[])`
-      params.push(excludeIds)
-      paramIdx++
-    }
-    query += ` ORDER BY score DESC LIMIT $${paramIdx}`
-    params.push(limit)
-
-    const { rows } = await db.query<{ id: number }>(query, params)
+  /** Top `limit` eligible candidate ids for a job, skipping `excludeIds`. */
+  async topEligibleIdsForJob(jobRoleId: number | null, excludeIds: number[], limit: number, db: Queryable = getPool()) {
+    const { rows } = await db.query<{ id: number }>(
+      `SELECT id FROM candidates
+       WHERE job_role_id IS NOT DISTINCT FROM $1
+         AND status IN ('shortlisted', 'applied', 'marked')
+         AND id != ALL($2::int[])
+       ORDER BY score DESC NULLS LAST LIMIT $3`,
+      [jobRoleId, excludeIds, limit]
+    )
     return rows.map(r => r.id)
   },
 
   // ---- Resume intake (ingestion pipeline)
 
-  /** Same person for the same role = same email + role_applied ('N/A' emails collide: DATA-01). */
-  async findIdByEmailAndRole(email: string, role: string, db: Queryable = getPool()) {
-    const { rows } = await db.query<{ id: number }>('SELECT id FROM candidates WHERE email = $1 AND role_applied = $2', [email, role])
-    return rows[0]?.id ?? null
-  },
-
-  async updateFromResume(id: number, c: ResumeCandidateUpdate, db: Queryable = getPool()) {
-    await db.query(
-      `UPDATE candidates SET score = $1, date_applied = NOW(), resume_url = $2, applied_through = $3, current_location = $4, current_ctc = $5, status = $6 WHERE id = $7`,
-      [c.score, c.resume_url, c.applied_through, c.current_location, c.current_ctc, c.status, id]
+  /**
+   * Saves a resume. The same email applying to the same job again updates that candidate (the unique
+   * index candidates_identity makes this safe across parallel scans); without an email there's no way
+   * to tell people apart, so every such resume is a new candidate (DATA-01). True if a row was inserted.
+   */
+  async saveFromResume(c: ResumeCandidate, db: Queryable = getPool()) {
+    const values = [c.name, c.email, c.phone, c.job_role_id, c.role_applied, c.resume_content, c.score, c.experience_years, c.status, c.resume_url, c.applied_through, c.current_location, c.current_ctc]
+    const insert = `INSERT INTO candidates (name, email, phone, job_role_id, role_applied, resume_content, score, experience_years, status, resume_url, applied_through, current_location, current_ctc)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`
+    if (c.email === null) {
+      await db.query(insert, values)
+      return true
+    }
+    const { rows } = await db.query<{ inserted: boolean }>(
+      `${insert}
+       ON CONFLICT (lower(email), job_role_id) WHERE email IS NOT NULL
+       DO UPDATE SET score = EXCLUDED.score, date_applied = now(), resume_url = EXCLUDED.resume_url,
+         applied_through = EXCLUDED.applied_through, current_location = EXCLUDED.current_location,
+         current_ctc = EXCLUDED.current_ctc, status = EXCLUDED.status
+       RETURNING (xmax = 0) AS inserted`,
+      values
     )
-  },
-
-  async insertFromResume(c: ResumeCandidateInsert, db: Queryable = getPool()) {
-    await db.query(
-      `INSERT INTO candidates (name, email, phone, role_applied, resume_content, score, experience_level, status, resume_url, applied_through, current_location, current_ctc)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-      [c.name, c.email, c.phone, c.role_applied, c.resume_content, c.score, c.experience_level, c.status, c.resume_url, c.applied_through, c.current_location, c.current_ctc]
-    )
+    return rows[0]!.inserted
   },
 
   // ---- Offer letters
@@ -272,14 +233,18 @@ export const candidatesRepository = {
     await db.query('UPDATE candidates SET offer_sent = true WHERE id = $1', [id])
   },
 
-  async updateStatus(id: number, status: unknown, db: Queryable = getPool()) {
-    await db.query('UPDATE candidates SET status = $1 WHERE id = $2', [status, id])
+  /** False if no such candidate. */
+  async updateStatus(id: number, status: CandidateStatus, db: Queryable = getPool()) {
+    const { rowCount } = await db.query('UPDATE candidates SET status = $1 WHERE id = $2', [status, id])
+    return rowCount === 1
   },
 
-  async updateStatusWithOffer(id: number, status: unknown, offer: OfferFields, db: Queryable = getPool()) {
-    await db.query(
+  /** False if no such candidate. */
+  async updateStatusWithOffer(id: number, status: CandidateStatus, offer: OfferFields, db: Queryable = getPool()) {
+    const { rowCount } = await db.query(
       'UPDATE candidates SET status = $1, offered_role = $2, offered_salary = $3, offered_location = $4, joining_date = $5 WHERE id = $6',
       [status, offer.offered_role, offer.offered_salary, offer.offered_location, offer.joining_date, id]
     )
+    return rowCount === 1
   }
 }

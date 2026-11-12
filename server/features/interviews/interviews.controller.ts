@@ -4,11 +4,7 @@ import { defineApiHandler } from '~~/server/core/http/define-api-handler'
 import { parseBody, parseParams } from '~~/server/core/http/validate'
 import { googleAuthService } from '../auth/google-auth.service'
 import { calendarSyncService } from './calendar-sync.service'
-import {
-  ASSIGN_MESSAGE, AUTO_ASSIGN_ALL_MESSAGE, AssignCandidatesBody, AutoAssignAllBody,
-  CREATE_EVENT_MESSAGE, CreateEventBody, EligibleParams, EventIdParams,
-  REGISTER_WEBHOOK_MESSAGE, RegisterWebhookBody
-} from './interviews.dto'
+import { AssignCandidatesBody, AutoAssignAllBody, CreateEventBody, EligibleParams, EventIdParams, RegisterWebhookBody } from './interviews.dto'
 import { interviewAssignmentsService } from './interview-assignments.service'
 import { interviewEventsService } from './interview-events.service'
 
@@ -17,7 +13,7 @@ const googleAuth = (event: H3Event) => googleAuthService.getAuthClientForUser(re
 /** POST creates and PATCH edits the same list; only the reply wording differs (unchanged). */
 const replaceAssignments = (message: string) => defineApiHandler(async (event) => {
   const { id } = parseParams(event, EventIdParams)
-  const { candidate_ids } = await parseBody(event, AssignCandidatesBody, ASSIGN_MESSAGE)
+  const { candidate_ids } = await parseBody(event, AssignCandidatesBody)
   const count = await interviewAssignmentsService.replace(id, candidate_ids)
   return { message, count }
 })
@@ -27,7 +23,7 @@ export const interviewsController = {
 
   createEvent: defineApiHandler(async (event) => {
     const auth = await googleAuth(event)
-    const body = await parseBody(event, CreateEventBody, CREATE_EVENT_MESSAGE)
+    const body = await parseBody(event, CreateEventBody)
     const created = await interviewEventsService.create(auth, body)
     setResponseStatus(event, 201)
     return created
@@ -54,7 +50,7 @@ export const interviewsController = {
   }),
 
   autoAssignAll: defineApiHandler(async (event) => {
-    const { role } = await parseBody(event, AutoAssignAllBody, AUTO_ASSIGN_ALL_MESSAGE)
+    const { role } = await parseBody(event, AutoAssignAllBody)
     return interviewAssignmentsService.autoAssignAll(role)
   }),
 
@@ -72,7 +68,7 @@ export const interviewsController = {
 
   registerWebhook: defineApiHandler(async (event) => {
     const auth = await googleAuth(event)
-    const { webhook_url } = await parseBody(event, RegisterWebhookBody, REGISTER_WEBHOOK_MESSAGE)
+    const { webhook_url } = await parseBody(event, RegisterWebhookBody)
     return calendarSyncService.registerWebhook(auth, webhook_url)
   }),
 

@@ -1,16 +1,13 @@
 import { z } from 'zod'
 
-/** Accepts the current `whatsappGroupIds` list or the older single `whatsappGroupId`. */
+/** WhatsApp group ids look like "120363012345678901@g.us". */
+const whatsappGroupId = z.string().regex(/^[\w.-]+@g\.us$/, 'Not a WhatsApp group id')
+
 export const ScanWhatsappBody = z.object({
-  whatsappGroupIds: z.array(z.string()).nullish(),
-  whatsappGroupId: z.string().nullish()
-})
+  whatsappGroupIds: z.array(whatsappGroupId).max(50).default([])
+}).strict()
 
-/**
- * Body is optional (an unreadable body counts as none) and a non-array formIds is ignored,
- * both as today. Ids are matched as strings against form_id and the database id.
- */
-export const ScanFormsBody = z.object({ formIds: z.unknown().optional() }).nullish()
-
-export const selectedFormIds = (body: z.infer<typeof ScanFormsBody>): string[] =>
-  Array.isArray(body?.formIds) ? body.formIds.map(String).filter(Boolean) : []
+/** Google form ids (or database ids) of the forms to scan; none means every form. */
+export const ScanFormsBody = z.preprocess(body => body ?? {}, z.object({
+  formIds: z.array(z.string().regex(/^[\w-]{1,200}$/, 'Not a form id')).max(100).default([])
+}).strict())

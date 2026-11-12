@@ -28,7 +28,7 @@ export const fetchResumeFromAnswer = async (auth: GoogleAuthClient, response: Fo
   // 2. Try text link answer (Drive share link, public URL)
   if (!base64Data) {
     const resumeLink = extractTextAnswer(response, resumeQuestionId)
-    if (resumeLink && resumeLink !== 'N/A') {
+    if (resumeLink) {
       const driveFileId = extractDriveFileId(resumeLink)
       if (driveFileId) {
         try {

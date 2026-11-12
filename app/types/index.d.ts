@@ -1,13 +1,15 @@
 export interface Job {
   id: number
   role: string
-  salary: string
+  /** annual amounts */
+  salary_min: number | null
+  salary_max: number | null
   qualification: string
   skills: string
-  experience: string
+  experience_min_years: number | null
   location: string
   shortlist_mode: 'manual' | 'auto'
-  deadline: string
+  deadline: string | null
   min_score: number
   criteria_weights: Record<string, number>
   created_at: string
@@ -26,14 +28,14 @@ export interface Candidate {
   role_applied: string
   date_applied: string
   score: number
-  experience_level: string
+  experience_years: number | null
   status: CandidateStatus
   resume_url: string
   applied_through: 'Gmail' | 'WhatsApp' | 'GoogleForms'
   current_location: string
-  current_ctc: string
+  current_ctc: number | null
   offered_role?: string
-  offered_salary?: string
+  offered_salary?: number | null
   offered_location?: string
   joining_date?: string
   offer_sent?: boolean

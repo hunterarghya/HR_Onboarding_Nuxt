@@ -2,7 +2,7 @@ import { setResponseStatus } from 'h3'
 import { requireUser } from '~~/server/core/auth/current-user'
 import { defineApiHandler } from '~~/server/core/http/define-api-handler'
 import { parseBody, parseParams } from '~~/server/core/http/validate'
-import { InviteEventParams, OFFERS_REQUIRED_MESSAGE, SendInvitesBody, SendOffersBody, TEMPLATE_REQUIRED_MESSAGE } from './mail.dto'
+import { InviteEventParams, SendInvitesBody, SendOffersBody } from './mail.dto'
 import { mailService } from './mail.service'
 
 // Bulk sends answer 202 { taskId, status: 'queued' }; the UI polls GET /api/tasks/:taskId for the
@@ -12,7 +12,7 @@ import { mailService } from './mail.service'
 export const mailController = {
   sendEventInvites: defineApiHandler(async (event) => {
     const user = requireUser(event)
-    const { templateId } = await parseBody(event, SendInvitesBody, TEMPLATE_REQUIRED_MESSAGE)
+    const { templateId } = await parseBody(event, SendInvitesBody)
     const { eventId } = parseParams(event, InviteEventParams)
     const task = await mailService.enqueueEventInvites(user.id, eventId, templateId)
     setResponseStatus(event, 202)
@@ -21,7 +21,7 @@ export const mailController = {
 
   sendAllInvites: defineApiHandler(async (event) => {
     const user = requireUser(event)
-    const { templateId } = await parseBody(event, SendInvitesBody, TEMPLATE_REQUIRED_MESSAGE)
+    const { templateId } = await parseBody(event, SendInvitesBody)
     const task = await mailService.enqueueAllInvites(user.id, templateId)
     setResponseStatus(event, 202)
     return task
@@ -29,7 +29,7 @@ export const mailController = {
 
   sendOffers: defineApiHandler(async (event) => {
     const user = requireUser(event)
-    const { templateId, candidateIds } = await parseBody(event, SendOffersBody, OFFERS_REQUIRED_MESSAGE)
+    const { templateId, candidateIds } = await parseBody(event, SendOffersBody)
     const task = await mailService.enqueueOffers(user.id, templateId, candidateIds)
     setResponseStatus(event, 202)
     return task

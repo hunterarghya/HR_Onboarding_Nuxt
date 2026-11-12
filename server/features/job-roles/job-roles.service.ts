@@ -1,8 +1,9 @@
 import { ConflictError, NotFoundError, ValidationError } from '~~/server/core/errors/app-error'
+import { withTransaction } from '~~/server/core/db/transaction'
 import { enqueue } from '~~/server/core/tasks/queues'
 import type { GoogleAuthClient } from '~~/server/integrations/google/oauth'
 import { googleFormsService } from '../google-forms/google-forms.service'
-import { NO_FIELDS_MESSAGE, type CreateJobRoleInput, type UpdateJobRoleInput } from './job-roles.dto'
+import type { CreateJobRoleInput, UpdateJobRoleInput } from './job-roles.dto'
 import { jobRolesRepository, UPDATABLE_FIELDS } from './job-roles.repository'
 import { jobVectorsRepository } from './job-vectors.repository'
 
@@ -27,6 +28,12 @@ const syncVector = async (job: Parameters<typeof jobVectorsRepository.upsert>[0]
   }
 }
 
+/** 409 if another job already has this name. */
+const assertNameFree = async (role: string, exceptId?: number) => {
+  const other = await jobRolesRepository.findByRoleName(role)
+  if (other && other.id !== exceptId) throw new ConflictError(`A job named "${other.role}" already exists`)
+}
+
 export const JOB_VECTORS_RESYNC_TASK_ID = 'vectors.resyncAll'
 
 export const jobRolesService = {
@@ -38,6 +45,7 @@ export const jobRolesService = {
    * indexing is retried in the background, a missing form can be generated from the job card.
    */
   async create(input: CreateJobRoleInput, googleAuth: GoogleAuthClient | null) {
+    await assertNameFree(input.role)
     const job = await jobRolesRepository.insert(input)
     await syncVector(job)
 
@@ -46,10 +54,17 @@ export const jobRolesService = {
   },
 
   async update(id: number, patch: UpdateJobRoleInput) {
+    // the DTO is strict, so every key is an updatable column; the filter keeps the SQL safe regardless
     const fields = Object.keys(patch).filter(f => (UPDATABLE_FIELDS as readonly string[]).includes(f))
-    if (fields.length === 0) throw new ValidationError(null, NO_FIELDS_MESSAGE)
+    if (fields.length === 0) throw new ValidationError(null, 'No valid fields provided for update')
 
-    const job = await jobRolesRepository.update(id, patch, fields)
+    if (patch.role !== undefined) await assertNameFree(patch.role, id)
+    // a new name is copied onto the job's candidates and events in the same transaction (BUG-10)
+    const job = await withTransaction(async (client) => {
+      const updated = await jobRolesRepository.update(id, patch, fields, client)
+      if (updated && patch.role !== undefined) await jobRolesRepository.renameLinked(id, updated.role, client)
+      return updated
+    })
     if (!job) throw new NotFoundError('Job role')
 
     // Re-embed the updated description
@@ -100,9 +115,15 @@ export const jobRolesService = {
     return { removed: jobId }
   },
 
-  /** No existence check: deleting an unknown id succeeds (unchanged; 404s arrive with BUG-12). */
+  /**
+   * The job's candidates and events stay, moved to Open. No existence check: deleting an unknown id
+   * succeeds (unchanged; 404s arrive with BUG-12).
+   */
   async remove(id: number) {
-    await jobRolesRepository.delete(id)
+    await withTransaction(async (client) => {
+      await jobRolesRepository.releaseLinked(id, client)
+      await jobRolesRepository.delete(id, client)
+    })
     try {
       await jobVectorsRepository.remove(id)
     } catch {

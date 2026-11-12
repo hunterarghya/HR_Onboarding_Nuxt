@@ -9,8 +9,9 @@ export const getDefaultSampleData = (type: string, companyName: string): Record<
     phone: '+91 98765 43210',
     role_applied: 'Backend Developer',
     experience_level: '3 years',
+    experience_years: 3,
     current_location: 'Bangalore',
-    current_ctc: '₹8,00,000',
+    current_ctc: '8,00,000',
     score: 85
   }
 
@@ -24,7 +25,7 @@ export const getDefaultSampleData = (type: string, companyName: string): Record<
 
   const offer = {
     offered_role: 'Senior Backend Developer',
-    offered_salary: '₹15,00,000 / year',
+    offered_salary: '15,00,000',
     offered_location: 'Bangalore',
     joining_date: '1st June 2026'
   }

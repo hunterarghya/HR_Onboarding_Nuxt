@@ -1,18 +1,20 @@
-// Row shapes as node-postgres returns them (TIMESTAMP and DATE columns arrive as Date, BIGINT counts as strings).
+// Row shapes as node-postgres returns them (TIMESTAMP columns arrive as Date, DATE as "YYYY-MM-DD", NUMERIC as number, BIGINT counts as strings).
 // Mirrors the tables created by server/database/migrations.
 
 export interface JobRoleRow {
   id: number
   role: string
-  salary: string | null
+  /** annual amounts */
+  salary_min: number | null
+  salary_max: number | null
   qualification: string | null
   skills: string | null
-  experience: string | null
+  experience_min_years: number | null
   location: string | null
-  shortlist_mode: string | null
+  shortlist_mode: 'manual' | 'auto'
   deadline: Date | null
-  min_score: number | null
-  criteria_weights: Record<string, number> | null
+  min_score: number
+  criteria_weights: Record<string, number>
   created_at: Date
 }
 
@@ -22,8 +24,13 @@ export interface JobRoleWithFormRow extends JobRoleRow {
   google_form_db_id?: number | null
 }
 
+export const CANDIDATE_STATUSES = ['applied', 'shortlisted', 'hold', 'rejected', 'marked', 'selected'] as const
+export type CandidateStatus = typeof CANDIDATE_STATUSES[number]
+
 export interface CandidateRow {
   id: number
+  /** The job applied for; null = the "Open" pool (role_applied is then "Open") */
+  job_role_id: number | null
   name: string | null
   email: string | null
   phone: string | null
@@ -31,16 +38,16 @@ export interface CandidateRow {
   date_applied: Date
   resume_content: string | null
   score: number | null
-  experience_level: string | null
-  status: string | null
+  experience_years: number | null
+  status: CandidateStatus
   resume_url: string | null
   applied_through: string | null
   current_location: string | null
-  current_ctc: string | null
+  current_ctc: number | null
   offered_role: string | null
-  offered_salary: string | null
+  offered_salary: number | null
   offered_location: string | null
-  joining_date: Date | null
+  joining_date: string | null
   offer_sent: boolean | null
 }
 
@@ -53,8 +60,10 @@ export interface ScanTimestampRow {
 
 export interface InterviewEventRow {
   id: number
+  /** The job interviewed for; null = an "Open Role" event */
+  job_role_id: number | null
   role: string
-  event_date: Date
+  event_date: string
   start_time: string
   end_time: string
   num_candidates: number

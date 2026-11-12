@@ -4,10 +4,10 @@
  * Zero LLM calls — pure string matching.
  */
 
-const extractEmail = (text: string): string => {
+const extractEmail = (text: string): string | null => {
   const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
   const matches = text.match(emailRegex)
-  if (!matches || matches.length === 0) return 'N/A'
+  if (!matches || matches.length === 0) return null
 
   const blacklist = ['example.com', 'email.com', 'domain.com', 'test.com', 'yourmail.com']
   const valid = matches.filter(e => !blacklist.some(b => e.toLowerCase().includes(b)))
@@ -15,7 +15,7 @@ const extractEmail = (text: string): string => {
   return valid.length > 0 ? valid[0]!.toLowerCase() : matches[0]!.toLowerCase()
 }
 
-const extractPhone = (text: string): string => {
+const extractPhone = (text: string): string | null => {
   const patterns = [
     /(?:\+91[\s-]?|91[\s-]|0)?[6-9]\d{4}[\s-]?\d{5}/g,
     /\+?\d{1,3}[\s-]?\(?\d{2,4}\)?[\s-]?\d{3,4}[\s-]?\d{3,4}/g,
@@ -31,7 +31,7 @@ const extractPhone = (text: string): string => {
       }
     }
   }
-  return 'N/A'
+  return null
 }
 
 const extractName = (text: string): string => {
@@ -56,7 +56,8 @@ const extractName = (text: string): string => {
   return 'Unknown'
 }
 
-const extractExperience = (text: string): string => {
+/** Years of experience, or null if the resume doesn't say. */
+const extractExperience = (text: string): number | null => {
   const patterns = [
     /(\d{1,2})\+?\s*(?:years?|yrs?)\s*(?:of\s*)?(?:experience|exp)/gi,
     /(?:experience|exp)[\s:]*(\d{1,2})\+?\s*(?:years?|yrs?)/gi,
@@ -68,14 +69,14 @@ const extractExperience = (text: string): string => {
     if (match && match[1]) {
       const years = parseInt(match[1])
       if (years > 0 && years < 50) {
-        return `${years} years`
+        return years
       }
     }
   }
-  return 'N/A'
+  return null
 }
 
-const extractLocation = (text: string): string => {
+const extractLocation = (text: string): string | null => {
   const patterns = [
     /(?:location|address|city|based in|residing)[\s:]*([A-Za-z][A-Za-z,\s]{3,40})/gi,
     /(?:,\s*)((?:Delhi|Mumbai|Bangalore|Bengaluru|Hyderabad|Chennai|Kolkata|Pune|Noida|Gurugram|Gurgaon|Jaipur|Ahmedabad|Lucknow|Chandigarh|Indore|Bhopal|Kochi|Thiruvananthapuram|Coimbatore|Nagpur|Patna|Ghaziabad|Ranchi|Bhubaneswar|Dehradun|Visakhapatnam)[A-Za-z,\s]{0,30})/gi
@@ -95,13 +96,14 @@ const extractLocation = (text: string): string => {
     }
   }
 
-  return 'N/A'
+  return null
 }
 
-const extractCTC = (text: string): string => {
+/** Current CTC as an annual amount (8 LPA → 800000, 1.2 cr → 12000000), or null. */
+const extractCTC = (text: string): number | null => {
   const patterns = [
-    /(?:current\s*)?(?:ctc|salary|compensation|package)[\s:]*(?:(?:INR|Rs\.?|₹)\s*)?(\d+(?:\.\d+)?)\s*(?:lpa|lakhs?|lacs?|L|cr|crore)/gi,
-    /(\d+(?:\.\d+)?)\s*(?:lpa|lakhs?|lacs?)\s*(?:ctc|salary|pa|per\s*annum)/gi
+    /(?:current\s*)?(?:ctc|salary|compensation|package)[\s:]*(?:(?:INR|Rs\.?|₹)\s*)?(\d+(?:\.\d+)?)\s*(lpa|lakhs?|lacs?|L|cr|crore)/gi,
+    /(\d+(?:\.\d+)?)\s*(lpa|lakhs?|lacs?)\s*(?:ctc|salary|pa|per\s*annum)/gi
   ]
 
   for (const pattern of patterns) {
@@ -109,11 +111,13 @@ const extractCTC = (text: string): string => {
     if (match && match[1]) {
       const amount = parseFloat(match[1])
       if (amount > 0 && amount < 500) {
-        return `${amount} LPA`
+        // the unit matters: crores used to be reported as lakhs
+        const perUnit = /^cr/i.test(match[2] ?? '') ? 10_000_000 : 100_000
+        return Math.round(amount * perUnit)
       }
     }
   }
-  return 'N/A'
+  return null
 }
 
 interface ResumeSections {
@@ -172,7 +176,7 @@ export const parseResume = (resumeText: string) => {
     name: extractName(resumeText),
     email: extractEmail(resumeText),
     phone: extractPhone(resumeText),
-    experience_level: extractExperience(resumeText),
+    experience_years: extractExperience(resumeText),
     current_location: extractLocation(resumeText),
     current_ctc: extractCTC(resumeText),
     sections: extractSections(resumeText)

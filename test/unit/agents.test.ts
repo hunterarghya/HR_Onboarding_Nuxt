@@ -38,6 +38,17 @@ describe('classifyEmail', () => {
     await expect(classifyEmail('s', 'b', fakeLlm('not json'))).resolves.toEqual({ isApplication: false, position: null })
     await expect(classifyEmail('s', 'b', fakeLlm(new Error('timed out')))).resolves.toEqual({ isApplication: false, position: null })
   })
+
+  it('reads a "false" string as no (it used to count as an application)', async () => {
+    await expect(classifyEmail('s', 'b', fakeLlm('{"isApplication": "false", "position": null}'))).resolves.toEqual({ isApplication: false, position: null })
+    await expect(classifyEmail('s', 'b', fakeLlm('{"isApplication": "true"}'))).resolves.toEqual({ isApplication: true, position: null })
+  })
+
+  it('treats an answer of the wrong shape as "not an application", and drops an odd position', async () => {
+    await expect(classifyEmail('s', 'b', fakeLlm('{"isApplication": "maybe"}'))).resolves.toEqual({ isApplication: false, position: null })
+    await expect(classifyEmail('s', 'b', fakeLlm('[1, 2]'))).resolves.toEqual({ isApplication: false, position: null })
+    await expect(classifyEmail('s', 'b', fakeLlm('{"isApplication": true, "position": 42}'))).resolves.toEqual({ isApplication: true, position: null })
+  })
 })
 
 describe('calendar-event normalizer', () => {
@@ -49,7 +60,7 @@ describe('calendar-event normalizer', () => {
     end: { dateTime: '2030-01-15T07:30:00Z' },
     ...over
   })
-  const base = { is_activity: true, matched_role: 'backend developer', date: '2030-01-15', start_time: '04:30', end_time: '07:30', num_candidates: '3' }
+  const base = { is_activity: true, matched_role: 'backend developer', date: '2030-01-15', start_time: '04:30', end_time: '07:30', num_candidates: 3 }
 
   it('reconciles the role case-insensitively and shifts times by +5:30 (BUG-02, unchanged)', () => {
     expect(normalizeCalendarExtraction(event(), ROLES, base)).toEqual({
@@ -88,7 +99,7 @@ describe('calendar-event normalizer', () => {
   })
 
   it('defaults the candidate count to 5', () => {
-    expect(normalizeCalendarExtraction(event(), ROLES, { ...base, num_candidates: 'many' })!.num_candidates).toBe(5)
+    expect(normalizeCalendarExtraction(event(), ROLES, { ...base, num_candidates: undefined })!.num_candidates).toBe(5)
   })
 
   it('validates and converts times', () => {
@@ -111,7 +122,19 @@ describe('extractInterviewEvent', () => {
 
   it('returns null for non-interviews, bad JSON and provider errors', async () => {
     await expect(extractInterviewEvent(calEvent, ROLES, fakeLlm('{"is_activity":false}'))).resolves.toBeNull()
+    await expect(extractInterviewEvent(calEvent, ROLES, fakeLlm('{"is_activity":"false","date":"2030-02-01"}'))).resolves.toBeNull()
     await expect(extractInterviewEvent(calEvent, ROLES, fakeLlm('{oops'))).resolves.toBeNull()
     await expect(extractInterviewEvent(calEvent, ROLES, fakeLlm(new Error('HTTP 500')))).resolves.toBeNull()
+  })
+
+  it('skips an interview without a valid date instead of saving one with none', async () => {
+    await expect(extractInterviewEvent(calEvent, ROLES, fakeLlm('{"is_activity":true,"date":"next Tuesday","start_time":"05:00"}'))).resolves.toBeNull()
+    await expect(extractInterviewEvent(calEvent, ROLES, fakeLlm('{"is_activity":true,"start_time":"05:00"}'))).resolves.toBeNull()
+  })
+
+  it('drops fields the model got wrong and falls back to defaults', async () => {
+    const llm = fakeLlm('{"is_activity":true,"matched_role":"UI Developer","date":"2030-02-01","start_time":"05:00","end_time":"06:00","num_candidates":"lots","interview_mode":"hybrid","venue_or_link":7}')
+    const draft = await extractInterviewEvent(calEvent, ROLES, llm)
+    expect(draft).toMatchObject({ num_candidates: 5, interview_mode: 'offline', venue_or_link: '' })
   })
 })

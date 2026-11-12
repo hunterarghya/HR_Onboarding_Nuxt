@@ -2,8 +2,7 @@ import { setResponseStatus } from 'h3'
 import { defineApiHandler } from '~~/server/core/http/define-api-handler'
 import { parseBody, parseParams } from '~~/server/core/http/validate'
 import {
-  PREVIEW_RAW_MESSAGE, PreviewRawTemplateBody, PreviewTemplateBody,
-  SAVE_TEMPLATE_MESSAGE, SaveTemplateBody, TemplateIdParams
+  PreviewRawTemplateBody, PreviewTemplateBody, SaveTemplateBody, TemplateIdParams
 } from './templates.dto'
 import { requireUser } from '~~/server/core/auth/current-user'
 import { profileService } from '../auth/profile.service'
@@ -18,7 +17,7 @@ export const templatesController = {
   }),
 
   create: defineApiHandler(async (event) => {
-    const body = await parseBody(event, SaveTemplateBody, SAVE_TEMPLATE_MESSAGE)
+    const body = await parseBody(event, SaveTemplateBody)
     const template = await templatesService.create(body)
     setResponseStatus(event, 201)
     return template
@@ -26,7 +25,7 @@ export const templatesController = {
 
   update: defineApiHandler(async (event) => {
     const { id } = parseParams(event, TemplateIdParams)
-    return templatesService.update(id, await parseBody(event, SaveTemplateBody, SAVE_TEMPLATE_MESSAGE))
+    return templatesService.update(id, await parseBody(event, SaveTemplateBody))
   }),
 
   remove: defineApiHandler(async (event) => {
@@ -42,7 +41,7 @@ export const templatesController = {
   }),
 
   previewRaw: defineApiHandler(async (event) => {
-    const body = await parseBody(event, PreviewRawTemplateBody, PREVIEW_RAW_MESSAGE)
+    const body = await parseBody(event, PreviewRawTemplateBody)
     return templatesService.previewRaw(body, await profileService.companyNameForPreview(requireUser(event).id))
   })
 }

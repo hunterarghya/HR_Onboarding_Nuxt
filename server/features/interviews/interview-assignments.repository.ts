@@ -30,13 +30,13 @@ export const interviewAssignmentsRepository = {
     return rows
   },
 
-  /** Candidates already placed in another event for the same role. */
-  async candidateIdsInOtherEventsOfRole(role: string, eventId: number, db: Queryable = getPool()) {
+  /** Candidates already placed in another event for the same job (null: another Open Role event). */
+  async candidateIdsInOtherEventsOfJob(jobRoleId: number | null, eventId: number, db: Queryable = getPool()) {
     const { rows } = await db.query<{ candidate_id: number }>(
       `SELECT ic.candidate_id FROM interview_candidates ic
        JOIN interview_events ie ON ie.id = ic.event_id
-       WHERE ie.role = $1 AND ic.event_id != $2`,
-      [role, eventId]
+       WHERE ie.job_role_id IS NOT DISTINCT FROM $1 AND ic.event_id != $2`,
+      [jobRoleId, eventId]
     )
     return rows.map(r => r.candidate_id)
   },
@@ -45,7 +45,8 @@ export const interviewAssignmentsRepository = {
    * Replaces an event's assignment list. New rows start with invite_sent = false, so re-assigning
    * resets invite state (BUG-04, kept until the behaviour-fix phase).
    */
-  async replaceForEvent(eventId: number, candidateIds: unknown[], db: Queryable = getPool()) {
+  /** Run it in a transaction: the old list is deleted before the new one is written. */
+  async replaceForEvent(eventId: number, candidateIds: number[], db: Queryable = getPool()) {
     await db.query('DELETE FROM interview_candidates WHERE event_id = $1', [eventId])
     if (candidateIds.length === 0) return
 

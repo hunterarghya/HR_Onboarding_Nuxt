@@ -11,12 +11,14 @@ const editingJob = ref<Job | null>(null)
 const viewOpen = ref(false)
 const editOpen = ref(false)
 
+// Number inputs (v-model.number) give a number, or '' when cleared; the API treats '' as "not set"
 const newJob = reactive({
   role: '',
-  salary: '',
+  salary_min: '' as number | '',
+  salary_max: '' as number | '',
   qualification: '',
   skills: '',
-  experience: '',
+  experience_min_years: '' as number | '',
   location: '',
   shortlist_mode: 'manual' as 'manual' | 'auto',
   deadline: '',
@@ -81,7 +83,7 @@ const handleDeleteForm = async (job: Job) => {
   if (deletingFormJobId.value) return
   deletingFormJobId.value = job.id
   try {
-    await apiFetch(`/google-forms/${job.id}?type=job`, { method: 'DELETE' })
+    await apiFetch(`/jobs/${job.id}/form`, { method: 'DELETE' })
     job.form_url = undefined
     job.google_form_id = undefined
     job.google_form_db_id = undefined
@@ -101,7 +103,7 @@ const handleCreateJob = async () => {
   try {
     const createdJob = await apiFetch<Job>('/jobs', { method: 'POST', body: { ...newJob } })
     Object.assign(newJob, {
-      role: '', salary: '', qualification: '', skills: '', experience: '',
+      role: '', salary_min: '', salary_max: '', qualification: '', skills: '', experience_min_years: '',
       location: '', shortlist_mode: 'manual', deadline: '', min_score: 60, criteria_weights: {}
     })
     toast.add({ title: 'Job posted successfully', color: 'success' })
@@ -141,10 +143,10 @@ const openEditJob = (job: Job) => {
 const handleUpdateJob = async () => {
   if (!editingJob.value) return
   try {
-    const { id, role, salary, qualification, skills, experience, location, shortlist_mode, deadline, min_score, criteria_weights } = editingJob.value
+    const { id, role, salary_min, salary_max, qualification, skills, experience_min_years, location, shortlist_mode, deadline, min_score, criteria_weights } = editingJob.value
     await apiFetch(`/jobs/${id}`, {
       method: 'PATCH',
-      body: { role, salary, qualification, skills, experience, location, shortlist_mode, deadline, min_score, criteria_weights }
+      body: { role, salary_min, salary_max, qualification, skills, experience_min_years, location, shortlist_mode, deadline, min_score, criteria_weights }
     })
     editOpen.value = false
     editingJob.value = null
@@ -171,7 +173,7 @@ const isExpired = (job: Job) => {
   return job.deadline && new Date(job.deadline) < new Date()
 }
 
-const formatDeadline = (deadline: string) => {
+const formatDeadline = (deadline: string | null) => {
   if (!deadline) return 'N/A'
   return new Date(deadline).toLocaleString()
 }
@@ -213,17 +215,42 @@ onMounted(() => {
             </UFormField>
 
             <div class="grid grid-cols-2 gap-4">
-              <UFormField label="Salary">
-                <UInput v-model="newJob.salary" placeholder="$100k - $120k" class="w-full" />
+              <UFormField label="Salary from (per year)">
+                <UInput
+                  v-model.number="newJob.salary_min"
+                  type="number"
+                  min="0"
+                  placeholder="1000000"
+                  class="w-full"
+                />
+              </UFormField>
+              <UFormField label="Salary to (per year)">
+                <UInput
+                  v-model.number="newJob.salary_max"
+                  type="number"
+                  min="0"
+                  placeholder="1500000"
+                  class="w-full"
+                />
+              </UFormField>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+              <UFormField label="Minimum experience (years)">
+                <UInput
+                  v-model.number="newJob.experience_min_years"
+                  type="number"
+                  min="0"
+                  max="60"
+                  step="0.5"
+                  placeholder="3"
+                  class="w-full"
+                />
               </UFormField>
               <UFormField label="Location">
                 <UInput v-model="newJob.location" placeholder="Remote / NYC" class="w-full" />
               </UFormField>
             </div>
-
-            <UFormField label="Experience Required">
-              <UInput v-model="newJob.experience" placeholder="3+ Years" class="w-full" />
-            </UFormField>
 
             <UFormField label="Skills (Comma separated)">
               <UInput v-model="newJob.skills" placeholder="Node.js, Postgres, Redis" class="w-full" />
@@ -362,7 +389,7 @@ onMounted(() => {
                     </UBadge>
                   </div>
                   <p class="text-sm text-muted">
-                    {{ job.location }} • {{ job.salary }}
+                    {{ [job.location, formatSalaryRange(job.salary_min, job.salary_max)].filter(Boolean).join(' • ') }}
                   </p>
                   <p class="text-xs mt-1 text-muted">
                     {{ job.skills }}
@@ -489,7 +516,7 @@ onMounted(() => {
                   Salary
                 </p>
                 <p class="text-sm">
-                  {{ viewingJob.salary || 'N/A' }}
+                  {{ formatSalaryRange(viewingJob.salary_min, viewingJob.salary_max) || 'N/A' }}
                 </p>
               </div>
               <div>
@@ -497,7 +524,7 @@ onMounted(() => {
                   Experience
                 </p>
                 <p class="text-sm">
-                  {{ viewingJob.experience || 'N/A' }}
+                  {{ formatExperience(viewingJob.experience_min_years) || 'N/A' }}
                 </p>
               </div>
               <div>
@@ -582,16 +609,38 @@ onMounted(() => {
               <UInput v-model="editingJob.role" required class="w-full" />
             </UFormField>
             <div class="grid grid-cols-2 gap-4">
-              <UFormField label="Salary">
-                <UInput v-model="editingJob.salary" class="w-full" />
+              <UFormField label="Salary from (per year)">
+                <UInput
+                  v-model.number="editingJob.salary_min"
+                  type="number"
+                  min="0"
+                  class="w-full"
+                />
+              </UFormField>
+              <UFormField label="Salary to (per year)">
+                <UInput
+                  v-model.number="editingJob.salary_max"
+                  type="number"
+                  min="0"
+                  class="w-full"
+                />
+              </UFormField>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <UFormField label="Minimum experience (years)">
+                <UInput
+                  v-model.number="editingJob.experience_min_years"
+                  type="number"
+                  min="0"
+                  max="60"
+                  step="0.5"
+                  class="w-full"
+                />
               </UFormField>
               <UFormField label="Location">
                 <UInput v-model="editingJob.location" class="w-full" />
               </UFormField>
             </div>
-            <UFormField label="Experience Required">
-              <UInput v-model="editingJob.experience" class="w-full" />
-            </UFormField>
             <UFormField label="Skills">
               <UInput v-model="editingJob.skills" class="w-full" />
             </UFormField>

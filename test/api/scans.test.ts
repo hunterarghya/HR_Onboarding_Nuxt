@@ -27,6 +27,14 @@ describe('POST /api/candidates/scan', () => {
   it('rejects a request with no body (400, before anything is queued)', async () => {
     expectError(await api('POST', '/api/candidates/scan', { token: userToken() }), 400)
   })
+
+  it.each([
+    ['a group id that is not a WhatsApp group', { whatsappGroupIds: ['hello'] }],
+    ['the old single-group field', { whatsappGroupId: '123@g.us' }],
+    ['a group list that is not a list', { whatsappGroupIds: '123@g.us' }]
+  ])('rejects %s (400)', async (_label, body) => {
+    expectError(await api('POST', '/api/candidates/scan', { token: userToken(), body }), 400, 'Validation failed')
+  })
 })
 
 describe('POST /api/candidates/scan-mail', () => {
@@ -73,5 +81,17 @@ describe('POST /api/candidates/scan-forms', () => {
     const form = await insertForm()
     const outcome = await runTask('POST', '/api/candidates/scan-forms', { formIds: [form.form_id] })
     expect(outcome.result).toEqual({ message: 'Google Forms scan complete', count: 0 })
+  })
+
+  it('treats a request with no body as "every form"', async () => {
+    expect(await startTask('POST', '/api/candidates/scan-forms')).toBe('scan.forms')
+    await waitForTask('scan.forms')
+  })
+
+  it.each([
+    ['form ids that are not a list (they used to be ignored)', { formIds: 'abc' }],
+    ['a malformed form id', { formIds: ['../etc'] }]
+  ])('rejects %s (400)', async (_label, body) => {
+    expectError(await api('POST', '/api/candidates/scan-forms', { token: userToken(), body }), 400, 'Validation failed')
   })
 })

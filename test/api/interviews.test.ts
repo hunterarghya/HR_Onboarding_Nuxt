@@ -45,9 +45,44 @@ describe('GET /api/interviews/events', () => {
 describe('POST /api/interviews/events', () => {
   itRequiresLogin('POST', '/api/interviews/events', {})
 
-  it('requires role, date and times (400)', async () => {
-    const res = await api('POST', '/api/interviews/events', { token: userToken(), body: { role: 'x' } })
-    expectError(res, 400, 'role, event_date, start_time, end_time are required')
+  beforeAll(async () => {
+    await resetDb()
+    await insertJob({ role: 'Backend Developer' })
+  })
+
+  const slot = { role: 'Backend Developer', event_date: '2030-05-01', start_time: '10:00', end_time: '12:00', sync_calendar: false }
+
+  it.each([
+    ['only a role', { role: 'Backend Developer' }],
+    ['a malformed date', { ...slot, event_date: '01/05/2030' }],
+    ['a malformed time', { ...slot, start_time: '10am' }],
+    ['an end before the start', { ...slot, start_time: '12:00', end_time: '10:00' }],
+    ['an end equal to the start', { ...slot, end_time: '10:00' }],
+    ['zero candidates', { ...slot, num_candidates: 0 }],
+    ['negative extras', { ...slot, extra_candidates: -1 }],
+    ['text as a count', { ...slot, num_candidates: 'five' }],
+    ['an unknown mode', { ...slot, interview_mode: 'hybrid' }],
+    ['an online slot with a venue instead of a link', { ...slot, interview_mode: 'online', venue_or_link: 'Room 4' }],
+    ['a non-boolean sync flag', { ...slot, sync_calendar: 'no' }],
+    ['an unknown field', { ...slot, colour: 'blue' }]
+  ])('rejects %s (400)', async (_label, body) => {
+    expectError(await api('POST', '/api/interviews/events', { token: userToken(), body }), 400, 'Validation failed')
+  })
+
+  it('rejects a role that is not a current job (400)', async () => {
+    const res = await api('POST', '/api/interviews/events', { token: userToken(), body: { ...slot, role: 'Astronaut' } })
+    expectError(res, 400, 'Unknown job role')
+  })
+
+  it('accepts "Open Role" and empty counts', async () => {
+    const res = await api('POST', '/api/interviews/events', { token: userToken(), body: { ...slot, role: 'Open Role', num_candidates: '', extra_candidates: null } })
+    expect(res.status).toBe(201)
+    expect(res.body).toMatchObject({ role: 'Open Role', num_candidates: 5, extra_candidates: 0, event_date: '2030-05-01' })
+  })
+
+  it('accepts an online slot with a meeting link', async () => {
+    const res = await api('POST', '/api/interviews/events', { token: userToken(), body: { ...slot, interview_mode: 'online', venue_or_link: 'https://meet.example.com/abc' } })
+    expect(res.status).toBe(201)
   })
 
   it('creates a local-only event with defaults', async () => {
@@ -129,7 +164,29 @@ describe('event candidate assignment', () => {
 
     it('requires a candidate_ids array (400)', async () => {
       const evt = await insertEvent()
-      expectError(await api('POST', `/api/interviews/events/${evt.id}/candidates/manual`, { body: {} }), 400, 'candidate_ids array is required')
+      expectError(await api('POST', `/api/interviews/events/${evt.id}/candidates/manual`, { body: {} }), 400, 'Validation failed')
+    })
+
+    it.each([
+      ['text ids', ['1']],
+      ['duplicate ids', 'dup'],
+      ['negative ids', [-1]]
+    ])('rejects %s (400)', async (_label, ids) => {
+      const evt = await insertEvent()
+      const candidate_ids = ids === 'dup' ? [a.id, a.id] : ids
+      expectError(await api('POST', `/api/interviews/events/${evt.id}/candidates/manual`, { body: { candidate_ids } }), 400, 'Validation failed')
+    })
+
+    it('rejects unknown candidates and keeps the old list (400)', async () => {
+      const evt = await insertEvent()
+      await assignCandidate(evt.id, a.id)
+      const res = await api('POST', `/api/interviews/events/${evt.id}/candidates/manual`, { body: { candidate_ids: [b.id, 999999] } })
+      expectError(res, 400, 'Unknown candidates')
+      expect(await assignedIds(evt.id)).toEqual([a.id])
+    })
+
+    it('returns 404 for an unknown event (it used to report success)', async () => {
+      expectError(await api('POST', '/api/interviews/events/999999/candidates/manual', { body: { candidate_ids: [] } }), 404, 'Event not found')
     })
   })
 
@@ -176,10 +233,11 @@ describe('event candidate assignment', () => {
       expectError(await api('POST', '/api/interviews/events/999999/candidates/auto'), 404, 'Event not found')
     })
 
-    it('crashes with 500 for an "Open Role" event when no job roles exist (BUG-05)', async () => {
-      await db().query('DELETE FROM job_roles')
+    it('fills an "Open Role" event from the Open pool, even with no jobs at all (was a 500: BUG-05)', async () => {
+      await db().query('DELETE FROM job_roles') // the candidates' job links become NULL: the Open pool
       const evt = await insertEvent({ role: 'Open Role' })
-      expectError(await api('POST', `/api/interviews/events/${evt.id}/candidates/auto`), 500)
+      const res = await api('POST', `/api/interviews/events/${evt.id}/candidates/auto`)
+      expect(res.body).toEqual({ message: 'Candidates auto-assigned successfully', count: 2 })
     })
   })
 
@@ -200,7 +258,7 @@ describe('event candidate assignment', () => {
     })
 
     it('requires role (400)', async () => {
-      expectError(await api('POST', '/api/interviews/events/auto-assign-all', { body: {} }), 400, 'role is required')
+      expectError(await api('POST', '/api/interviews/events/auto-assign-all', { body: {} }), 400, 'Validation failed')
     })
   })
 
@@ -229,7 +287,11 @@ describe('POST /api/interviews/register-webhook', () => {
   itRequiresLogin('POST', '/api/interviews/register-webhook', {})
 
   it('requires webhook_url (400)', async () => {
-    expectError(await api('POST', '/api/interviews/register-webhook', { token: userToken(), body: {} }), 400, 'webhook_url is required')
+    expectError(await api('POST', '/api/interviews/register-webhook', { token: userToken(), body: {} }), 400, 'Validation failed')
+  })
+
+  it.each(['not a url', 'http://example.com/hook', 'javascript:alert(1)'])('rejects %s (400: Google only calls https)', async (webhook_url) => {
+    expectError(await api('POST', '/api/interviews/register-webhook', { token: userToken(), body: { webhook_url } }), 400, 'Validation failed')
   })
 
   it('returns 500 when Google is unreachable', async () => {

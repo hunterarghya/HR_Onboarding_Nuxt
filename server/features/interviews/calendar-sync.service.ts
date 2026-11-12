@@ -38,7 +38,8 @@ const fetchRecentCalendarEvents = async (auth: GoogleAuthClient) => {
 }
 
 const runSync = async (auth: GoogleAuthClient, onProgress: (p: TaskProgress) => Promise<void>) => {
-  const activeRoles = await jobRolesRepository.listRoleNames()
+  const jobs = await jobRolesRepository.findAll()
+  const activeRoles = jobs.map(j => j.role)
   console.log(`[Sync] Active roles from DB (${activeRoles.length}):`, activeRoles)
 
   if (activeRoles.length === 0) {
@@ -99,6 +100,8 @@ const runSync = async (auth: GoogleAuthClient, onProgress: (p: TaskProgress) => 
     console.log(`[Sync] Inserting into interview_events table...`)
     await interviewEventsRepository.insertImported({
       ...parsed,
+      // the agent answers with one of activeRoles or "Open Role"
+      job_role_id: jobs.find(j => j.role === parsed.role)?.id ?? null,
       interview_mode: parsed.interview_mode || 'offline',
       venue_or_link: parsed.venue_or_link || null
     })

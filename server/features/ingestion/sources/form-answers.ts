@@ -3,15 +3,15 @@ import type { FormResponse } from '~~/server/integrations/google/forms.client'
 /**
  * Extracts a text answer from a form response for a given question ID.
  */
-export const extractTextAnswer = (response: FormResponse, questionId: string): string => {
+export const extractTextAnswer = (response: FormResponse, questionId: string): string | null => {
   const answer = response.answers?.[questionId]
-  if (!answer) return 'N/A'
+  if (!answer) return null
 
   const textAnswers = answer.textAnswers?.answers
   if (textAnswers && textAnswers.length > 0) {
-    return textAnswers[0]!.value || 'N/A'
+    return textAnswers[0]!.value || null
   }
-  return 'N/A'
+  return null
 }
 
 /**

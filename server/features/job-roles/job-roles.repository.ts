@@ -1,14 +1,15 @@
 import { getPool, type Queryable } from '~~/server/core/db/pool'
 import type { JobRoleRow, JobRoleWithFormRow } from '~~/server/database/types'
-import type { CreateJobRoleInput, UpdateJobRoleInput } from './job-roles.dto'
+import { OPEN_POOL, OPEN_ROLE, type CreateJobRoleInput, type UpdateJobRoleInput } from './job-roles.dto'
 
 /** Columns a PATCH may change; anything else in the body is ignored. */
 export const UPDATABLE_FIELDS = [
   'role',
-  'salary',
+  'salary_min',
+  'salary_max',
   'qualification',
   'skills',
-  'experience',
+  'experience_min_years',
   'location',
   'shortlist_mode',
   'deadline',
@@ -56,6 +57,24 @@ export const jobRolesRepository = {
     return rows
   },
 
+  /** Names identify jobs to people; they're unique ignoring case and surrounding spaces. */
+  async findByRoleName(role: string, db: Queryable = getPool()) {
+    const { rows } = await db.query<JobRoleRow>('SELECT * FROM job_roles WHERE lower(btrim(role)) = lower(btrim($1))', [role])
+    return rows[0] ?? null
+  },
+
+  /** Copies a job's (new) name onto its candidates and events, which show it. */
+  async renameLinked(id: number, role: string, db: Queryable = getPool()) {
+    await db.query('UPDATE candidates SET role_applied = $1 WHERE job_role_id = $2', [role, id])
+    await db.query('UPDATE interview_events SET role = $1 WHERE job_role_id = $2', [role, id])
+  },
+
+  /** Before a job is deleted: its candidates move to the Open pool and its events become Open Role events. */
+  async releaseLinked(id: number, db: Queryable = getPool()) {
+    await db.query(`UPDATE candidates SET role_applied = $1, job_role_id = NULL WHERE job_role_id = $2`, [OPEN_POOL, id])
+    await db.query(`UPDATE interview_events SET role = $1, job_role_id = NULL WHERE job_role_id = $2`, [OPEN_ROLE, id])
+  },
+
   async listRoleNames(db: Queryable = getPool()) {
     const { rows } = await db.query<{ role: string }>('SELECT role FROM job_roles')
     return rows.map(r => r.role)
@@ -63,9 +82,11 @@ export const jobRolesRepository = {
 
   async insert(input: CreateJobRoleInput, db: Queryable = getPool()) {
     const { rows } = await db.query<JobRoleRow>(
-      'INSERT INTO job_roles (role, salary, qualification, skills, experience, location, shortlist_mode, deadline, min_score, criteria_weights) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *',
-      [input.role, input.salary, input.qualification, input.skills, input.experience, input.location,
-        input.shortlist_mode || 'manual', input.deadline, input.min_score || 60, JSON.stringify(input.criteria_weights || {})]
+      `INSERT INTO job_roles (role, salary_min, salary_max, qualification, skills, experience_min_years, location, shortlist_mode, deadline, min_score, criteria_weights)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      // defaults (manual, 60, {}) come from the DTO; ?? keeps a legitimate min_score of 0 (BUG-03)
+      [input.role, input.salary_min, input.salary_max, input.qualification, input.skills, input.experience_min_years, input.location,
+        input.shortlist_mode, input.deadline, input.min_score, JSON.stringify(input.criteria_weights)]
     )
     return rows[0]!
   },
@@ -73,7 +94,7 @@ export const jobRolesRepository = {
   /** Updates only the given allowed columns; null if the job doesn't exist. */
   async update(id: number, patch: UpdateJobRoleInput, fields: readonly string[], db: Queryable = getPool()) {
     const values = fields.map((field) => {
-      const value = patch[field]
+      const value = patch[field as keyof UpdateJobRoleInput]
       // JSONB column: send objects as JSON text
       return field === 'criteria_weights' && value && typeof value === 'object' ? JSON.stringify(value) : value
     })

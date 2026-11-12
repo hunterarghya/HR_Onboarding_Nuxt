@@ -1,5 +1,5 @@
 import { config } from '~~/server/config/env'
-import { NotFoundError } from '~~/server/core/errors/app-error'
+import { NotFoundError, ValidationError } from '~~/server/core/errors/app-error'
 import { enqueue } from '~~/server/core/tasks/queues'
 import type { TaskProgress } from '~~/server/core/tasks/task-status'
 import { sendRawMessage } from '~~/server/integrations/google/gmail.client'
@@ -28,14 +28,32 @@ export interface Sender {
 type ReportProgress = (progress: TaskProgress) => Promise<void>
 const noProgress: ReportProgress = async () => {}
 
-const longDate = (d: Date) => new Date(d).toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+/** "2030-03-01" → "Friday, 1 March 2030" (the calendar day itself, whatever the server's time zone) */
+const longDate = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })
+
+/** 1500000 → "15,00,000" */
+const amount = (v: number | null | undefined) => v == null ? '' : v.toLocaleString('en-IN', { maximumFractionDigits: 2 })
+
+/** Numeric candidate fields as template text; {{experience_level}} keeps working for older templates. */
+const candidateText = (c: { current_ctc?: number | null, offered_salary?: number | null, experience_years?: number | null }) => ({
+  current_ctc: amount(c.current_ctc),
+  offered_salary: amount(c.offered_salary),
+  experience_level: c.experience_years == null ? '' : `${c.experience_years} years`
+})
 
 /** Spaces out sends to stay well inside Gmail's sending limits (MAIL_SEND_INTERVAL_MS). */
 const pause = () => new Promise(resolve => setTimeout(resolve, config.mail.sendIntervalMs))
 
-const getTemplate = async (templateId: number) => {
+/** Which templates suit which mail: an invite template (or a custom one) for invites, and so on. */
+const SUITS = { invite: ['invite', 'custom'], offer: ['offer', 'custom'] } as const
+type MailKind = keyof typeof SUITS
+
+const getTemplate = async (templateId: number, kind: MailKind) => {
   const template = await templatesRepository.findById(templateId)
   if (!template) throw new NotFoundError('Template')
+  if (!(SUITS[kind] as readonly string[]).includes(template.type)) {
+    throw new ValidationError([{ path: ['templateId'], message: `A ${template.type} template can't be sent as ${kind === 'invite' ? 'an invite' : 'an offer'}` }], 'Wrong template type')
+  }
   return template
 }
 
@@ -48,10 +66,10 @@ const senderContext = async (userId: number): Promise<{ auth: GoogleAuthClient, 
 }
 
 /** Checked before queueing, so the HR hears about it at once instead of from a failed task. */
-const assertCanSend = async (userId: number, templateId: number) => {
+const assertCanSend = async (userId: number, templateId: number, kind: MailKind) => {
   await profileService.requireCompanyName(userId)
   await googleAuthService.getAuthClientForUser(userId)
-  await getTemplate(templateId)
+  await getTemplate(templateId, kind)
 }
 
 const failed = (label: string, message: string, err: unknown) => {
@@ -61,7 +79,7 @@ const failed = (label: string, message: string, err: unknown) => {
 
 /** Invites the uninvited candidates of one event. Throws if the template or event is missing. */
 const sendInvitesForEvent = async (auth: GoogleAuthClient, sender: Sender, eventId: number, templateId: number, onProgress: ReportProgress) => {
-  const template = await getTemplate(templateId)
+  const template = await getTemplate(templateId, 'invite')
 
   const event = await interviewEventsRepository.findById(eventId)
   if (!event) throw new NotFoundError('Event')
@@ -80,6 +98,7 @@ const sendInvitesForEvent = async (auth: GoogleAuthClient, sender: Sender, event
     try {
       const data = {
         ...candidate,
+        ...candidateText(candidate),
         company_name: sender.companyName,
         interview_date: event.event_date ? longDate(event.event_date) : '',
         interview_start_time: event.start_time?.slice(0, 5) || '',
@@ -110,7 +129,7 @@ export const mailService = {
   // ---- enqueue (HTTP side): validate, queue, answer 202
 
   async enqueueEventInvites(userId: number, eventId: number, templateId: number) {
-    await assertCanSend(userId, templateId)
+    await assertCanSend(userId, templateId, 'invite')
     if (!(await interviewEventsRepository.findById(eventId))) throw new NotFoundError('Event')
     return enqueue('mail.invites', { userId, eventId, templateId }, {
       taskId: `mail.invites.event.${eventId}`,
@@ -119,7 +138,7 @@ export const mailService = {
   },
 
   async enqueueAllInvites(userId: number, templateId: number) {
-    await assertCanSend(userId, templateId)
+    await assertCanSend(userId, templateId, 'invite')
     return enqueue('mail.invitesAll', { userId, templateId }, {
       taskId: 'mail.invites.all',
       conflictMessage: 'Invites are already being sent'
@@ -127,7 +146,7 @@ export const mailService = {
   },
 
   async enqueueOffers(userId: number, templateId: number, candidateIds: number[]) {
-    await assertCanSend(userId, templateId)
+    await assertCanSend(userId, templateId, 'offer')
     return enqueue('mail.offers', { userId, templateId, candidateIds }, {
       taskId: 'mail.offers',
       conflictMessage: 'Offer letters are already being sent'
@@ -174,7 +193,7 @@ export const mailService = {
   async runOffers(userId: number, templateId: number, candidateIds: number[], onProgress: ReportProgress = noProgress) {
     try {
       const { auth, sender } = await senderContext(userId)
-      const template = await getTemplate(templateId)
+      const template = await getTemplate(templateId, 'offer')
       const candidates = await candidatesRepository.findSelectedWithoutOffer(candidateIds)
 
       let sent = 0, failed = 0, skipped = 0
@@ -189,6 +208,7 @@ export const mailService = {
         try {
           const data = {
             ...candidate,
+            ...candidateText(candidate),
             company_name: sender.companyName,
             joining_date: candidate.joining_date ? longDate(candidate.joining_date) : ''
           }

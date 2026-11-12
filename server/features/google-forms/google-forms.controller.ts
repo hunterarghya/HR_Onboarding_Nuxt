@@ -1,7 +1,7 @@
 import { requireUser } from '~~/server/core/auth/current-user'
 import { defineApiHandler } from '~~/server/core/http/define-api-handler'
-import { parseBody, parseParams, parseQuery } from '~~/server/core/http/validate'
-import { CREATE_FORM_MESSAGE, CreateFormBody, DeleteFormQuery, FormIdParams, JobIdParam } from './google-forms.dto'
+import { parseBody, parseParams } from '~~/server/core/http/validate'
+import { CreateFormBody, FormIdParams, JobIdParam } from './google-forms.dto'
 import { googleAuthService } from '../auth/google-auth.service'
 import { googleFormsService } from './google-forms.service'
 
@@ -10,13 +10,18 @@ export const googleFormsController = {
 
   create: defineApiHandler(async (event) => {
     const auth = await googleAuthService.getAuthClientForUser(requireUser(event).id)
-    const { jobRoleId } = await parseBody(event, CreateFormBody, CREATE_FORM_MESSAGE)
+    const { jobRoleId } = await parseBody(event, CreateFormBody)
     return googleFormsService.createForJob(auth, jobRoleId)
   }),
 
   remove: defineApiHandler((event) => {
-    const byJob = parseQuery(event, DeleteFormQuery).type === 'job'
-    const id = byJob ? String(parseParams(event, JobIdParam).id) : parseParams(event, FormIdParams).id
-    return googleFormsService.remove(id, byJob)
+    const { id } = parseParams(event, FormIdParams)
+    return googleFormsService.remove(id)
+  }),
+
+  /** DELETE /api/jobs/:id/form: forget the application form of a job. */
+  removeForJob: defineApiHandler((event) => {
+    const { id } = parseParams(event, JobIdParam)
+    return googleFormsService.removeForJob(id)
   })
 }

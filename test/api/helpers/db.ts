@@ -25,12 +25,25 @@ export const resetDb = async () => {
 
 // Fixtures are inserted directly so tests don't depend on Google, Qdrant or the embedding model.
 
+/** Job names are unique: without a role, the first job is "Backend Developer" and later ones get a numbered name. */
 export const insertJob = async (fields: Record<string, unknown> = {}) => {
-  const row = { role: 'Backend Developer', salary: '1200000', skills: 'node, sql', experience: '2 years', location: 'Remote', ...fields }
+  const { rows: taken } = await db().query('SELECT 1 FROM job_roles WHERE role = $1', ['Backend Developer'])
+  const role = taken.length ? `Backend Developer ${Math.random().toString(36).slice(2, 8)}` : 'Backend Developer'
+  const row = { role, salary_min: 1000000, salary_max: 1200000, skills: 'node, sql', experience_min_years: 2, location: 'Remote', ...fields }
   const cols = Object.keys(row)
   const { rows } = await db().query(
     `INSERT INTO job_roles (${cols.join(', ')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(', ')}) RETURNING *`,
     Object.values(row)
+  )
+  return rows[0]
+}
+
+/** Links a fixture row to the job named by its role column, as migration 0007 does for real data (unless a job_role_id was given). */
+const linkToJobByName = async (table: 'candidates' | 'interview_events', nameColumn: string, id: number) => {
+  const { rows } = await db().query(
+    `UPDATE ${table} t SET job_role_id = j.id FROM job_roles j
+     WHERE t.id = $1 AND t.job_role_id IS NULL AND lower(btrim(j.role)) = lower(btrim(t.${nameColumn})) RETURNING t.*`,
+    [id]
   )
   return rows[0]
 }
@@ -51,7 +64,7 @@ export const insertCandidate = async (fields: Record<string, unknown> = {}) => {
     `INSERT INTO candidates (${cols.join(', ')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(', ')}) RETURNING *`,
     Object.values(row)
   )
-  return rows[0]
+  return 'job_role_id' in fields ? rows[0] : (await linkToJobByName('candidates', 'role_applied', rows[0].id)) ?? rows[0]
 }
 
 export const insertEvent = async (fields: Record<string, unknown> = {}) => {
@@ -61,7 +74,7 @@ export const insertEvent = async (fields: Record<string, unknown> = {}) => {
     `INSERT INTO interview_events (${cols.join(', ')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(', ')}) RETURNING *`,
     Object.values(row)
   )
-  return rows[0]
+  return 'job_role_id' in fields ? rows[0] : (await linkToJobByName('interview_events', 'role', rows[0].id)) ?? rows[0]
 }
 
 export const assignCandidate = async (eventId: number, candidateId: number, inviteSent = false) => {
