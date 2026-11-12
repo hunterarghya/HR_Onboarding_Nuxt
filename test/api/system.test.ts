@@ -99,3 +99,10 @@ describe('pages behind the session cookie (server-side rendering)', () => {
     expect(res.body).toContain('<html')
   })
 })
+
+describe('cross-origin requests', () => {
+  it('get no CORS permission: the API is same-origin only', async () => {
+    const res = await api('GET', '/api/auth/me', { headers: { origin: 'https://evil.example' } })
+    expect(res.headers.get('access-control-allow-origin')).toBeNull()
+  })
+})
