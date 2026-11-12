@@ -8,7 +8,7 @@ export type SelectedCandidateRow = Pick<CandidateRow,
 /** A candidate as read from a resume. Unknown details are null, never "N/A" (DATA-04). */
 export interface ResumeCandidate {
   score: number
-  resume_url: string | null
+  resume_file: string | null
   applied_through: string
   current_location: string | null
   current_ctc: number | null
@@ -30,6 +30,12 @@ export interface OfferFields {
 }
 
 export const candidatesRepository = {
+  /** Where a candidate's resume is stored, or null (no candidate, or no resume). */
+  async findResumeFile(id: number, db: Queryable = getPool()) {
+    const { rows } = await db.query<{ resume_file: string | null }>('SELECT resume_file FROM candidates WHERE id = $1', [id])
+    return rows[0]?.resume_file ?? null
+  },
+
   /** Which of these ids exist. */
   async existingIds(ids: number[], db: Queryable = getPool()) {
     if (ids.length === 0) return []
@@ -197,8 +203,8 @@ export const candidatesRepository = {
    * to tell people apart, so every such resume is a new candidate (DATA-01). True if a row was inserted.
    */
   async saveFromResume(c: ResumeCandidate, db: Queryable = getPool()) {
-    const values = [c.name, c.email, c.phone, c.job_role_id, c.role_applied, c.resume_content, c.score, c.experience_years, c.status, c.resume_url, c.applied_through, c.current_location, c.current_ctc]
-    const insert = `INSERT INTO candidates (name, email, phone, job_role_id, role_applied, resume_content, score, experience_years, status, resume_url, applied_through, current_location, current_ctc)
+    const values = [c.name, c.email, c.phone, c.job_role_id, c.role_applied, c.resume_content, c.score, c.experience_years, c.status, c.resume_file, c.applied_through, c.current_location, c.current_ctc]
+    const insert = `INSERT INTO candidates (name, email, phone, job_role_id, role_applied, resume_content, score, experience_years, status, resume_file, applied_through, current_location, current_ctc)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`
     if (c.email === null) {
       await db.query(insert, values)
@@ -207,7 +213,7 @@ export const candidatesRepository = {
     const { rows } = await db.query<{ inserted: boolean }>(
       `${insert}
        ON CONFLICT (lower(email), job_role_id) WHERE email IS NOT NULL
-       DO UPDATE SET score = EXCLUDED.score, date_applied = now(), resume_url = EXCLUDED.resume_url,
+       DO UPDATE SET score = EXCLUDED.score, date_applied = now(), resume_file = EXCLUDED.resume_file,
          applied_through = EXCLUDED.applied_through, current_location = EXCLUDED.current_location,
          current_ctc = EXCLUDED.current_ctc, status = EXCLUDED.status
        RETURNING (xmax = 0) AS inserted`,

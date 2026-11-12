@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, inject, it } from 'vitest'
 import { api, expectError } from './helpers/http'
 import { itRequiresLogin, userToken } from './helpers/auth'
 import { db, insertCandidate, resetDb } from './helpers/db'
@@ -180,6 +180,39 @@ describe('GET /api/candidates/selected/filters', () => {
     expect(res.status).toBe(200)
     expect(res.body.roles).toEqual(expect.arrayContaining(['QA', 'SDE']))
     expect(res.body.locations).toEqual(expect.arrayContaining(['Delhi', 'Pune']))
+  })
+})
+
+describe('GET /api/candidates/:id/resume', () => {
+  itRequiresLogin('GET', '/api/candidates/1/resume')
+
+  const open = (id: number) => fetch(`${inject('baseURL')}/api/candidates/${id}/resume`, {
+    headers: { authorization: `Bearer ${userToken()}` },
+    redirect: 'manual'
+  })
+
+  it('sends a signed-in HR on to a signed link that expires (SEC-10: resumes were public links)', async () => {
+    const c = await insertCandidate({ resume_file: '/resumes/asha_cv.pdf' })
+    expect(c.resume_url).toBe(`/api/candidates/${c.id}/resume`) // what the API lists, not a storage link
+
+    const res = await open(c.id)
+    expect(res.status).toBe(302)
+    expect(res.headers.get('cache-control')).toBe('no-store')
+    const link = new URL(res.headers.get('location')!)
+    expect(link.href.startsWith('https://ik.imagekit.io/smoke-test/resumes/asha_cv.pdf')).toBe(true)
+    expect(link.searchParams.get('ik-s')).toMatch(/^[0-9a-f]{40}$/)
+    expect(Number(link.searchParams.get('ik-t'))).toBeGreaterThan(Date.now() / 1000)
+  })
+
+  it('opens a resume uploaded before files were private at its old link', async () => {
+    const c = await insertCandidate({ resume_file: 'https://ik.imagekit.io/smoke-test/resumes/old.pdf' })
+    expect((await open(c.id)).headers.get('location')).toBe('https://ik.imagekit.io/smoke-test/resumes/old.pdf')
+  })
+
+  it('returns 404 without a resume or a candidate', async () => {
+    const c = await insertCandidate()
+    expectError(await api('GET', `/api/candidates/${c.id}/resume`), 404, 'Resume not found')
+    expectError(await api('GET', '/api/candidates/999999/resume'), 404, 'Resume not found')
   })
 })
 
