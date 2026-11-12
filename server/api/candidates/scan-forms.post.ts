@@ -1,4 +1,4 @@
-import jwt from 'jsonwebtoken'
+import { requireUser } from '~~/server/core/auth/current-user'
 
 let isScanningForms = false
 
@@ -7,18 +7,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 409, statusMessage: 'Google Forms scan already in progress' })
   }
 
-  const authHeader = getHeader(event, 'authorization')
-  const token = authHeader && authHeader.split(' ')[1]
-  if (!token) {
-    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
-  }
-
-  let userData: any
-  try {
-    userData = jwt.verify(token, process.env.JWT_SECRET || 'secret')
-  } catch {
-    throw createError({ statusCode: 403, statusMessage: 'Invalid token' })
-  }
+  const userData = requireUser(event)
 
   const tokens = userData.tokens
   isScanningForms = true

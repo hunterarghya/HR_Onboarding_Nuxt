@@ -1,5 +1,6 @@
 import { google } from 'googleapis'
-import jwt from 'jsonwebtoken'
+import { config } from '~~/server/config/env'
+import { signSession } from '~~/server/core/auth/session-token'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
@@ -7,9 +8,9 @@ export default defineEventHandler(async (event) => {
 
   try {
     const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI
+      config.google.clientId,
+      config.google.clientSecret,
+      config.google.redirectUri
     )
 
     const { tokens } = await oauth2Client.getToken(code)
@@ -18,15 +19,12 @@ export default defineEventHandler(async (event) => {
     const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client })
     const userInfo = await oauth2.userinfo.get()
 
-    const token = jwt.sign(
-      {
-        email: userInfo.data.email,
-        name: userInfo.data.name,
-        tokens: tokens // Store tokens to access Gmail API later
-      },
-      process.env.JWT_SECRET || 'secret',
-      { expiresIn: '24h' }
-    )
+    if (!userInfo.data.email) throw new Error('Google account returned no email')
+    const token = signSession({
+      email: userInfo.data.email,
+      name: userInfo.data.name ?? undefined,
+      tokens // Store tokens to access Gmail API later
+    })
 
     // Redirect to frontend with token
     return sendRedirect(event, `/login?token=${token}`)

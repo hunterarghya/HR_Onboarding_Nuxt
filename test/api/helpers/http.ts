@@ -1,4 +1,5 @@
 import { expect, inject } from 'vitest'
+import { userToken } from './tokens'
 
 export interface ApiResponse<T = any> {
   status: number
@@ -7,17 +8,20 @@ export interface ApiResponse<T = any> {
 }
 
 interface RequestOptions {
-  token?: string
+  /** Defaults to a valid session; pass `null` to send no Authorization header. */
+  token?: string | null
   body?: unknown
   query?: Record<string, string | number | boolean>
+  headers?: Record<string, string>
 }
 
 export const api = async <T = any>(method: string, path: string, opts: RequestOptions = {}): Promise<ApiResponse<T>> => {
   const url = new URL(path, inject('baseURL'))
   for (const [k, v] of Object.entries(opts.query ?? {})) url.searchParams.set(k, String(v))
 
-  const headers: Record<string, string> = {}
-  if (opts.token) headers.authorization = `Bearer ${opts.token}`
+  const headers: Record<string, string> = { ...opts.headers }
+  const token = opts.token === undefined ? userToken() : opts.token
+  if (token) headers.authorization = `Bearer ${token}`
   if (opts.body !== undefined) headers['content-type'] = 'application/json'
 
   const res = await fetch(url, {

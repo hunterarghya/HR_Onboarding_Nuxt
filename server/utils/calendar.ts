@@ -1,4 +1,5 @@
 import { google } from 'googleapis'
+import { config } from '~~/server/config/env'
 
 interface CalendarTokens {
   access_token?: string
@@ -22,9 +23,9 @@ interface EventData {
  */
 export const getCalendarService = (tokens: CalendarTokens) => {
   const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
+    config.google.clientId,
+    config.google.clientSecret,
+    config.google.redirectUri
   )
   oauth2Client.setCredentials(tokens)
   return google.calendar({ version: 'v3', auth: oauth2Client })

@@ -1,16 +1,7 @@
-import jwt from 'jsonwebtoken'
+import { requireUser } from '~~/server/core/auth/current-user'
 
 export default defineEventHandler(async (event) => {
-  const authHeader = getHeader(event, 'authorization')
-  const token = authHeader && authHeader.split(' ')[1]
-  if (!token) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
-
-  let userData: any
-  try {
-    userData = jwt.verify(token, process.env.JWT_SECRET || 'secret')
-  } catch {
-    throw createError({ statusCode: 403, statusMessage: 'Invalid token' })
-  }
+  const userData = requireUser(event)
 
   const body = await readBody(event)
   const { webhook_url } = body
@@ -20,7 +11,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const result = await registerCalendarWebhook(userData.tokens, webhook_url)
+    const result = await registerCalendarWebhook(userData.tokens ?? {}, webhook_url)
     return { message: 'Webhook registered', data: result }
   } catch (err) {
     console.error('Error registering webhook:', err)

@@ -1,30 +1,16 @@
-import jwt from 'jsonwebtoken'
 import { it } from 'vitest'
-import { TEST_JWT_SECRET } from '../setup/test-env'
 import { api, expectError } from './http'
+import { tokenWithWrongSecret } from './tokens'
 
-// Same payload shape the OAuth callback signs today. The Google tokens are fake, and the server under
-// test has no network, so any Google call made with them fails fast.
-export const userToken = (overrides: Record<string, unknown> = {}) => jwt.sign(
-  {
-    email: 'smoke.tester@example.com',
-    name: 'Smoke Tester',
-    tokens: { access_token: 'fake-access-token', refresh_token: 'fake-refresh-token' },
-    ...overrides
-  },
-  TEST_JWT_SECRET,
-  { expiresIn: '1h' }
-)
+export { userToken } from './tokens'
 
-export const tokenWithWrongSecret = () => jwt.sign({ email: 'intruder@example.com' }, 'not-the-server-secret')
-
-/** The inline auth check most protected routes have today: no token → 401, bad token → 403. */
-export const itChecksToken = (method: string, path: string, body?: unknown) => {
+/** Every non-public route: no session → 401, and a token signed with another secret → 401. */
+export const itRequiresLogin = (method: string, path: string, body?: unknown) => {
   it('rejects a request without a token (401)', async () => {
-    expectError(await api(method, path, { body }), 401, 'Unauthorized')
+    expectError(await api(method, path, { body, token: null }), 401, 'Unauthorized')
   })
 
-  it('rejects a token signed with another secret (403)', async () => {
-    expectError(await api(method, path, { body, token: tokenWithWrongSecret() }), 403, 'Invalid token')
+  it('rejects a token signed with another secret (401)', async () => {
+    expectError(await api(method, path, { body, token: tokenWithWrongSecret() }), 401, 'Invalid or expired session')
   })
 }

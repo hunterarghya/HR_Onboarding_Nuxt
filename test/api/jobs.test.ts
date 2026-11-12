@@ -5,7 +5,7 @@ import { db, insertForm, insertJob, resetDb } from './helpers/db'
 beforeAll(resetDb)
 
 describe('POST /api/jobs', () => {
-  it('creates a job with defaults (no auth required today)', async () => {
+  it('creates a job with defaults', async () => {
     const res = await api('POST', '/api/jobs', {
       body: { role: 'Data Engineer', salary: '1500000', skills: 'python, spark', experience: '3 years', location: 'Pune' }
     })

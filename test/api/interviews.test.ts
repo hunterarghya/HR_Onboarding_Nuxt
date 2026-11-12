@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { api, expectError } from './helpers/http'
-import { itChecksToken, userToken } from './helpers/auth'
+import { itRequiresLogin, userToken } from './helpers/auth'
 import { assignCandidate, db, insertCandidate, insertEvent, insertJob, resetDb } from './helpers/db'
 
 const assignedIds = async (eventId: number) => {
@@ -10,7 +10,7 @@ const assignedIds = async (eventId: number) => {
 
 describe('POST /api/interviews/sync-calendar', () => {
   beforeAll(resetDb)
-  itChecksToken('POST', '/api/interviews/sync-calendar')
+  itRequiresLogin('POST', '/api/interviews/sync-calendar')
 
   it('aborts when there are no job roles', async () => {
     const res = await api('POST', '/api/interviews/sync-calendar', { token: userToken() })
@@ -41,7 +41,7 @@ describe('GET /api/interviews/events', () => {
 })
 
 describe('POST /api/interviews/events', () => {
-  itChecksToken('POST', '/api/interviews/events', {})
+  itRequiresLogin('POST', '/api/interviews/events', {})
 
   it('requires role, date and times (400)', async () => {
     const res = await api('POST', '/api/interviews/events', { token: userToken(), body: { role: 'x' } })
@@ -68,7 +68,7 @@ describe('POST /api/interviews/events', () => {
 })
 
 describe('DELETE /api/interviews/events/:id', () => {
-  itChecksToken('DELETE', '/api/interviews/events/1')
+  itRequiresLogin('DELETE', '/api/interviews/events/1')
 
   it('deletes the event and its assignments', async () => {
     const evt = await insertEvent()
@@ -219,7 +219,7 @@ describe('event candidate assignment', () => {
 })
 
 describe('POST /api/interviews/register-webhook', () => {
-  itChecksToken('POST', '/api/interviews/register-webhook', {})
+  itRequiresLogin('POST', '/api/interviews/register-webhook', {})
 
   it('requires webhook_url (400)', async () => {
     expectError(await api('POST', '/api/interviews/register-webhook', { token: userToken(), body: {} }), 400, 'webhook_url is required')
@@ -232,8 +232,8 @@ describe('POST /api/interviews/register-webhook', () => {
 })
 
 describe('POST /api/interviews/webhook', () => {
-  it('acknowledges any push notification without auth', async () => {
-    const res = await api('POST', '/api/interviews/webhook', { body: {} })
+  it('acknowledges any push notification without a session', async () => {
+    const res = await api('POST', '/api/interviews/webhook', { body: {}, token: null })
     expect(res.status).toBe(200)
     expect(res.body).toBe('OK')
   })

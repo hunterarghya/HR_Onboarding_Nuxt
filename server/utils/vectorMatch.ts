@@ -4,8 +4,9 @@
  */
 
 import { QdrantClient } from '@qdrant/js-client-rest'
+import { config } from '~~/server/config/env'
 
-const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333'
+const QDRANT_URL = config.qdrant.url
 const COLLECTION_NAME = 'job_descriptions'
 const VECTOR_SIZE = 384
 

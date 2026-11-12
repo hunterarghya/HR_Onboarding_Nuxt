@@ -8,6 +8,18 @@ describe('GET /api/health', () => {
     expect(res.status).toBe(200)
     expect(res.body).toEqual({ status: 'ok' })
   })
+
+  it('tags every response with a request id', async () => {
+    const res = await api('GET', '/api/health')
+    expect(res.headers.get('x-request-id')).toMatch(/^[0-9a-f-]{36}$/)
+  })
+
+  it('reuses a well-formed incoming request id and ignores a malformed one', async () => {
+    const reused = await api('GET', '/api/health', { headers: { 'x-request-id': 'proxy-id-12345' } })
+    expect(reused.headers.get('x-request-id')).toBe('proxy-id-12345')
+    const replaced = await api('GET', '/api/health', { headers: { 'x-request-id': 'bad id <script>' } })
+    expect(replaced.headers.get('x-request-id')).toMatch(/^[0-9a-f-]{36}$/)
+  })
 })
 
 describe('GET /api/auth/google', () => {
@@ -32,7 +44,7 @@ describe('GET /auth/google/callback', () => {
 })
 
 describe('GET /api/whatsapp/status', () => {
-  it('is public and reports the client state (SEC-02: exposes the QR code)', async () => {
+  it('reports the client state to signed-in users', async () => {
     const res = await api('GET', '/api/whatsapp/status')
     expect(res.status).toBe(200)
     expect(res.body).toEqual({ status: expect.stringMatching(/^(initializing|error)$/), qrCodeData: null })

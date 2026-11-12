@@ -1,16 +1,7 @@
-import jwt from 'jsonwebtoken'
+import { requireUser } from '~~/server/core/auth/current-user'
 
 export default defineEventHandler(async (event) => {
-  const authHeader = getHeader(event, 'authorization')
-  const token = authHeader && authHeader.split(' ')[1]
-  if (!token) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
-
-  let userData: any
-  try {
-    userData = jwt.verify(token, process.env.JWT_SECRET || 'secret')
-  } catch {
-    throw createError({ statusCode: 403, statusMessage: 'Invalid token' })
-  }
+  const userData = requireUser(event)
 
   const body = await readBody(event)
   const { role, event_date, start_time, end_time, num_candidates, extra_candidates, interview_mode, venue_or_link, sync_calendar } = body
@@ -27,7 +18,7 @@ export default defineEventHandler(async (event) => {
 
     if (sync_calendar !== false) {
       try {
-        googleEventId = await createCalendarEvent(userData.tokens, {
+        googleEventId = await createCalendarEvent(userData.tokens ?? {}, {
           role, event_date, start_time, end_time,
           num_candidates: num_candidates || 5,
           extra_candidates: extra_candidates || 0,

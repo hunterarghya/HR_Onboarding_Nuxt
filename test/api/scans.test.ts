@@ -1,12 +1,12 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { api, expectError } from './helpers/http'
-import { itChecksToken, userToken } from './helpers/auth'
+import { itRequiresLogin, userToken } from './helpers/auth'
 import { insertForm, resetDb } from './helpers/db'
 
 beforeAll(resetDb)
 
 describe('POST /api/candidates/scan', () => {
-  itChecksToken('POST', '/api/candidates/scan', {})
+  itRequiresLogin('POST', '/api/candidates/scan', {})
 
   it('completes with 0 candidates when no groups are given', async () => {
     const res = await api('POST', '/api/candidates/scan', { token: userToken(), body: {} })
@@ -27,11 +27,11 @@ describe('POST /api/candidates/scan', () => {
 
 describe('POST /api/candidates/scan-mail', () => {
   // A valid token goes straight to Gmail; that path is covered by the manual checklist.
-  itChecksToken('POST', '/api/candidates/scan-mail', {})
+  itRequiresLogin('POST', '/api/candidates/scan-mail', {})
 })
 
 describe('POST /api/candidates/scan-forms', () => {
-  itChecksToken('POST', '/api/candidates/scan-forms', {})
+  itRequiresLogin('POST', '/api/candidates/scan-forms', {})
 
   it('reports when no forms are configured', async () => {
     const res = await api('POST', '/api/candidates/scan-forms', { token: userToken(), body: {} })

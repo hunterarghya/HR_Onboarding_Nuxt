@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { api, expectError } from './helpers/http'
-import { itChecksToken, userToken } from './helpers/auth'
+import { itRequiresLogin, userToken } from './helpers/auth'
 import { db, insertCandidate, resetDb } from './helpers/db'
 
 beforeAll(resetDb)
@@ -98,7 +98,7 @@ describe('GET /api/candidates/selected/filters', () => {
 })
 
 describe('GET /api/candidates/scan-status', () => {
-  itChecksToken('GET', '/api/candidates/scan-status')
+  itRequiresLogin('GET', '/api/candidates/scan-status')
 
   it('returns the last scan time per source', async () => {
     await db().query(`INSERT INTO scan_timestamps (source_type, source_id, last_scanned_at) VALUES

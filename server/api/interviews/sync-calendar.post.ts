@@ -1,16 +1,7 @@
-import jwt from 'jsonwebtoken'
+import { requireUser } from '~~/server/core/auth/current-user'
 
 export default defineEventHandler(async (event) => {
-  const authHeader = getHeader(event, 'authorization')
-  const token = authHeader && authHeader.split(' ')[1]
-  if (!token) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
-
-  let userData: any
-  try {
-    userData = jwt.verify(token, process.env.JWT_SECRET || 'secret')
-  } catch {
-    throw createError({ statusCode: 403, statusMessage: 'Invalid token' })
-  }
+  const userData = requireUser(event)
 
   const pool = usePool()
 
@@ -29,7 +20,7 @@ export default defineEventHandler(async (event) => {
     }
 
     console.log(`[Sync] Fetching calendar events from Google Calendar API...`)
-    const calendarEvents = await fetchRecentCalendarEvents(userData.tokens)
+    const calendarEvents = await fetchRecentCalendarEvents(userData.tokens ?? {})
     console.log(`[Sync] ✅ Found ${calendarEvents.length} calendar events from Google`)
 
     calendarEvents.forEach((ev: any, i: number) => {

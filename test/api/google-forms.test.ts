@@ -1,12 +1,12 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { api, expectError } from './helpers/http'
-import { itChecksToken, userToken } from './helpers/auth'
+import { itRequiresLogin, userToken } from './helpers/auth'
 import { insertForm, insertJob, resetDb } from './helpers/db'
 
 beforeAll(resetDb)
 
 describe('GET /api/google-forms', () => {
-  itChecksToken('GET', '/api/google-forms')
+  itRequiresLogin('GET', '/api/google-forms')
 
   it('lists forms with their job role name', async () => {
     const job = await insertJob({ role: 'SRE' })
@@ -24,7 +24,7 @@ describe('GET /api/google-forms', () => {
 })
 
 describe('POST /api/google-forms/create', () => {
-  itChecksToken('POST', '/api/google-forms/create', { jobRoleId: 1 })
+  itRequiresLogin('POST', '/api/google-forms/create', { jobRoleId: 1 })
 
   it('requires jobRoleId (400)', async () => {
     expectError(await api('POST', '/api/google-forms/create', { token: userToken(), body: {} }), 400, 'jobRoleId is required')
@@ -49,7 +49,7 @@ describe('POST /api/google-forms/create', () => {
 })
 
 describe('DELETE /api/google-forms/:id', () => {
-  itChecksToken('DELETE', '/api/google-forms/1')
+  itRequiresLogin('DELETE', '/api/google-forms/1')
 
   it('deletes by database id', async () => {
     const form = await insertForm()

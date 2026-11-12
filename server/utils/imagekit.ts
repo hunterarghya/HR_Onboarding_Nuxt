@@ -1,9 +1,10 @@
 import ImageKit from 'imagekit'
+import { config } from '~~/server/config/env'
 
 const imagekit = new ImageKit({
-  publicKey: process.env.IMAGEKIT_PUBLIC_KEY || '',
-  privateKey: process.env.IMAGEKIT_PRIVATE_KEY || '',
-  urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT || ''
+  publicKey: config.imagekit.publicKey,
+  privateKey: config.imagekit.privateKey,
+  urlEndpoint: config.imagekit.urlEndpoint
 })
 
 /**

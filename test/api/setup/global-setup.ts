@@ -107,7 +107,7 @@ export default async function setup(project: TestProject) {
     GOOGLE_REDIRECT_URI: `${baseURL}/auth/google/callback`,
     QDRANT_URL: UNREACHABLE_URL,
     OLLAMA_BASE_URL: UNREACHABLE_URL,
-    // Required just to boot today (BUG-21); uploads never happen in the smoke suite.
+    // Required by the config module; uploads never happen in the smoke suite.
     IMAGEKIT_PUBLIC_KEY: 'smoke-test-public-key',
     IMAGEKIT_PRIVATE_KEY: 'smoke-test-private-key',
     IMAGEKIT_URL_ENDPOINT: 'https://ik.imagekit.io/smoke-test',

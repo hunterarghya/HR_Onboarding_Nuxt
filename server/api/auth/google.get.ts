@@ -1,4 +1,5 @@
 import { google } from 'googleapis'
+import { config } from '~~/server/config/env'
 
 const SCOPES = [
   'https://www.googleapis.com/auth/userinfo.profile',
@@ -13,9 +14,9 @@ const SCOPES = [
 
 export default defineEventHandler(() => {
   const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
+    config.google.clientId,
+    config.google.clientSecret,
+    config.google.redirectUri
   )
 
   const url = oauth2Client.generateAuthUrl({
