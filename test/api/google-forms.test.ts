@@ -40,11 +40,11 @@ describe('POST /api/google-forms/create', () => {
     expectError(await api('POST', '/api/google-forms/create', { token: userToken(), body: { jobRoleId: job.id } }), 409)
   })
 
-  it('returns 500 with details when Google rejects the call', async () => {
+  it('returns 500 when Google rejects the call, without Google\'s own error text (SEC-09)', async () => {
     const job = await insertJob()
     const res = await api('POST', '/api/google-forms/create', { token: userToken(), body: { jobRoleId: job.id } })
     expectError(res, 500, 'Failed to create Google Form')
-    expect(res.body.data.details).toEqual(expect.any(String))
+    expect(res.body.data).toMatchObject({ code: 'GOOGLE_FORM_FAILED', details: null, requestId: expect.any(String) })
   })
 })
 

@@ -51,8 +51,10 @@ export const googleFormsService = {
     try {
       return await createAndSaveForm(auth, job)
     } catch (err) {
+      if (err instanceof AppError) throw err // e.g. a parallel request saved this job's form first (409)
+      // Google's own message stays in the log, not in the response (SEC-09); the request id links the two
       console.error('--- [GoogleForms] Error creating form ---', err)
-      throw new AppError(500, 'GOOGLE_FORM_FAILED', 'Failed to create Google Form', (err as Error).message)
+      throw new AppError(500, 'GOOGLE_FORM_FAILED', 'Failed to create Google Form')
     }
   },
 
