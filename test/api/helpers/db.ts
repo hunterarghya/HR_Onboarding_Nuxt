@@ -26,7 +26,7 @@ export const resetDb = async () => {
 // Fixtures are inserted directly so tests don't depend on Google, Qdrant or the embedding model.
 
 export const insertJob = async (fields: Record<string, unknown> = {}) => {
-  const row = { role: 'Backend Developer', salary: '1200000', skills: 'node, sql', experience: '2 years', location: 'Remote', ...fields }
+  const row = { role: 'Backend Developer', salary_min: 1000000, salary_max: 1200000, skills: 'node, sql', experience_min_years: 2, location: 'Remote', ...fields }
   const cols = Object.keys(row)
   const { rows } = await db().query(
     `INSERT INTO job_roles (${cols.join(', ')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(', ')}) RETURNING *`,

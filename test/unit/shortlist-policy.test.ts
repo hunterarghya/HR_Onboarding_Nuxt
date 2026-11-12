@@ -12,7 +12,7 @@ describe('shortlist policy', () => {
     expect(decide({ role: 'QA', shortlist_mode: 'auto', min_score: 70 }, 69)).toMatchObject({ accept: false, minScoreRequired: 70 })
   })
 
-  it('treats min_score 0 as 60 (BUG-03, unchanged)', () => {
-    expect(decide({ role: 'QA', shortlist_mode: 'auto', min_score: 0 }, 59)).toMatchObject({ accept: false, minScoreRequired: 60 })
+  it('keeps a min_score of 0: every resume qualifies (BUG-03 fixed)', () => {
+    expect(decide({ role: 'QA', shortlist_mode: 'auto', min_score: 0 }, 5)).toMatchObject({ accept: true, status: 'shortlisted', minScoreRequired: 0 })
   })
 })

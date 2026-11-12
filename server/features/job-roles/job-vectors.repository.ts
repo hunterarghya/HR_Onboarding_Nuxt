@@ -9,7 +9,10 @@ import { getQdrant } from '~~/server/integrations/qdrant/qdrant.client'
 const COLLECTION_NAME = config.qdrant.collection
 const VECTOR_SIZE = config.qdrant.vectorSize
 
-type JobForVector = Pick<JobRoleRow, 'id' | 'role' | 'skills' | 'qualification' | 'experience' | 'location' | 'shortlist_mode' | 'min_score' | 'criteria_weights'>
+type JobForVector = Pick<JobRoleRow, 'id' | 'role' | 'skills' | 'qualification' | 'experience_min_years' | 'location' | 'shortlist_mode' | 'min_score' | 'criteria_weights'>
+
+/** "3+ years experience", the wording the embedding model compares resumes against */
+const experienceText = (years: number | null) => (years == null ? '' : `${years}+ years experience`)
 
 export const jobVectorsRepository = {
   async ensureCollection(): Promise<void> {
@@ -37,14 +40,14 @@ export const jobVectorsRepository = {
   /** Embeds the job's text (full / skills / experience) and stores it under the job id. */
   async upsert(job: JobForVector): Promise<void> {
     try {
-      const fullText = `${job.role}. ${job.skills || ''}. ${job.qualification || ''}. ${job.experience || ''}. ${job.location || ''}`
+      const fullText = `${job.role}. ${job.skills || ''}. ${job.qualification || ''}. ${experienceText(job.experience_min_years)}. ${job.location || ''}`
       const skillsText = job.skills || job.role
-      const experienceText = job.experience || 'Any experience'
+      const expText = experienceText(job.experience_min_years) || 'Any experience'
 
       const [fullVec, skillsVec, expVec] = await Promise.all([
         embed(fullText),
         embed(skillsText),
-        embed(experienceText)
+        embed(expText)
       ])
 
       await getQdrant().upsert(COLLECTION_NAME, {
@@ -55,7 +58,7 @@ export const jobVectorsRepository = {
           payload: {
             role: job.role,
             skills: job.skills,
-            experience: job.experience,
+            experience_min_years: job.experience_min_years,
             shortlist_mode: job.shortlist_mode,
             min_score: job.min_score,
             criteria_weights: job.criteria_weights || null

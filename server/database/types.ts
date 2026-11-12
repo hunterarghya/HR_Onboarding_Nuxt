@@ -4,15 +4,17 @@
 export interface JobRoleRow {
   id: number
   role: string
-  salary: string | null
+  /** annual amounts */
+  salary_min: number | null
+  salary_max: number | null
   qualification: string | null
   skills: string | null
-  experience: string | null
+  experience_min_years: number | null
   location: string | null
-  shortlist_mode: string | null
+  shortlist_mode: 'manual' | 'auto'
   deadline: Date | null
-  min_score: number | null
-  criteria_weights: Record<string, number> | null
+  min_score: number
+  criteria_weights: Record<string, number>
   created_at: Date
 }
 

@@ -1,6 +1,10 @@
 import pg from 'pg'
 import { config } from '~~/server/config/env'
 
+// NUMERIC columns (salaries, CTC, years of experience) come back as numbers, not strings.
+// They're far below 2^53, so nothing is lost. COUNT(*) (BIGINT) is left as a string.
+pg.types.setTypeParser(pg.types.builtins.NUMERIC, value => parseFloat(value))
+
 let pool: pg.Pool | null = null
 
 /** Anything that can run a query: the pool itself, or a client inside a transaction. */

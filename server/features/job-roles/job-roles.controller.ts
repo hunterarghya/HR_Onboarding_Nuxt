@@ -3,7 +3,7 @@ import { requireUser } from '~~/server/core/auth/current-user'
 import { defineApiHandler } from '~~/server/core/http/define-api-handler'
 import { parseBody, parseParams } from '~~/server/core/http/validate'
 import { googleAuthService } from '../auth/google-auth.service'
-import { CreateJobRoleBody, JobIdParams, NO_FIELDS_MESSAGE, UpdateJobRoleBody } from './job-roles.dto'
+import { CreateJobRoleBody, JobIdParams, UpdateJobRoleBody } from './job-roles.dto'
 import { jobRolesService } from './job-roles.service'
 
 export const jobRolesController = {
@@ -19,7 +19,7 @@ export const jobRolesController = {
 
   update: defineApiHandler(async (event) => {
     const { id } = parseParams(event, JobIdParams)
-    return jobRolesService.update(id, await parseBody(event, UpdateJobRoleBody, NO_FIELDS_MESSAGE))
+    return jobRolesService.update(id, await parseBody(event, UpdateJobRoleBody))
   }),
 
   remove: defineApiHandler(async (event) => {

@@ -2,7 +2,7 @@ import { ConflictError, NotFoundError, ValidationError } from '~~/server/core/er
 import { enqueue } from '~~/server/core/tasks/queues'
 import type { GoogleAuthClient } from '~~/server/integrations/google/oauth'
 import { googleFormsService } from '../google-forms/google-forms.service'
-import { NO_FIELDS_MESSAGE, type CreateJobRoleInput, type UpdateJobRoleInput } from './job-roles.dto'
+import type { CreateJobRoleInput, UpdateJobRoleInput } from './job-roles.dto'
 import { jobRolesRepository, UPDATABLE_FIELDS } from './job-roles.repository'
 import { jobVectorsRepository } from './job-vectors.repository'
 
@@ -46,8 +46,9 @@ export const jobRolesService = {
   },
 
   async update(id: number, patch: UpdateJobRoleInput) {
+    // the DTO is strict, so every key is an updatable column; the filter keeps the SQL safe regardless
     const fields = Object.keys(patch).filter(f => (UPDATABLE_FIELDS as readonly string[]).includes(f))
-    if (fields.length === 0) throw new ValidationError(null, NO_FIELDS_MESSAGE)
+    if (fields.length === 0) throw new ValidationError(null, 'No valid fields provided for update')
 
     const job = await jobRolesRepository.update(id, patch, fields)
     if (!job) throw new NotFoundError('Job role')

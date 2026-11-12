@@ -5,10 +5,11 @@ import type { CreateJobRoleInput, UpdateJobRoleInput } from './job-roles.dto'
 /** Columns a PATCH may change; anything else in the body is ignored. */
 export const UPDATABLE_FIELDS = [
   'role',
-  'salary',
+  'salary_min',
+  'salary_max',
   'qualification',
   'skills',
-  'experience',
+  'experience_min_years',
   'location',
   'shortlist_mode',
   'deadline',
@@ -63,9 +64,11 @@ export const jobRolesRepository = {
 
   async insert(input: CreateJobRoleInput, db: Queryable = getPool()) {
     const { rows } = await db.query<JobRoleRow>(
-      'INSERT INTO job_roles (role, salary, qualification, skills, experience, location, shortlist_mode, deadline, min_score, criteria_weights) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *',
-      [input.role, input.salary, input.qualification, input.skills, input.experience, input.location,
-        input.shortlist_mode || 'manual', input.deadline, input.min_score || 60, JSON.stringify(input.criteria_weights || {})]
+      `INSERT INTO job_roles (role, salary_min, salary_max, qualification, skills, experience_min_years, location, shortlist_mode, deadline, min_score, criteria_weights)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      // defaults (manual, 60, {}) come from the DTO; ?? keeps a legitimate min_score of 0 (BUG-03)
+      [input.role, input.salary_min, input.salary_max, input.qualification, input.skills, input.experience_min_years, input.location,
+        input.shortlist_mode, input.deadline, input.min_score, JSON.stringify(input.criteria_weights)]
     )
     return rows[0]!
   },
@@ -73,7 +76,7 @@ export const jobRolesRepository = {
   /** Updates only the given allowed columns; null if the job doesn't exist. */
   async update(id: number, patch: UpdateJobRoleInput, fields: readonly string[], db: Queryable = getPool()) {
     const values = fields.map((field) => {
-      const value = patch[field]
+      const value = patch[field as keyof UpdateJobRoleInput]
       // JSONB column: send objects as JSON text
       return field === 'criteria_weights' && value && typeof value === 'object' ? JSON.stringify(value) : value
     })

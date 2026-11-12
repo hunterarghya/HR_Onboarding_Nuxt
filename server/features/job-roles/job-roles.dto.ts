@@ -1,28 +1,49 @@
 import { z } from 'zod'
 
-// Phase 3: accepts what the API accepts today (free-text salary, experience …). Only inputs that used
-// to crash become 400s. Numeric salary/experience and strict enums come in the validation phase (VAL-01/02).
+// Strict: unknown fields are rejected, every field has a type and a range (VAL-01/02).
+// Number inputs send '' when emptied, so '' means "not set" for optional numbers and text.
 
-const text = z.union([z.string(), z.number()]).nullish()
+const emptyToNull = <T>(v: T | '' | null | undefined) => (v === '' || v === undefined ? null : v)
+
+const optionalText = (max: number) => z.string().trim().max(max).nullish().transform(v => v || null)
+const optionalNumber = (schema: z.ZodNumber) => z.union([schema, z.literal('')]).nullish().transform(emptyToNull)
+
+export const CRITERIA = ['skills', 'projects', 'experience'] as const
+
+const fields = {
+  role: z.string().trim().min(1).max(255),
+  /** Annual amounts, in the company's currency */
+  salary_min: optionalNumber(z.number().nonnegative().max(1e12)),
+  salary_max: optionalNumber(z.number().nonnegative().max(1e12)),
+  experience_min_years: optionalNumber(z.number().min(0).max(60)),
+  qualification: optionalText(2000),
+  skills: optionalText(2000),
+  location: optionalText(255),
+  shortlist_mode: z.enum(['manual', 'auto']),
+  // datetime-local inputs send "2030-01-31T17:00"; '' means no deadline (was a 500: VAL-01)
+  deadline: z.union([z.iso.datetime({ offset: true }), z.iso.datetime({ local: true }), z.iso.date(), z.literal('')])
+    .nullish().transform(v => v || null),
+  min_score: z.number().int().min(0).max(100),
+  // weight per resume section used for scoring; leaving a section out means it isn't weighted
+  criteria_weights: z.partialRecord(z.enum(CRITERIA), z.number().int().min(0).max(100))
+}
+
+const salaryInOrder = (v: { salary_min?: number | null, salary_max?: number | null }) =>
+  v.salary_min == null || v.salary_max == null || v.salary_min <= v.salary_max
+const SALARY_ORDER = { message: 'salary_min must not be greater than salary_max', path: ['salary_max'] }
 
 export const JobIdParams = z.object({ id: z.coerce.number().int().positive() })
 
 export const CreateJobRoleBody = z.object({
-  role: z.union([z.string().min(1), z.number()]),
-  salary: text,
-  qualification: text,
-  skills: text,
-  experience: text,
-  location: text,
-  shortlist_mode: z.string().nullish(),
-  deadline: z.string().nullish(),
-  min_score: z.union([z.number(), z.string()]).nullish(),
-  criteria_weights: z.record(z.string(), z.unknown()).nullish()
-})
+  ...fields,
+  shortlist_mode: fields.shortlist_mode.default('manual'),
+  min_score: fields.min_score.default(60),
+  criteria_weights: fields.criteria_weights.default({})
+}).strict().refine(salaryInOrder, SALARY_ORDER)
 
-/** Any JSON object; only the allowed columns are applied. */
-export const UpdateJobRoleBody = z.record(z.string(), z.unknown())
-export const NO_FIELDS_MESSAGE = 'No valid fields provided for update'
+export const UpdateJobRoleBody = z.object(fields).partial().strict()
+  .refine(v => Object.keys(v).length > 0, { message: 'No valid fields provided for update' })
+  .refine(salaryInOrder, SALARY_ORDER)
 
 export type CreateJobRoleInput = z.infer<typeof CreateJobRoleBody>
 export type UpdateJobRoleInput = z.infer<typeof UpdateJobRoleBody>

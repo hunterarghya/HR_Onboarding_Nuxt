@@ -1,13 +1,15 @@
 export interface Job {
   id: number
   role: string
-  salary: string
+  /** annual amounts */
+  salary_min: number | null
+  salary_max: number | null
   qualification: string
   skills: string
-  experience: string
+  experience_min_years: number | null
   location: string
   shortlist_mode: 'manual' | 'auto'
-  deadline: string
+  deadline: string | null
   min_score: number
   criteria_weights: Record<string, number>
   created_at: string
