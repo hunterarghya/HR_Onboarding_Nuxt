@@ -30,6 +30,11 @@ export default defineNuxtConfig({
 
   compatibilityDate: '2024-07-11',
 
+  nitro: {
+    // SQL migrations ship inside the server bundle (read by server/database/migration-files.ts)
+    serverAssets: [{ baseName: 'migrations', dir: 'database/migrations' }]
+  },
+
   eslint: {
     config: {
       stylistic: {
