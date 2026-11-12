@@ -1,4 +1,5 @@
 import { requireUser } from '~~/server/core/auth/current-user'
+import { getAuthClientFromSession } from '~~/server/core/auth/google-session'
 
 export default defineEventHandler(async (event) => {
   const userData = requireUser(event)
@@ -11,7 +12,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const result = await sendOfferLetters(
-      userData.tokens, userData.email,
+      getAuthClientFromSession(userData), userData.email,
       parseInt(templateId), candidateIds.map((id: any) => parseInt(id))
     )
     return { message: 'Offer letters processed', ...result }

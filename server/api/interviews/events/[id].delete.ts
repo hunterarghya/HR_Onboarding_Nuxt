@@ -1,4 +1,5 @@
 import { requireUser } from '~~/server/core/auth/current-user'
+import { getAuthClientFromSession } from '~~/server/core/auth/google-session'
 
 export default defineEventHandler(async (event) => {
   const userData = requireUser(event)
@@ -16,7 +17,7 @@ export default defineEventHandler(async (event) => {
 
     if (googleEventId) {
       try {
-        await deleteCalendarEvent(userData.tokens ?? {}, googleEventId)
+        await deleteCalendarEvent(getAuthClientFromSession(userData), googleEventId)
       } catch (calErr: any) {
         console.error('--- [Calendar] Delete sync failed:', calErr.message)
       }

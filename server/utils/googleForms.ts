@@ -6,17 +6,7 @@
  */
 
 import { google } from 'googleapis'
-import { config } from '~~/server/config/env'
-
-const getOAuth2Client = (tokens: any) => {
-  const oauth2Client = new google.auth.OAuth2(
-    config.google.clientId,
-    config.google.clientSecret,
-    config.google.redirectUri
-  )
-  oauth2Client.setCredentials(tokens)
-  return oauth2Client
-}
+import type { GoogleAuthClient } from '~~/server/integrations/google/oauth'
 
 /**
  * Creates a Google Form for a specific job role with standard application fields:
@@ -24,12 +14,11 @@ const getOAuth2Client = (tokens: any) => {
  *
  * Returns the form ID, public URL, and a map of field names → question IDs.
  */
-export const createApplicationForm = async (tokens: any, jobTitle: string): Promise<{
+export const createApplicationForm = async (auth: GoogleAuthClient, jobTitle: string): Promise<{
   formId: string
   formUrl: string
   questionMap: Record<string, string>
 }> => {
-  const auth = getOAuth2Client(tokens)
   const forms = google.forms({ version: 'v1', auth })
 
   console.log(`--- [GoogleForms] Creating form for: ${jobTitle} ---`)
@@ -117,11 +106,10 @@ export const extractDriveFileId = (url: string): string | null => {
  * Fetches responses from a Google Form, optionally filtered by timestamp.
  */
 export const fetchFormResponses = async (
-  tokens: any,
+  auth: GoogleAuthClient,
   formId: string,
   sinceTimestamp?: Date | null
 ): Promise<any[]> => {
-  const auth = getOAuth2Client(tokens)
   const forms = google.forms({ version: 'v1', auth })
 
   const params: any = { formId }
@@ -174,8 +162,7 @@ export const extractFileAnswer = (response: any, questionId: string): { fileId: 
  * Downloads a file from Google Drive by file ID.
  * Returns the file content as a base64 string.
  */
-export const downloadDriveFile = async (tokens: any, fileId: string): Promise<string> => {
-  const auth = getOAuth2Client(tokens)
+export const downloadDriveFile = async (auth: GoogleAuthClient, fileId: string): Promise<string> => {
   const drive = google.drive({ version: 'v3', auth })
 
   console.log(`--- [GoogleForms] Downloading file ${fileId} from Drive ---`)

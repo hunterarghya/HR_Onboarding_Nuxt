@@ -1,21 +1,15 @@
 import { google } from 'googleapis'
-import { config } from '~~/server/config/env'
+import type { GoogleAuthClient } from '~~/server/integrations/google/oauth'
 
-const getGmailService = (tokens: any) => {
-  const oauth2Client = new google.auth.OAuth2(
-    config.google.clientId,
-    config.google.clientSecret,
-    config.google.redirectUri
-  )
-  oauth2Client.setCredentials(tokens)
-  return google.gmail({ version: 'v1', auth: oauth2Client })
+const getGmailService = (auth: GoogleAuthClient) => {
+  return google.gmail({ version: 'v1', auth })
 }
 
 /**
  * Fetches emails from the inbox, optionally only those after a given date.
  */
-export const fetchEmails = async (tokens: any, sinceDate: Date | null = null) => {
-  const gmail = getGmailService(tokens)
+export const fetchEmails = async (auth: GoogleAuthClient, sinceDate: Date | null = null) => {
+  const gmail = getGmailService(auth)
 
   const queryParts = ['has:attachment']
   if (sinceDate) {
@@ -50,8 +44,8 @@ export const fetchEmails = async (tokens: any, sinceDate: Date | null = null) =>
 /**
  * Extracts raw attachments (PDFs) from a message parts.
  */
-export const getAttachments = async (tokens: any, messageId: string, parts: any[]): Promise<Array<{ filename: string, data: string }>> => {
-  const gmail = getGmailService(tokens)
+export const getAttachments = async (auth: GoogleAuthClient, messageId: string, parts: any[]): Promise<Array<{ filename: string, data: string }>> => {
+  const gmail = getGmailService(auth)
   const attachments: Array<{ filename: string, data: string }> = []
 
   for (const part of parts) {
@@ -69,7 +63,7 @@ export const getAttachments = async (tokens: any, messageId: string, parts: any[
         data: response.data.data! // Raw base64 from Gmail API
       })
     } else if (part.parts) {
-      const nested = await getAttachments(tokens, messageId, part.parts)
+      const nested = await getAttachments(auth, messageId, part.parts)
       attachments.push(...nested)
     }
   }

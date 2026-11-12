@@ -1,4 +1,5 @@
 import { requireUser } from '~~/server/core/auth/current-user'
+import { getAuthClientFromSession } from '~~/server/core/auth/google-session'
 
 let isScanningForms = false
 
@@ -9,7 +10,7 @@ export default defineEventHandler(async (event) => {
 
   const userData = requireUser(event)
 
-  const tokens = userData.tokens
+  const auth = getAuthClientFromSession(userData)
   isScanningForms = true
   const pool = usePool()
 
@@ -54,7 +55,7 @@ export default defineEventHandler(async (event) => {
         console.log(`--- [Forms Scanner] Form ${formId} (${form.form_title}) last scan: ${lastScan ? lastScan.toISOString() : 'NEVER'} ---`)
 
         // Fetch responses since last scan
-        const responses = await fetchFormResponses(tokens, formId, lastScan)
+        const responses = await fetchFormResponses(auth, formId, lastScan)
 
         for (const response of responses) {
           try {
@@ -72,7 +73,7 @@ export default defineEventHandler(async (event) => {
             const fileInfo = extractFileAnswer(response, resumeQuestionId)
             if (fileInfo?.fileId) {
               try {
-                base64Data = await downloadDriveFile(tokens, fileInfo.fileId)
+                base64Data = await downloadDriveFile(auth, fileInfo.fileId)
                 fileName = fileInfo.fileName || 'resume.pdf'
               } catch (dErr: any) {
                 console.error(`--- [Forms Scanner] Drive file download error: ${dErr.message} ---`)
@@ -86,7 +87,7 @@ export default defineEventHandler(async (event) => {
                 const driveFileId = extractDriveFileId(resumeLink)
                 if (driveFileId) {
                   try {
-                    base64Data = await downloadDriveFile(tokens, driveFileId)
+                    base64Data = await downloadDriveFile(auth, driveFileId)
                     fileName = `${driveFileId}.pdf`
                   } catch (dErr: any) {
                     console.error(`--- [Forms Scanner] Drive link download error: ${dErr.message} ---`)

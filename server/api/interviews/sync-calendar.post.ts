@@ -1,4 +1,5 @@
 import { requireUser } from '~~/server/core/auth/current-user'
+import { getAuthClientFromSession } from '~~/server/core/auth/google-session'
 
 export default defineEventHandler(async (event) => {
   const userData = requireUser(event)
@@ -20,7 +21,7 @@ export default defineEventHandler(async (event) => {
     }
 
     console.log(`[Sync] Fetching calendar events from Google Calendar API...`)
-    const calendarEvents = await fetchRecentCalendarEvents(userData.tokens ?? {})
+    const calendarEvents = await fetchRecentCalendarEvents(getAuthClientFromSession(userData))
     console.log(`[Sync] ✅ Found ${calendarEvents.length} calendar events from Google`)
 
     calendarEvents.forEach((ev: any, i: number) => {

@@ -1,28 +1,18 @@
-import { google } from 'googleapis'
-import { config } from '~~/server/config/env'
 import { signSession } from '~~/server/core/auth/session-token'
+import { exchangeCode, getUserInfo } from '~~/server/integrations/google/oauth'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const code = query.code as string
 
   try {
-    const oauth2Client = new google.auth.OAuth2(
-      config.google.clientId,
-      config.google.clientSecret,
-      config.google.redirectUri
-    )
+    const { client, tokens } = await exchangeCode(code)
+    const userInfo = await getUserInfo(client)
 
-    const { tokens } = await oauth2Client.getToken(code)
-    oauth2Client.setCredentials(tokens)
-
-    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client })
-    const userInfo = await oauth2.userinfo.get()
-
-    if (!userInfo.data.email) throw new Error('Google account returned no email')
+    if (!userInfo.email) throw new Error('Google account returned no email')
     const token = signSession({
-      email: userInfo.data.email,
-      name: userInfo.data.name ?? undefined,
+      email: userInfo.email,
+      name: userInfo.name ?? undefined,
       tokens // Store tokens to access Gmail API later
     })
 

@@ -1,4 +1,5 @@
 import { requireUser } from '~~/server/core/auth/current-user'
+import { getAuthClientFromSession } from '~~/server/core/auth/google-session'
 
 export default defineEventHandler(async (event) => {
   const userData = requireUser(event)
@@ -29,7 +30,7 @@ export default defineEventHandler(async (event) => {
   try {
     console.log(`--- [GoogleForms] Creating form for job role: ${job.role} (id: ${jobRoleId}) ---`)
 
-    const { formId, formUrl, questionMap } = await createApplicationForm(userData.tokens, job.role)
+    const { formId, formUrl, questionMap } = await createApplicationForm(getAuthClientFromSession(userData), job.role)
 
     // Save to database
     await pool.query(

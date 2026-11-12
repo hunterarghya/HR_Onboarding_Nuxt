@@ -1,11 +1,5 @@
 import { google } from 'googleapis'
-import { config } from '~~/server/config/env'
-
-interface CalendarTokens {
-  access_token?: string
-  refresh_token?: string
-  [key: string]: any
-}
+import type { GoogleAuthClient } from '~~/server/integrations/google/oauth'
 
 interface EventData {
   role: string
@@ -21,21 +15,15 @@ interface EventData {
 /**
  * Creates an authenticated Google Calendar service instance.
  */
-export const getCalendarService = (tokens: CalendarTokens) => {
-  const oauth2Client = new google.auth.OAuth2(
-    config.google.clientId,
-    config.google.clientSecret,
-    config.google.redirectUri
-  )
-  oauth2Client.setCredentials(tokens)
-  return google.calendar({ version: 'v3', auth: oauth2Client })
+export const getCalendarService = (auth: GoogleAuthClient) => {
+  return google.calendar({ version: 'v3', auth })
 }
 
 /**
  * Creates an interview event on Google Calendar.
  */
-export const createCalendarEvent = async (tokens: CalendarTokens, eventData: EventData): Promise<string> => {
-  const calendar = getCalendarService(tokens)
+export const createCalendarEvent = async (auth: GoogleAuthClient, eventData: EventData): Promise<string> => {
+  const calendar = getCalendarService(auth)
 
   const startDateTime = `${eventData.event_date}T${eventData.start_time}:00`
   const endDateTime = `${eventData.event_date}T${eventData.end_time}:00`
@@ -101,9 +89,9 @@ export const createCalendarEvent = async (tokens: CalendarTokens, eventData: Eve
 /**
  * Deletes a Google Calendar event.
  */
-export const deleteCalendarEvent = async (tokens: CalendarTokens, googleEventId: string): Promise<void> => {
+export const deleteCalendarEvent = async (auth: GoogleAuthClient, googleEventId: string): Promise<void> => {
   if (!googleEventId) return
-  const calendar = getCalendarService(tokens)
+  const calendar = getCalendarService(auth)
   try {
     await calendar.events.delete({
       calendarId: 'primary',
@@ -118,8 +106,8 @@ export const deleteCalendarEvent = async (tokens: CalendarTokens, googleEventId:
 /**
  * Fetches recent calendar events (last 7 days to next 60 days).
  */
-export const fetchRecentCalendarEvents = async (tokens: CalendarTokens) => {
-  const calendar = getCalendarService(tokens)
+export const fetchRecentCalendarEvents = async (auth: GoogleAuthClient) => {
+  const calendar = getCalendarService(auth)
 
   // Debug: List all calendars first to see what we have access to
   try {
@@ -158,8 +146,8 @@ export const fetchRecentCalendarEvents = async (tokens: CalendarTokens) => {
 /**
  * Registers a webhook (watch) on the primary calendar for push notifications.
  */
-export const registerCalendarWebhook = async (tokens: CalendarTokens, webhookUrl: string) => {
-  const calendar = getCalendarService(tokens)
+export const registerCalendarWebhook = async (auth: GoogleAuthClient, webhookUrl: string) => {
+  const calendar = getCalendarService(auth)
 
   const channelId = `hr-interview-${Date.now()}`
   const response = await calendar.events.watch({
