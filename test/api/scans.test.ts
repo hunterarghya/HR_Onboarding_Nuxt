@@ -20,8 +20,8 @@ describe('POST /api/candidates/scan', () => {
     expect(res.body).toEqual({ message: 'WhatsApp scan complete', count: 0 })
   })
 
-  it('crashes with 500 when there is no body (VAL)', async () => {
-    expectError(await api('POST', '/api/candidates/scan', { token: userToken() }), 500)
+  it('rejects a request with no body (400, was a 500 crash)', async () => {
+    expectError(await api('POST', '/api/candidates/scan', { token: userToken() }), 400)
   })
 })
 

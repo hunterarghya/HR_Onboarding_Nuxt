@@ -1,11 +1,11 @@
 /**
- * Vector Matching Service
- * Job descriptions in Qdrant + BAAI/bge-small-en-v1.5 embeddings for resume-to-JD matching.
- * The Qdrant client and the embedding model live in integrations/.
+ * Resume scoring: semantic match of a resume against the job descriptions in Qdrant
+ * (BAAI/bge-small-en-v1.5 embeddings), optionally weighted per section by the job's criteria_weights.
  */
 
+import type { JobRoleRow } from '~~/server/database/types'
 import { embed } from '~~/server/integrations/embeddings/embedder'
-import { jobVectorsRepository } from '~~/server/modules/job-roles/job-vectors.repository'
+import { jobVectorsRepository } from '../../job-roles/job-vectors.repository'
 
 const toScore = (similarity: number): number => {
   return Math.round(Math.min(100, Math.max(0, similarity * 100)))
@@ -26,7 +26,7 @@ const cosineSimilarity = (a: number[], b: number[]): number => {
 export const matchResumeToJobs = async (
   resumeText: string,
   sections: { skills: string, projects: string, experience: string },
-  jobRoles: any[]
+  jobRoles: JobRoleRow[]
 ): Promise<{ target_role: string, score: number }> => {
   try {
     console.log('--- [Vector] Starting Match Process ---')

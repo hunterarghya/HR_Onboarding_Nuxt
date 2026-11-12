@@ -5,6 +5,24 @@ import type { ListCandidatesFilters, ListSelectedFilters } from './candidates.dt
 export type SelectedCandidateRow = Pick<CandidateRow,
   'id' | 'name' | 'email' | 'phone' | 'offered_role' | 'offered_salary' | 'offered_location' | 'joining_date' | 'status' | 'offer_sent'>
 
+export interface ResumeCandidateUpdate {
+  score: number
+  resume_url: string | null
+  applied_through: string
+  current_location: string
+  current_ctc: string
+  status: string
+}
+
+export interface ResumeCandidateInsert extends ResumeCandidateUpdate {
+  name: string
+  email: string
+  phone: string
+  role_applied: string
+  resume_content: string
+  experience_level: string
+}
+
 export interface OfferFields {
   offered_role: unknown
   offered_salary: unknown
@@ -212,6 +230,29 @@ export const candidatesRepository = {
 
     const { rows } = await db.query<{ id: number }>(query, params)
     return rows.map(r => r.id)
+  },
+
+  // ---- Resume intake (ingestion pipeline)
+
+  /** Same person for the same role = same email + role_applied ('N/A' emails collide: DATA-01). */
+  async findIdByEmailAndRole(email: string, role: string, db: Queryable = getPool()) {
+    const { rows } = await db.query<{ id: number }>('SELECT id FROM candidates WHERE email = $1 AND role_applied = $2', [email, role])
+    return rows[0]?.id ?? null
+  },
+
+  async updateFromResume(id: number, c: ResumeCandidateUpdate, db: Queryable = getPool()) {
+    await db.query(
+      `UPDATE candidates SET score = $1, date_applied = NOW(), resume_url = $2, applied_through = $3, current_location = $4, current_ctc = $5, status = $6 WHERE id = $7`,
+      [c.score, c.resume_url, c.applied_through, c.current_location, c.current_ctc, c.status, id]
+    )
+  },
+
+  async insertFromResume(c: ResumeCandidateInsert, db: Queryable = getPool()) {
+    await db.query(
+      `INSERT INTO candidates (name, email, phone, role_applied, resume_content, score, experience_level, status, resume_url, applied_through, current_location, current_ctc)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      [c.name, c.email, c.phone, c.role_applied, c.resume_content, c.score, c.experience_level, c.status, c.resume_url, c.applied_through, c.current_location, c.current_ctc]
+    )
   },
 
   // ---- Offer letters
