@@ -14,6 +14,8 @@ const EnvSchema = z.object({
   REDIS_URL: z.url().default('redis://localhost:6379'),
   // Pause between two emails of a bulk send, to stay well inside Gmail's sending limits
   MAIL_SEND_INTERVAL_MS: z.coerce.number().int().min(0).default(200),
+  // First retry delay of a failed background task; each further retry waits twice as long
+  TASK_RETRY_DELAY_MS: z.coerce.number().int().min(0).default(5_000),
 
   JWT_SECRET: z.string().min(32, 'must be at least 32 characters (e.g. `openssl rand -hex 32`)'),
   // Encrypts Google tokens at rest. Changing it makes stored tokens unreadable (users sign in again).
@@ -69,6 +71,7 @@ export const loadConfig = (source: Record<string, string | undefined>) => {
     env: env.NODE_ENV,
     app: { role: env.APP_ROLE },
     redis: { url: env.REDIS_URL },
+    tasks: { retryDelayMs: env.TASK_RETRY_DELAY_MS },
     mail: { sendIntervalMs: env.MAIL_SEND_INTERVAL_MS },
     db: { url: env.DATABASE_URL },
     auth: {

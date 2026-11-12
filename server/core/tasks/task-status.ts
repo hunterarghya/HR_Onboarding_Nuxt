@@ -27,8 +27,14 @@ const toState = (bullState: string): TaskStatus['state'] => {
   return 'queued' // waiting, delayed (between retries), prioritized, waiting-children
 }
 
-export const toTaskStatus = async (job: Job): Promise<TaskStatus> => {
-  const state = toState(await job.getState())
+/** `refetch` reloads the same job; used when it finished between being fetched and inspected. */
+export const toTaskStatus = async (fetched: Job, refetch: () => Promise<Job | null>): Promise<TaskStatus> => {
+  const state = toState(await fetched.getState())
+  // The job may have finished between being fetched and asked for its state: re-read it so the
+  // result / error match the state
+  const job = state === 'completed' || state === 'failed'
+    ? (await refetch()) ?? fetched
+    : fetched
   const progress = typeof job.progress === 'object' && job.progress !== null ? job.progress as TaskProgress : null
   return {
     id: job.id!,

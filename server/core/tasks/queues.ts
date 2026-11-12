@@ -1,4 +1,5 @@
 import { Queue, type Job } from 'bullmq'
+import { config } from '~~/server/config/env'
 import { ConflictError } from '../errors/app-error'
 import { redisConnection } from './connection'
 
@@ -37,21 +38,21 @@ export const QUEUE_OF: Record<TaskName, QueueName> = {
   'vectors.resyncAll': 'background'
 }
 
-// Retried up to 3 times (5 s, 10 s, 20 s apart). Finished tasks are kept a while so the UI and
-// people debugging can still read their result.
-const DEFAULT_JOB_OPTIONS = {
+// Up to 3 attempts, retried after TASK_RETRY_DELAY_MS, then twice that (5 s, 10 s by default).
+// Finished tasks are kept a while so the UI and people debugging can still read their result.
+const defaultJobOptions = () => ({
   attempts: 3,
-  backoff: { type: 'exponential', delay: 5_000 },
+  backoff: { type: 'exponential', delay: config.tasks.retryDelayMs },
   removeOnComplete: { age: 7 * 24 * 3600 },
   removeOnFail: { age: 30 * 24 * 3600 }
-}
+})
 
 const queues = new Map<QueueName, Queue>()
 
 export const getQueue = (name: QueueName): Queue => {
   let queue = queues.get(name)
   if (!queue) {
-    queue = new Queue(name, { connection: redisConnection(), defaultJobOptions: DEFAULT_JOB_OPTIONS })
+    queue = new Queue(name, { connection: redisConnection(), defaultJobOptions: defaultJobOptions() })
     queues.set(name, queue)
   }
   return queue

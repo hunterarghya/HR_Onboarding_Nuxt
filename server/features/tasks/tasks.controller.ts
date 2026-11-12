@@ -13,6 +13,6 @@ export const tasksController = {
     const { id } = parseParams(event, TaskIdParams)
     const job = await findTask(id)
     if (!job) throw new NotFoundError('Task')
-    return toTaskStatus(job)
+    return toTaskStatus(job, () => findTask(id))
   })
 }
