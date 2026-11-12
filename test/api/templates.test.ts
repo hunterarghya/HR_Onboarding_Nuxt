@@ -130,6 +130,14 @@ describe('POST /api/templates/:id/preview', () => {
 })
 
 describe('POST /api/templates/preview-raw', () => {
+  it('renders the subject as plain text and the body as HTML', async () => {
+    const res = await api('POST', '/api/templates/preview-raw', {
+      body: { subject: '{{role_applied}} at R&D', body: '<p>{{role_applied}}</p>', sampleData: { role_applied: 'Q&A Lead' } }
+    })
+    expect(res.body.subject).toBe('Q&A Lead at R&D') // was "Q&amp;A Lead"
+    expect(res.body.body).toBe('<p>Q&amp;A Lead</p>')
+  })
+
   it('renders an unsaved template', async () => {
     const res = await api('POST', '/api/templates/preview-raw', { body: { subject: 'For {{name}}', body: '<b>{{role_applied}}</b>', type: 'rejection' } })
     expect(res.status).toBe(200)
