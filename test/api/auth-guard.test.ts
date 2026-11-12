@@ -48,6 +48,7 @@ describe('authentication on every route', () => {
   it('leaves the public routes open', async () => {
     expect((await api('GET', '/api/health', { token: null })).status).toBe(200)
     expect((await api('GET', '/api/auth/google', { token: null })).status).toBe(200)
-    expect((await api('POST', '/api/interviews/webhook', { token: null, body: {} })).status).toBe(200)
+    // the webhook is reached without a session; it then checks Google's channel token itself
+    expect((await api('POST', '/api/interviews/webhook', { token: null, body: {} })).body.statusMessage).toBe('Unknown calendar channel')
   })
 })

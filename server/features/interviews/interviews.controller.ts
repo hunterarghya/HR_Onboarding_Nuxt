@@ -1,10 +1,11 @@
-import { setResponseStatus, type H3Event } from 'h3'
+import { getHeader, setResponseStatus, type H3Event } from 'h3'
 import { requireUser } from '~~/server/core/auth/current-user'
 import { defineApiHandler } from '~~/server/core/http/define-api-handler'
 import { parseBody, parseParams } from '~~/server/core/http/validate'
 import { googleAuthService } from '../auth/google-auth.service'
 import { calendarSyncService } from './calendar-sync.service'
-import { AssignCandidatesBody, AutoAssignAllBody, CreateEventBody, EligibleParams, EventIdParams, RegisterWebhookBody } from './interviews.dto'
+import { calendarWebhookService } from './calendar-webhook.service'
+import { AssignCandidatesBody, AutoAssignAllBody, CreateEventBody, EligibleParams, EventIdParams } from './interviews.dto'
 import { interviewAssignmentsService } from './interview-assignments.service'
 import { interviewEventsService } from './interview-events.service'
 
@@ -66,16 +67,13 @@ export const interviewsController = {
     return task
   }),
 
-  registerWebhook: defineApiHandler(async (event) => {
-    const auth = await googleAuth(event)
-    const { webhook_url } = await parseBody(event, RegisterWebhookBody)
-    return calendarSyncService.registerWebhook(auth, webhook_url)
-  }),
+  /** Opens a push channel on the HR's Google Calendar, at PUBLIC_BASE_URL/api/interviews/webhook. */
+  registerWebhook: defineApiHandler(event => calendarWebhookService.register(requireUser(event).id)),
 
-  /** Google Calendar push notifications (public route). Acknowledged only; nothing is processed yet. */
-  calendarWebhook: defineApiHandler((event) => {
-    setResponseStatus(event, 200)
-    console.log('--- [Calendar Webhook] Push notification received ---')
-    return 'OK'
-  })
+  /** Google Calendar push notifications (public route): checked against the channel's secret token. */
+  calendarWebhook: defineApiHandler(event => calendarWebhookService.handleNotification({
+    channelId: getHeader(event, 'x-goog-channel-id'),
+    token: getHeader(event, 'x-goog-channel-token'),
+    resourceState: getHeader(event, 'x-goog-resource-state')
+  }))
 }

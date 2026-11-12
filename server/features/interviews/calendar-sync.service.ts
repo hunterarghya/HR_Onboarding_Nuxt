@@ -1,9 +1,8 @@
 import { extractInterviewEvent } from '~~/server/agents/calendar-event/calendar-event.agent'
 import { config } from '~~/server/config/env'
-import { AppError } from '~~/server/core/errors/app-error'
 import { enqueue } from '~~/server/core/tasks/queues'
 import type { TaskProgress } from '~~/server/core/tasks/task-status'
-import { listEvents, watchEvents } from '~~/server/integrations/google/calendar.client'
+import { listEvents } from '~~/server/integrations/google/calendar.client'
 import type { GoogleAuthClient } from '~~/server/integrations/google/oauth'
 import { googleAuthService } from '../auth/google-auth.service'
 import { jobRolesRepository } from '../job-roles/job-roles.repository'
@@ -113,19 +112,6 @@ export const calendarSyncService = {
       console.error('[Sync] ❌ FATAL ERROR during sync:', err)
       // the task fails with the reason, and is retried
       throw new Error(`Calendar sync failed: ${(err as Error).message}`, { cause: err })
-    }
-  },
-
-  /** Registers a webhook (watch) on the primary calendar for push notifications. */
-  async registerWebhook(auth: GoogleAuthClient, webhookUrl: string) {
-    try {
-      const channelId = `hr-interview-${Date.now()}`
-      const data = await watchEvents(auth, channelId, webhookUrl)
-      console.log(`--- [Calendar] Webhook registered: ${channelId} ---`)
-      return { message: 'Webhook registered', data }
-    } catch (err) {
-      console.error('Error registering webhook:', err)
-      throw new AppError(500, 'WEBHOOK_REGISTER_FAILED', 'Failed to register webhook')
     }
   }
 }

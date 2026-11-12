@@ -48,11 +48,23 @@ export const listEvents = async (auth: GoogleAuthClient, timeMin: Date, timeMax:
   return items
 }
 
-/** Subscribes `address` to push notifications for the primary calendar. */
-export const watchEvents = async (auth: GoogleAuthClient, channelId: string, address: string) => {
+/**
+ * Subscribes `address` to push notifications for the primary calendar. Google sends `token` back with
+ * every notification. Returns Google's id for the watched resource and when the channel expires.
+ */
+export const watchEvents = async (auth: GoogleAuthClient, channelId: string, address: string, token: string) => {
   const response = await calendarFor(auth).events.watch({
     calendarId: 'primary',
-    requestBody: { id: channelId, type: 'web_hook', address }
+    requestBody: { id: channelId, type: 'web_hook', address, token }
   })
-  return response.data
+  return {
+    resourceId: response.data.resourceId!,
+    // milliseconds since the epoch, as a string; Google's default lifetime is a week
+    expiresAt: new Date(Number(response.data.expiration) || Date.now() + 7 * 24 * 3600 * 1000)
+  }
+}
+
+/** Stops a push channel. */
+export const stopChannel = async (auth: GoogleAuthClient, channelId: string, resourceId: string) => {
+  await calendarFor(auth).channels.stop({ requestBody: { id: channelId, resourceId } })
 }

@@ -114,7 +114,7 @@ export default async function setup(project: TestProject) {
     PATH: process.env.PATH,
     SystemRoot: process.env.SystemRoot,
     NODE_ENV: TARGET === 'build' ? 'production' : 'development',
-    TZ: 'UTC', // as in the Docker image; candidate cursors depend on the server timezone
+    TZ: 'UTC', // as in the Docker image
 
     HOST: '127.0.0.1',
     PORT: String(port),
@@ -122,6 +122,7 @@ export default async function setup(project: TestProject) {
     REDIS_URL: TEST_REDIS_URL,
     MAIL_SEND_INTERVAL_MS: '0',
     TASK_RETRY_DELAY_MS: '50',
+    PUBLIC_BASE_URL: 'https://hr.example.com',
     JWT_SECRET: TEST_JWT_SECRET,
     TOKEN_ENCRYPTION_KEY: TEST_TOKEN_ENCRYPTION_KEY,
     ALLOWED_EMAIL_DOMAINS: 'example.com',

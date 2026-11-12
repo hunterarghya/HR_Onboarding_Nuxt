@@ -10,6 +10,7 @@ export interface TaskPayloads {
   'scan.forms': { userId: number, formIds: string[] }
   'scan.whatsapp': { userId: number, groupIds: string[] }
   'calendar.sync': { userId: number }
+  'calendar.renewChannels': Record<string, never>
   'mail.invites': { userId: number, eventId: number, templateId: number }
   'mail.invitesAll': { userId: number, templateId: number }
   'mail.offers': { userId: number, templateId: number, candidateIds: number[] }
@@ -32,6 +33,7 @@ export const QUEUE_OF: Record<TaskName, QueueName> = {
   'scan.forms': 'scans',
   'scan.whatsapp': 'scans',
   'calendar.sync': 'background',
+  'calendar.renewChannels': 'background',
   'mail.invites': 'mail',
   'mail.invitesAll': 'mail',
   'mail.offers': 'mail',
@@ -88,6 +90,14 @@ export const enqueue = async <K extends TaskName>(name: K, payload: TaskPayloads
 
   const job = await queue.add(name, payload, opts.taskId ? { jobId: opts.taskId } : {})
   return { taskId: job.id!, status: 'queued' as const }
+}
+
+/**
+ * Runs a task every `everyMs` (the first run comes right away). Calling it again with the same
+ * schedulerId updates the schedule instead of adding a second one, so every boot can call it.
+ */
+export const schedule = async <K extends TaskName>(name: K, payload: TaskPayloads[K], opts: { schedulerId: string, everyMs: number }) => {
+  await getQueue(QUEUE_OF[name]).upsertJobScheduler(opts.schedulerId, { every: opts.everyMs }, { name, data: payload })
 }
 
 /** Finds a task by id in whichever queue holds it. */

@@ -39,7 +39,4 @@ export const AssignCandidatesBody = z.object({
 
 export const AutoAssignAllBody = z.object({ role: z.string().trim().min(1).max(255) }).strict()
 
-/** Google only calls https addresses. */
-export const RegisterWebhookBody = z.object({ webhook_url: z.url({ protocol: /^https$/ }).max(2000) }).strict()
-
 export type CreateEventInput = z.infer<typeof CreateEventBody>
