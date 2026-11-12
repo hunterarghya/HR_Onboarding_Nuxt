@@ -12,7 +12,19 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'unit',
-          include: ['test/unit/**/*.test.ts']
+          include: ['test/unit/**/*.test.ts'],
+          // Server modules that import config need a valid env; nothing here reaches these services.
+          env: {
+            DATABASE_URL: 'postgresql://unit:unit@127.0.0.1:9/unit_test',
+            JWT_SECRET: 'unit-test-secret-unit-test-secret-0123',
+            GOOGLE_CLIENT_ID: 'unit-client-id',
+            GOOGLE_CLIENT_SECRET: 'unit-client-secret',
+            GOOGLE_REDIRECT_URI: 'http://127.0.0.1:9/auth/google/callback',
+            IMAGEKIT_PUBLIC_KEY: 'unit-public',
+            IMAGEKIT_PRIVATE_KEY: 'unit-private',
+            IMAGEKIT_URL_ENDPOINT: 'https://ik.imagekit.io/unit',
+            OLLAMA_BASE_URL: 'http://127.0.0.1:9'
+          }
         }
       },
       {

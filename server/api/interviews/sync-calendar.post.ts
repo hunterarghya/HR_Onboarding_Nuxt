@@ -1,3 +1,4 @@
+import { extractInterviewEvent } from '~~/server/agents/calendar-event/calendar-event.agent'
 import { requireUser } from '~~/server/core/auth/current-user'
 import { getAuthClientFromSession } from '~~/server/core/auth/google-session'
 
@@ -60,7 +61,7 @@ export default defineEventHandler(async (event) => {
       }
 
       console.log(`[Sync] Sending to AI agent for parsing...`)
-      const parsed = await parseCalendarEvent(calEvent, activeRoles)
+      const parsed = await extractInterviewEvent(calEvent, activeRoles)
 
       if (!parsed) {
         console.log(`[Sync] ⏭️ SKIPPED (agent returned null — not an interview or missing data)`)

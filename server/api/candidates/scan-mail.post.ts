@@ -1,3 +1,4 @@
+import { classifyEmail } from '~~/server/agents/email-classifier/email-classifier.agent'
 import { requireUser } from '~~/server/core/auth/current-user'
 import { getAuthClientFromSession } from '~~/server/core/auth/google-session'
 import { getPdfAttachments, listMessagesSince } from '~~/server/integrations/google/gmail.client'
@@ -34,7 +35,7 @@ export default defineEventHandler(async (event) => {
       const bodyText = (email as any).snippet || ''
       const senderEmail = payload.headers.find((h: any) => h.name === 'From')?.value || ''
 
-      const analysis = await analyzeEmail(subject, bodyText)
+      const analysis = await classifyEmail(subject, bodyText)
       if (analysis.isApplication) {
         console.log(`--- [Gmail] ✅ Application Found: "${subject}" ---`)
         const gmailAttachments = await getPdfAttachments(auth, (email as any).id, payload.parts)
