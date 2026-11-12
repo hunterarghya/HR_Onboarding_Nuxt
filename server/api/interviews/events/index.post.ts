@@ -1,4 +1,5 @@
 import { requireUser } from '~~/server/core/auth/current-user'
+import { getAuthClientFromSession } from '~~/server/core/auth/google-session'
 
 export default defineEventHandler(async (event) => {
   const userData = requireUser(event)
@@ -18,7 +19,7 @@ export default defineEventHandler(async (event) => {
 
     if (sync_calendar !== false) {
       try {
-        googleEventId = await createCalendarEvent(userData.tokens ?? {}, {
+        googleEventId = await createCalendarEvent(getAuthClientFromSession(userData), {
           role, event_date, start_time, end_time,
           num_candidates: num_candidates || 5,
           extra_candidates: extra_candidates || 0,

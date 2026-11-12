@@ -1,4 +1,5 @@
 import { requireUser } from '~~/server/core/auth/current-user'
+import { fetchPDFsFromGroup, getWhatsAppStatus } from '~~/server/integrations/whatsapp/whatsapp.client'
 
 let isScanning = false
 

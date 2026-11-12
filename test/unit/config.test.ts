@@ -17,7 +17,7 @@ describe('loadConfig', () => {
     const config = loadConfig(validEnv)
     expect(config.auth.jwtSecret).toBe('x'.repeat(32))
     expect(config.google.redirectUri).toBe(validEnv.GOOGLE_REDIRECT_URI)
-    expect(config.ollama).toEqual({ baseUrl: 'http://localhost:11434', model: 'phi3' })
+    expect(config.llm).toEqual({ provider: 'ollama', timeoutMs: 120_000, ollama: { baseUrl: 'http://localhost:11434', model: 'phi3' }, groq: { apiKey: undefined, model: undefined } })
     expect(config.qdrant.url).toBe('http://localhost:6333')
     expect(config.whatsapp.executablePath).toBeUndefined()
     expect(Object.isFrozen(config)).toBe(true)
@@ -25,7 +25,7 @@ describe('loadConfig', () => {
 
   it('treats empty values as unset', () => {
     const config = loadConfig({ ...validEnv, OLLAMA_MODEL: '', PUPPETEER_EXECUTABLE_PATH: '' })
-    expect(config.ollama.model).toBe('phi3')
+    expect(config.llm.ollama.model).toBe('phi3')
     expect(config.whatsapp.executablePath).toBeUndefined()
   })
 
@@ -37,6 +37,17 @@ describe('loadConfig', () => {
   it.each(['DATABASE_URL', 'JWT_SECRET', 'GOOGLE_CLIENT_ID', 'IMAGEKIT_PUBLIC_KEY'])('requires %s', (key) => {
     const env: Record<string, string | undefined> = { ...validEnv, [key]: undefined }
     expect(() => loadConfig(env)).toThrow(new RegExp(key))
+  })
+
+  it('needs Groq key and model only when Groq is the selected provider', () => {
+    expect(() => loadConfig({ ...validEnv, LLM_PROVIDER: 'groq' })).toThrow(/GROQ_API_KEY[\s\S]*GROQ_MODEL|GROQ_MODEL[\s\S]*GROQ_API_KEY/)
+    const config = loadConfig({ ...validEnv, LLM_PROVIDER: 'groq', GROQ_API_KEY: 'gsk_test', GROQ_MODEL: 'llama-3.3-70b-versatile', LLM_TIMEOUT_MS: '5000' })
+    expect(config.llm).toMatchObject({ provider: 'groq', timeoutMs: 5000, groq: { apiKey: 'gsk_test', model: 'llama-3.3-70b-versatile' } })
+    expect(loadConfig({ ...validEnv, GROQ_API_KEY: '' }).llm.provider).toBe('ollama')
+  })
+
+  it('rejects an unknown LLM provider', () => {
+    expect(() => loadConfig({ ...validEnv, LLM_PROVIDER: 'gpt' })).toThrow(/LLM_PROVIDER/)
   })
 
   it('rejects malformed URLs', () => {

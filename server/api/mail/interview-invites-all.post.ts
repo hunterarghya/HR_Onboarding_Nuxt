@@ -1,4 +1,5 @@
 import { requireUser } from '~~/server/core/auth/current-user'
+import { getAuthClientFromSession } from '~~/server/core/auth/google-session'
 
 export default defineEventHandler(async (event) => {
   const userData = requireUser(event)
@@ -20,7 +21,7 @@ export default defineEventHandler(async (event) => {
 
     for (const evt of eventsResult.rows) {
       const result = await sendInterviewInvites(
-        userData.tokens, userData.email,
+        getAuthClientFromSession(userData), userData.email,
         evt.id, parseInt(templateId)
       )
       totalSent += result.sent

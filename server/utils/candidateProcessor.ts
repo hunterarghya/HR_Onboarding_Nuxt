@@ -5,6 +5,7 @@
  */
 
 import pdf from 'pdf-parse'
+import { uploadResume } from '~~/server/integrations/imagekit/imagekit.client'
 
 export interface RawAttachment {
   filename: string

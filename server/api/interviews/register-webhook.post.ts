@@ -1,4 +1,5 @@
 import { requireUser } from '~~/server/core/auth/current-user'
+import { getAuthClientFromSession } from '~~/server/core/auth/google-session'
 
 export default defineEventHandler(async (event) => {
   const userData = requireUser(event)
@@ -11,7 +12,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const result = await registerCalendarWebhook(userData.tokens ?? {}, webhook_url)
+    const result = await registerCalendarWebhook(getAuthClientFromSession(userData), webhook_url)
     return { message: 'Webhook registered', data: result }
   } catch (err) {
     console.error('Error registering webhook:', err)

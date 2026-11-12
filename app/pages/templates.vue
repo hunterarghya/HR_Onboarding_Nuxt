@@ -154,7 +154,7 @@ const handleSave = async () => {
         return
       }
       await apiFetch(`/templates/${selectedTemplateId.value}`, {
-        method: 'PATCH',
+        method: 'PUT',
         body: payload
       })
       toast.add({ title: 'Template updated', color: 'success' })
