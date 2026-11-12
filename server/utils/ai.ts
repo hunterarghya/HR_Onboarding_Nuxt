@@ -1,8 +1,4 @@
-import axios from 'axios'
-import { config } from '~~/server/config/env'
-
-const OLLAMA_URL = config.ollama.baseUrl
-const MODEL = config.ollama.model
+import { getLlm } from '~~/server/integrations/llm'
 
 /**
  * Matches a resume against a job description using Ollama.
@@ -47,14 +43,9 @@ export const matchResume = async (resumeText: string, activeRolesList: string): 
   `
 
   try {
-    const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
-      model: MODEL,
-      prompt: prompt,
-      stream: false,
-      format: 'json'
-    })
+    const raw = await getLlm().generateJson(prompt)
 
-    const result = JSON.parse(response.data.response)
+    const result = JSON.parse(raw)
     console.log('AI Matching Result:', result)
     return result
   } catch (err) {
@@ -85,15 +76,10 @@ export const analyzeEmail = async (emailSubject: string, emailBody: string): Pro
   `
 
   try {
-    const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
-      model: MODEL,
-      prompt: prompt,
-      stream: false,
-      format: 'json'
-    })
+    const raw = await getLlm().generateJson(prompt)
 
-    console.log(`Raw AI Response (Email Analysis):`, response.data.response)
-    return JSON.parse(response.data.response)
+    console.log(`Raw AI Response (Email Analysis):`, raw)
+    return JSON.parse(raw)
   } catch (err) {
     console.error('Error in email analysis:', err)
     return { isApplication: false, position: null }

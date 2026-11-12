@@ -12,8 +12,13 @@ const EnvSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().min(1),
   GOOGLE_REDIRECT_URI: z.url(),
 
+  // Which LLM the agents use (ADR-12). Only the selected provider's settings are required.
+  LLM_PROVIDER: z.enum(['ollama', 'groq']).default('ollama'),
+  LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
   OLLAMA_BASE_URL: z.url().default('http://localhost:11434'),
   OLLAMA_MODEL: z.string().default('phi3'),
+  GROQ_API_KEY: z.string().optional(),
+  GROQ_MODEL: z.string().optional(),
 
   QDRANT_URL: z.url().default('http://localhost:6333'),
 
@@ -22,6 +27,11 @@ const EnvSchema = z.object({
   IMAGEKIT_URL_ENDPOINT: z.url(),
 
   PUPPETEER_EXECUTABLE_PATH: z.string().optional()
+}).superRefine((env, ctx) => {
+  if (env.LLM_PROVIDER === 'groq') {
+    if (!env.GROQ_API_KEY) ctx.addIssue({ code: 'custom', path: ['GROQ_API_KEY'], message: 'required when LLM_PROVIDER=groq' })
+    if (!env.GROQ_MODEL) ctx.addIssue({ code: 'custom', path: ['GROQ_MODEL'], message: 'required when LLM_PROVIDER=groq' })
+  }
 })
 
 export class ConfigError extends Error {}
@@ -42,7 +52,12 @@ export const loadConfig = (source: Record<string, string | undefined>) => {
     db: { url: env.DATABASE_URL },
     auth: { jwtSecret: env.JWT_SECRET },
     google: { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET, redirectUri: env.GOOGLE_REDIRECT_URI },
-    ollama: { baseUrl: env.OLLAMA_BASE_URL, model: env.OLLAMA_MODEL },
+    llm: {
+      provider: env.LLM_PROVIDER,
+      timeoutMs: env.LLM_TIMEOUT_MS,
+      ollama: { baseUrl: env.OLLAMA_BASE_URL, model: env.OLLAMA_MODEL },
+      groq: { apiKey: env.GROQ_API_KEY, model: env.GROQ_MODEL }
+    },
     qdrant: { url: env.QDRANT_URL, collection: 'job_descriptions', vectorSize: 384 },
     imagekit: { publicKey: env.IMAGEKIT_PUBLIC_KEY, privateKey: env.IMAGEKIT_PRIVATE_KEY, urlEndpoint: env.IMAGEKIT_URL_ENDPOINT },
     whatsapp: { executablePath: env.PUPPETEER_EXECUTABLE_PATH }

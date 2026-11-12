@@ -1,8 +1,4 @@
-import axios from 'axios'
-import { config } from '~~/server/config/env'
-
-const OLLAMA_URL = config.ollama.baseUrl
-const MODEL = config.ollama.model
+import { getLlm } from '~~/server/integrations/llm'
 
 const convertToIST = (timeStr: string): string => {
   if (!timeStr || !timeStr.includes(':')) return timeStr
@@ -73,18 +69,17 @@ export const parseCalendarEvent = async (calendarEvent: any, activeRoles: string
     }
   `
 
-  console.log(`[CalendarAgent] Sending prompt to Ollama...`)
+  const llm = getLlm()
+  console.log(`[CalendarAgent] Sending prompt to ${llm.name} (${llm.model})...`)
 
   try {
-    const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
-      model: MODEL, prompt, stream: false, format: 'json'
-    })
+    const raw = await llm.generateJson(prompt)
 
-    console.log(`[CalendarAgent] Raw Ollama response: "${response.data.response}"`)
+    console.log(`[CalendarAgent] Raw ${llm.name} response: "${raw}"`)
 
     let result: any
     try {
-      result = JSON.parse(response.data.response)
+      result = JSON.parse(raw)
       console.log(`[CalendarAgent] Parsed JSON:`, JSON.stringify(result, null, 2))
     } catch (parseErr: any) {
       console.error(`[CalendarAgent] ❌ JSON Parse Failure: ${parseErr.message}`)
@@ -175,7 +170,7 @@ export const parseCalendarEvent = async (calendarEvent: any, activeRoles: string
     console.log(`[CalendarAgent] 📍 Mode: ${interviewMode} | Venue/Link: ${venueOrLink || '(none)'}`)
     return finalResult
   } catch (err: any) {
-    console.error(`[CalendarAgent] ❌ Error calling Ollama:`, err.message)
+    console.error(`[CalendarAgent] ❌ Error calling ${llm.name}:`, err.message)
     return null
   }
 }
