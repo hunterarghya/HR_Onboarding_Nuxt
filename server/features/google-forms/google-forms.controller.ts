@@ -1,15 +1,15 @@
-import { getAuthClientFromSession } from '~~/server/core/auth/google-session'
 import { requireUser } from '~~/server/core/auth/current-user'
 import { defineApiHandler } from '~~/server/core/http/define-api-handler'
 import { parseBody, parseParams, parseQuery } from '~~/server/core/http/validate'
 import { CREATE_FORM_MESSAGE, CreateFormBody, DeleteFormQuery, FormIdParams, JobIdParam } from './google-forms.dto'
+import { googleAuthService } from '../auth/google-auth.service'
 import { googleFormsService } from './google-forms.service'
 
 export const googleFormsController = {
   list: defineApiHandler(() => googleFormsService.list()),
 
   create: defineApiHandler(async (event) => {
-    const auth = getAuthClientFromSession(requireUser(event))
+    const auth = await googleAuthService.getAuthClientForUser(requireUser(event).id)
     const { jobRoleId } = await parseBody(event, CreateFormBody, CREATE_FORM_MESSAGE)
     return googleFormsService.createForJob(auth, jobRoleId)
   }),

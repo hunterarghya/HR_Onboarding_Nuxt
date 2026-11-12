@@ -1,12 +1,22 @@
 import { z } from 'zod'
 
+/** "a@x.com, B@Y.com" → ['a@x.com', 'b@y.com'] */
+const list = (value: string | undefined) => (value ?? '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+
 // Each key is added by the commit that first reads it, so this schema never lists unused settings.
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  COMPANY_NAME: z.string().min(1).default('Ripplewalk'),
 
   DATABASE_URL: z.url(),
 
   JWT_SECRET: z.string().min(32, 'must be at least 32 characters (e.g. `openssl rand -hex 32`)'),
+  // Encrypts Google tokens at rest. Changing it makes stored tokens unreadable (users sign in again).
+  TOKEN_ENCRYPTION_KEY: z.string().regex(/^[0-9a-fA-F]{64}$/, 'must be 64 hex characters (32 bytes, e.g. `openssl rand -hex 32`)'),
+
+  // Who may sign in (SEC-05). Comma-separated; at least one of the two must be set.
+  ALLOWED_EMAIL_DOMAINS: z.string().optional(),
+  ALLOWED_EMAILS: z.string().optional(),
 
   GOOGLE_CLIENT_ID: z.string().min(1),
   GOOGLE_CLIENT_SECRET: z.string().min(1),
@@ -28,6 +38,9 @@ const EnvSchema = z.object({
 
   PUPPETEER_EXECUTABLE_PATH: z.string().optional()
 }).superRefine((env, ctx) => {
+  if (!list(env.ALLOWED_EMAIL_DOMAINS).length && !list(env.ALLOWED_EMAILS).length) {
+    ctx.addIssue({ code: 'custom', path: ['ALLOWED_EMAILS'], message: 'set ALLOWED_EMAILS and/or ALLOWED_EMAIL_DOMAINS: without them anyone with a Google account could sign in' })
+  }
   if (env.LLM_PROVIDER === 'groq') {
     if (!env.GROQ_API_KEY) ctx.addIssue({ code: 'custom', path: ['GROQ_API_KEY'], message: 'required when LLM_PROVIDER=groq' })
     if (!env.GROQ_MODEL) ctx.addIssue({ code: 'custom', path: ['GROQ_MODEL'], message: 'required when LLM_PROVIDER=groq' })
@@ -49,8 +62,13 @@ export const loadConfig = (source: Record<string, string | undefined>) => {
 
   return Object.freeze({
     env: env.NODE_ENV,
+    app: { companyName: env.COMPANY_NAME },
     db: { url: env.DATABASE_URL },
-    auth: { jwtSecret: env.JWT_SECRET },
+    auth: {
+      jwtSecret: env.JWT_SECRET,
+      tokenEncryptionKey: env.TOKEN_ENCRYPTION_KEY,
+      allowlist: { domains: list(env.ALLOWED_EMAIL_DOMAINS), emails: list(env.ALLOWED_EMAILS) }
+    },
     google: { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET, redirectUri: env.GOOGLE_REDIRECT_URI },
     llm: {
       provider: env.LLM_PROVIDER,

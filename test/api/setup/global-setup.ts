@@ -16,12 +16,15 @@ import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import pg from 'pg'
+import { encrypt } from '../../../server/core/crypto'
 import type { TestProject } from 'vitest/node'
-import { TEST_DATABASE_URL, TEST_GOOGLE_CLIENT_ID, TEST_JWT_SECRET, UNREACHABLE_URL } from './test-env'
+import { TEST_DATABASE_URL, TEST_GOOGLE_CLIENT_ID, TEST_JWT_SECRET, TEST_TOKEN_ENCRYPTION_KEY, UNREACHABLE_URL } from './test-env'
 
 declare module 'vitest' {
   export interface ProvidedContext {
     baseURL: string
+    /** The signed-in test user (has stored, fake Google credentials). */
+    testUserId: number
   }
 }
 
@@ -102,6 +105,8 @@ export default async function setup(project: TestProject) {
     PORT: String(port),
     DATABASE_URL: TEST_DATABASE_URL,
     JWT_SECRET: TEST_JWT_SECRET,
+    TOKEN_ENCRYPTION_KEY: TEST_TOKEN_ENCRYPTION_KEY,
+    ALLOWED_EMAILS: 'smoke.tester@example.com,no-google@example.com',
     GOOGLE_CLIENT_ID: TEST_GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET: 'smoke-test-client-secret',
     GOOGLE_REDIRECT_URI: `${baseURL}/auth/google/callback`,
@@ -138,17 +143,30 @@ export default async function setup(project: TestProject) {
     server.kill()
   })
 
+  let testUserId = 0
   try {
     await waitFor('the server to answer /api/health', async () => (await fetch(`${baseURL}/api/health`)).ok, 60_000)
 
-    // bootstrapSchema runs in a Nitro plugin that is not awaited, so the schema can lag behind the first response.
+    // Migrations and the template seed run in a Nitro plugin that is not awaited, so they can lag behind the first response.
     const db = new pg.Client({ connectionString: TEST_DATABASE_URL })
     await db.connect()
     try {
-      await waitFor('boot-time schema and default templates', async () => {
+      await waitFor('migrations and default templates', async () => {
         const { rows } = await db.query('SELECT COUNT(*)::int AS n FROM email_templates WHERE is_default = true')
         return rows[0].n === 3
       }, 60_000)
+
+      // The user every test session belongs to, with Google tokens that are fake: the server under test
+      // has no network, so any Google call fails fast, exactly as with a revoked account.
+      const { rows } = await db.query<{ id: number }>(
+        'INSERT INTO users (email, name, last_login_at) VALUES (\'smoke.tester@example.com\', \'Smoke Tester\', now()) RETURNING id'
+      )
+      testUserId = rows[0]!.id
+      const far = new Date(Date.now() + 365 * 24 * 3600 * 1000)
+      await db.query(
+        'INSERT INTO google_credentials (user_id, refresh_token_enc, access_token_enc, expiry_date, scopes) VALUES ($1, $2, $3, $4, $5)',
+        [testUserId, encrypt('fake-refresh-token', TEST_TOKEN_ENCRYPTION_KEY), encrypt('fake-access-token', TEST_TOKEN_ENCRYPTION_KEY), far, 'openid']
+      )
     } finally {
       await db.end()
     }
@@ -159,6 +177,7 @@ export default async function setup(project: TestProject) {
   }
 
   project.provide('baseURL', baseURL)
+  project.provide('testUserId', testUserId)
 
   return async () => {
     await stop()

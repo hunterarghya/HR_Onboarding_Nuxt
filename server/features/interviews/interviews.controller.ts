@@ -1,8 +1,8 @@
 import { setResponseStatus, type H3Event } from 'h3'
 import { requireUser } from '~~/server/core/auth/current-user'
-import { getAuthClientFromSession } from '~~/server/core/auth/google-session'
 import { defineApiHandler } from '~~/server/core/http/define-api-handler'
 import { parseBody, parseParams } from '~~/server/core/http/validate'
+import { googleAuthService } from '../auth/google-auth.service'
 import { calendarSyncService } from './calendar-sync.service'
 import {
   ASSIGN_MESSAGE, AUTO_ASSIGN_ALL_MESSAGE, AssignCandidatesBody, AutoAssignAllBody,
@@ -12,7 +12,7 @@ import {
 import { interviewAssignmentsService } from './interview-assignments.service'
 import { interviewEventsService } from './interview-events.service'
 
-const googleAuth = (event: H3Event) => getAuthClientFromSession(requireUser(event))
+const googleAuth = (event: H3Event) => googleAuthService.getAuthClientForUser(requireUser(event).id)
 
 /** POST creates and PATCH edits the same list; only the reply wording differs (unchanged). */
 const replaceAssignments = (message: string) => defineApiHandler(async (event) => {
@@ -26,7 +26,7 @@ export const interviewsController = {
   listEvents: defineApiHandler(() => interviewEventsService.list()),
 
   createEvent: defineApiHandler(async (event) => {
-    const auth = googleAuth(event)
+    const auth = await googleAuth(event)
     const body = await parseBody(event, CreateEventBody, CREATE_EVENT_MESSAGE)
     const created = await interviewEventsService.create(auth, body)
     setResponseStatus(event, 201)
@@ -34,7 +34,7 @@ export const interviewsController = {
   }),
 
   deleteEvent: defineApiHandler(async (event) => {
-    const auth = googleAuth(event)
+    const auth = await googleAuth(event)
     const { id } = parseParams(event, EventIdParams)
     await interviewEventsService.remove(auth, id)
     return { message: 'Event deleted successfully' }
@@ -63,10 +63,10 @@ export const interviewsController = {
     return interviewAssignmentsService.eligibleForEvent(eventId)
   }),
 
-  syncCalendar: defineApiHandler(event => calendarSyncService.sync(googleAuth(event))),
+  syncCalendar: defineApiHandler(async event => calendarSyncService.sync(await googleAuth(event))),
 
   registerWebhook: defineApiHandler(async (event) => {
-    const auth = googleAuth(event)
+    const auth = await googleAuth(event)
     const { webhook_url } = await parseBody(event, RegisterWebhookBody, REGISTER_WEBHOOK_MESSAGE)
     return calendarSyncService.registerWebhook(auth, webhook_url)
   }),

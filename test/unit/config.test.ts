@@ -4,6 +4,8 @@ import { ConfigError, loadConfig } from '../../server/config/load-config'
 const validEnv = {
   DATABASE_URL: 'postgresql://postgres:postgres@localhost:5434/hr_onboarding',
   JWT_SECRET: 'x'.repeat(32),
+  TOKEN_ENCRYPTION_KEY: 'ab'.repeat(32),
+  ALLOWED_EMAIL_DOMAINS: 'example.com',
   GOOGLE_CLIENT_ID: 'client-id',
   GOOGLE_CLIENT_SECRET: 'client-secret',
   GOOGLE_REDIRECT_URI: 'http://localhost:3001/auth/google/callback',
@@ -34,7 +36,7 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ ...validEnv, JWT_SECRET: 'secret' })).toThrow(/at least 32 characters[\s\S]*JWT_SECRET/)
   })
 
-  it.each(['DATABASE_URL', 'JWT_SECRET', 'GOOGLE_CLIENT_ID', 'IMAGEKIT_PUBLIC_KEY'])('requires %s', (key) => {
+  it.each(['DATABASE_URL', 'JWT_SECRET', 'TOKEN_ENCRYPTION_KEY', 'GOOGLE_CLIENT_ID', 'IMAGEKIT_PUBLIC_KEY'])('requires %s', (key) => {
     const env: Record<string, string | undefined> = { ...validEnv, [key]: undefined }
     expect(() => loadConfig(env)).toThrow(new RegExp(key))
   })
@@ -44,6 +46,13 @@ describe('loadConfig', () => {
     const config = loadConfig({ ...validEnv, LLM_PROVIDER: 'groq', GROQ_API_KEY: 'gsk_test', GROQ_MODEL: 'llama-3.3-70b-versatile', LLM_TIMEOUT_MS: '5000' })
     expect(config.llm).toMatchObject({ provider: 'groq', timeoutMs: 5000, groq: { apiKey: 'gsk_test', model: 'llama-3.3-70b-versatile' } })
     expect(loadConfig({ ...validEnv, GROQ_API_KEY: '' }).llm.provider).toBe('ollama')
+  })
+
+  it('requires a login allowlist and normalises it', () => {
+    expect(() => loadConfig({ ...validEnv, ALLOWED_EMAIL_DOMAINS: undefined })).toThrow(/ALLOWED_EMAILS/)
+    expect(() => loadConfig({ ...validEnv, ALLOWED_EMAIL_DOMAINS: ' , ' })).toThrow(/ALLOWED_EMAILS/)
+    const config = loadConfig({ ...validEnv, ALLOWED_EMAIL_DOMAINS: 'Ripplewalk.com, ', ALLOWED_EMAILS: ' Lead@Gmail.com' })
+    expect(config.auth.allowlist).toEqual({ domains: ['ripplewalk.com'], emails: ['lead@gmail.com'] })
   })
 
   it('rejects an unknown LLM provider', () => {
