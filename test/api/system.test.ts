@@ -9,7 +9,7 @@ describe('GET /api/health', () => {
     const res = await api('GET', '/api/health')
     expect(res.status).toBe(200)
     // Qdrant and the LLM are unreachable in the smoke environment: reported, but not fatal
-    expect(res.body).toEqual({ status: 'ok', checks: { database: 'ok', vectorStore: 'error', llm: 'error', llmProvider: 'ollama' } })
+    expect(res.body).toEqual({ status: 'ok', checks: { database: 'ok', queue: 'ok', vectorStore: 'error', llm: 'error', llmProvider: 'ollama' } })
   })
 
   it('tags every response with a request id', async () => {
@@ -59,6 +59,12 @@ describe('GET /api/whatsapp/groups', () => {
     const res = await api('GET', '/api/whatsapp/groups')
     expect(res.status).toBe(200)
     expect(res.body).toEqual([])
+  })
+})
+
+describe('GET /api/tasks/:id', () => {
+  it('returns 404 for a task that does not exist', async () => {
+    expectError(await api('GET', '/api/tasks/no.such.task'), 404, 'Task not found')
   })
 })
 
