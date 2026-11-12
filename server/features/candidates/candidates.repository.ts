@@ -5,19 +5,17 @@ import type { CandidatesPosition, ListCandidatesFilters, ListSelectedFilters, Se
 export type SelectedCandidateRow = Pick<CandidateRow,
   'id' | 'name' | 'email' | 'phone' | 'offered_role' | 'offered_salary' | 'offered_location' | 'joining_date' | 'status' | 'offer_sent'>
 
-export interface ResumeCandidateUpdate {
+/** A candidate as read from a resume. Unknown details are null, never "N/A" (DATA-04). */
+export interface ResumeCandidate {
   score: number
   resume_url: string | null
   applied_through: string
-  current_location: string
+  current_location: string | null
   current_ctc: number | null
   status: CandidateStatus
-}
-
-export interface ResumeCandidateInsert extends ResumeCandidateUpdate {
   name: string
-  email: string
-  phone: string
+  email: string | null
+  phone: string | null
   job_role_id: number | null
   role_applied: string
   resume_content: string
@@ -193,25 +191,29 @@ export const candidatesRepository = {
 
   // ---- Resume intake (ingestion pipeline)
 
-  /** Same person for the same job = same email + job ('N/A' emails collide: DATA-01). */
-  async findIdByEmailAndJob(email: string, jobRoleId: number | null, db: Queryable = getPool()) {
-    const { rows } = await db.query<{ id: number }>('SELECT id FROM candidates WHERE email = $1 AND job_role_id IS NOT DISTINCT FROM $2', [email, jobRoleId])
-    return rows[0]?.id ?? null
-  },
-
-  async updateFromResume(id: number, c: ResumeCandidateUpdate, db: Queryable = getPool()) {
-    await db.query(
-      `UPDATE candidates SET score = $1, date_applied = NOW(), resume_url = $2, applied_through = $3, current_location = $4, current_ctc = $5, status = $6 WHERE id = $7`,
-      [c.score, c.resume_url, c.applied_through, c.current_location, c.current_ctc, c.status, id]
+  /**
+   * Saves a resume. The same email applying to the same job again updates that candidate (the unique
+   * index candidates_identity makes this safe across parallel scans); without an email there's no way
+   * to tell people apart, so every such resume is a new candidate (DATA-01). True if a row was inserted.
+   */
+  async saveFromResume(c: ResumeCandidate, db: Queryable = getPool()) {
+    const values = [c.name, c.email, c.phone, c.job_role_id, c.role_applied, c.resume_content, c.score, c.experience_years, c.status, c.resume_url, c.applied_through, c.current_location, c.current_ctc]
+    const insert = `INSERT INTO candidates (name, email, phone, job_role_id, role_applied, resume_content, score, experience_years, status, resume_url, applied_through, current_location, current_ctc)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`
+    if (c.email === null) {
+      await db.query(insert, values)
+      return true
+    }
+    const { rows } = await db.query<{ inserted: boolean }>(
+      `${insert}
+       ON CONFLICT (lower(email), job_role_id) WHERE email IS NOT NULL
+       DO UPDATE SET score = EXCLUDED.score, date_applied = now(), resume_url = EXCLUDED.resume_url,
+         applied_through = EXCLUDED.applied_through, current_location = EXCLUDED.current_location,
+         current_ctc = EXCLUDED.current_ctc, status = EXCLUDED.status
+       RETURNING (xmax = 0) AS inserted`,
+      values
     )
-  },
-
-  async insertFromResume(c: ResumeCandidateInsert, db: Queryable = getPool()) {
-    await db.query(
-      `INSERT INTO candidates (name, email, phone, job_role_id, role_applied, resume_content, score, experience_years, status, resume_url, applied_through, current_location, current_ctc)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-      [c.name, c.email, c.phone, c.job_role_id, c.role_applied, c.resume_content, c.score, c.experience_years, c.status, c.resume_url, c.applied_through, c.current_location, c.current_ctc]
-    )
+    return rows[0]!.inserted
   },
 
   // ---- Offer letters

@@ -33,10 +33,10 @@ describe('form answer extraction', () => {
     }
   }
 
-  it('reads text answers, with N/A when missing', () => {
+  it('reads text answers, with null when missing', () => {
     expect(extractTextAnswer(response, 'q1')).toBe('https://drive.google.com/file/d/abc/view')
-    expect(extractTextAnswer(response, 'q3')).toBe('N/A')
-    expect(extractTextAnswer(response, 'nope')).toBe('N/A')
+    expect(extractTextAnswer(response, 'q3')).toBeNull()
+    expect(extractTextAnswer(response, 'nope')).toBeNull()
   })
 
   it('reads file upload answers, or null', () => {

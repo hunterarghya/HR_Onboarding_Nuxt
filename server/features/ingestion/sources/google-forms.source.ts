@@ -34,16 +34,14 @@ export const collectFromForm = async (auth: GoogleAuthClient, form: ScannableFor
       const resume = await fetchResumeFromAnswer(auth, response, resumeQuestionId)
 
       // Extract candidate email
-      const senderEmail = questionMap.email
-        ? extractTextAnswer(response, questionMap.email)
-        : 'N/A'
+      const senderEmail = questionMap.email ? extractTextAnswer(response, questionMap.email) : null
 
       if (resume) {
         attachments.push({
           filename: resume.fileName,
           data: resume.data,
           source: 'GoogleForms',
-          sender: senderEmail
+          sender: senderEmail ?? undefined
         })
         console.log(`--- [Forms Scanner] ✅ Resume collected: ${resume.fileName} from ${senderEmail} ---`)
       } else {

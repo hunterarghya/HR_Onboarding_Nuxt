@@ -4,10 +4,10 @@
  * Zero LLM calls — pure string matching.
  */
 
-const extractEmail = (text: string): string => {
+const extractEmail = (text: string): string | null => {
   const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
   const matches = text.match(emailRegex)
-  if (!matches || matches.length === 0) return 'N/A'
+  if (!matches || matches.length === 0) return null
 
   const blacklist = ['example.com', 'email.com', 'domain.com', 'test.com', 'yourmail.com']
   const valid = matches.filter(e => !blacklist.some(b => e.toLowerCase().includes(b)))
@@ -15,7 +15,7 @@ const extractEmail = (text: string): string => {
   return valid.length > 0 ? valid[0]!.toLowerCase() : matches[0]!.toLowerCase()
 }
 
-const extractPhone = (text: string): string => {
+const extractPhone = (text: string): string | null => {
   const patterns = [
     /(?:\+91[\s-]?|91[\s-]|0)?[6-9]\d{4}[\s-]?\d{5}/g,
     /\+?\d{1,3}[\s-]?\(?\d{2,4}\)?[\s-]?\d{3,4}[\s-]?\d{3,4}/g,
@@ -31,7 +31,7 @@ const extractPhone = (text: string): string => {
       }
     }
   }
-  return 'N/A'
+  return null
 }
 
 const extractName = (text: string): string => {
@@ -76,7 +76,7 @@ const extractExperience = (text: string): number | null => {
   return null
 }
 
-const extractLocation = (text: string): string => {
+const extractLocation = (text: string): string | null => {
   const patterns = [
     /(?:location|address|city|based in|residing)[\s:]*([A-Za-z][A-Za-z,\s]{3,40})/gi,
     /(?:,\s*)((?:Delhi|Mumbai|Bangalore|Bengaluru|Hyderabad|Chennai|Kolkata|Pune|Noida|Gurugram|Gurgaon|Jaipur|Ahmedabad|Lucknow|Chandigarh|Indore|Bhopal|Kochi|Thiruvananthapuram|Coimbatore|Nagpur|Patna|Ghaziabad|Ranchi|Bhubaneswar|Dehradun|Visakhapatnam)[A-Za-z,\s]{0,30})/gi
@@ -96,7 +96,7 @@ const extractLocation = (text: string): string => {
     }
   }
 
-  return 'N/A'
+  return null
 }
 
 /** Current CTC as an annual amount (8 LPA → 800000, 1.2 cr → 12000000), or null. */

@@ -20,6 +20,16 @@ import { decide, OPEN_TARGET } from './shortlist-policy'
  *
  * @returns Number of candidates successfully processed
  */
+/**
+ * The sender's email, when the source gives one: Gmail's "Name <a@b.com>" → "a@b.com".
+ * WhatsApp sender ids ("9198…@c.us") and anything else that isn't an email give null.
+ */
+export const emailFromSender = (sender: string | undefined): string | null => {
+  const match = sender?.match(/[\w.%+-]+@[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}/i)?.[0]
+  if (!match || /@(?:c|g)\.us$|@s\.whatsapp\.net$|@lid$/i.test(match)) return null
+  return match.toLowerCase()
+}
+
 export const processAttachments = async (
   attachments: RawAttachment[],
   onProgress: (progress: TaskProgress) => Promise<void> = async () => {}
@@ -48,38 +58,26 @@ export const processAttachments = async (
       const { accept, status: finalStatus, minScoreRequired } = decide(targetRole, score)
 
       if (accept) {
-        const finalEmail = (parsed.email && parsed.email !== 'N/A') ? parsed.email : (attachment.sender || 'N/A')
+        const email = parsed.email ?? emailFromSender(attachment.sender)
+        const name = parsed.name.substring(0, 250)
 
-        const safeName = (parsed.name || 'Unknown').substring(0, 250)
-        const safePhone = (parsed.phone || 'N/A').substring(0, 45)
-        const safeLocation = (parsed.current_location || 'N/A').substring(0, 250)
-
-        const existingId = await candidatesRepository.findIdByEmailAndJob(finalEmail, targetRole.id)
         const ikUrl = await uploadResume(attachment.data, attachment.filename)
-
-        if (existingId !== null) {
-          await candidatesRepository.updateFromResume(existingId, {
-            score, resume_url: ikUrl, applied_through: attachment.source, current_location: safeLocation, current_ctc: parsed.current_ctc, status: finalStatus
-          })
-          console.log(`--- [Database] Updated: ${safeName} under ${targetRole.role} ---`)
-        } else {
-          await candidatesRepository.insertFromResume({
-            name: safeName,
-            email: finalEmail,
-            phone: safePhone,
-            job_role_id: targetRole.id,
-            role_applied: targetRole.role,
-            resume_content: resumeText.substring(0, 2000),
-            score,
-            experience_years: parsed.experience_years,
-            status: finalStatus,
-            resume_url: ikUrl,
-            applied_through: attachment.source,
-            current_location: safeLocation,
-            current_ctc: parsed.current_ctc
-          })
-          console.log(`--- [Database] Saved New: ${safeName} under ${targetRole.role} ---`)
-        }
+        const inserted = await candidatesRepository.saveFromResume({
+          name,
+          email,
+          phone: parsed.phone?.substring(0, 45) ?? null,
+          job_role_id: targetRole.id,
+          role_applied: targetRole.role,
+          resume_content: resumeText.substring(0, 2000),
+          score,
+          experience_years: parsed.experience_years,
+          status: finalStatus,
+          resume_url: ikUrl,
+          applied_through: attachment.source,
+          current_location: parsed.current_location?.substring(0, 250) ?? null,
+          current_ctc: parsed.current_ctc
+        })
+        console.log(`--- [Database] ${inserted ? 'Saved New' : 'Updated'}: ${name} under ${targetRole.role} ---`)
         candidatesFound++
       } else {
         console.log(`--- [Skip] ${parsed.name} scored ${score} < ${minScoreRequired} for ${targetRole.role} (Auto mode) ---`)
