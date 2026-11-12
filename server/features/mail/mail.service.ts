@@ -11,7 +11,7 @@ import { usersRepository } from '../auth/users.repository'
 import { candidatesRepository } from '../candidates/candidates.repository'
 import { interviewAssignmentsRepository } from '../interviews/interview-assignments.repository'
 import { interviewEventsRepository } from '../interviews/interview-events.repository'
-import { renderString } from '../templates/template-renderer'
+import { renderString, renderText } from '../templates/template-renderer'
 import { templatesRepository } from '../templates/templates.repository'
 
 // Bulk mail runs as background tasks on the "mail" queue, one batch at a time. It sends from the
@@ -107,7 +107,7 @@ const sendInvitesForEvent = async (auth: GoogleAuthClient, sender: Sender, event
         venue_or_link: event.venue_or_link || 'To be confirmed'
       }
 
-      const raw = buildRawEmail(candidate.email, sender.email, renderString(template.subject, data), renderString(template.body, data))
+      const raw = buildRawEmail(candidate.email, sender.email, renderText(template.subject, data), renderString(template.body, data))
 
       if (sent + failed > 0) await pause()
       await sendRawMessage(auth, raw)
@@ -213,7 +213,7 @@ export const mailService = {
             joining_date: candidate.joining_date ? longDate(candidate.joining_date) : ''
           }
 
-          const raw = buildRawEmail(candidate.email, sender.email, renderString(template.subject, data), renderString(template.body, data))
+          const raw = buildRawEmail(candidate.email, sender.email, renderText(template.subject, data), renderString(template.body, data))
 
           if (sent + failed > 0) await pause()
           await sendRawMessage(auth, raw)

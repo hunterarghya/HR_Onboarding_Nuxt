@@ -175,17 +175,10 @@ export const ingestionService = {
       google_forms: { lastScannedAt: null, running: forms }
     }
 
+    // rows are newest first: each source shows its most recent scan (any WhatsApp group, any form: BUG-23)
     for (const row of rows) {
-      if (row.source_type === 'gmail') {
-        status.gmail.lastScannedAt = row.last_scanned_at
-      } else if (row.source_type === 'whatsapp') {
-        // Use the most recent whatsapp scan across all groups
-        if (!status.whatsapp.lastScannedAt || new Date(row.last_scanned_at) > new Date(status.whatsapp.lastScannedAt)) {
-          status.whatsapp.lastScannedAt = row.last_scanned_at
-        }
-      } else if (row.source_type === 'google_forms') {
-        status.google_forms.lastScannedAt = row.last_scanned_at
-      }
+      const source = status[row.source_type as ScanSource]
+      if (source && !source.lastScannedAt) source.lastScannedAt = row.last_scanned_at
     }
 
     return status

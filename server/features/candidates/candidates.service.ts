@@ -1,4 +1,5 @@
 import { NotFoundError } from '~~/server/core/errors/app-error'
+import { resumeLink } from '~~/server/integrations/imagekit/imagekit.client'
 import { decodeCursor, encodeCursor } from '~~/server/core/http/cursor'
 import { CandidatesCursor, SelectedCursor, type CandidatesPosition, type ListCandidatesFilters, type ListSelectedFilters, type SelectedPosition, type UpdateStatusInput } from './candidates.dto'
 import { candidatesRepository } from './candidates.repository'
@@ -28,6 +29,13 @@ export const candidatesService = {
     const roles = await candidatesRepository.distinctOfferedRoles()
     const locations = await candidatesRepository.distinctOfferedLocations()
     return { roles, locations }
+  },
+
+  /** A short-lived link to the candidate's resume; 404 if there's none. */
+  async resumeLink(id: number) {
+    const file = await candidatesRepository.findResumeFile(id)
+    if (!file) throw new NotFoundError('Resume')
+    return resumeLink(file)
   },
 
   /** "selected" also records the offer, and needs every offer field. */

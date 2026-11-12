@@ -14,7 +14,8 @@ const getImageKit = (): ImageKit => {
 }
 
 /**
- * Uploads a base64 PDF to ImageKit
+ * Uploads a base64 PDF to ImageKit as a private file (SEC-10: resumes were public). Returns its path,
+ * which only opens through a signed link (resumeLink), or null if the upload failed.
  */
 export const uploadResume = async (base64Data: string, filename: string): Promise<string | null> => {
   try {
@@ -23,13 +24,24 @@ export const uploadResume = async (base64Data: string, filename: string): Promis
       file: base64Data,
       fileName: filename,
       folder: '/resumes',
-      useUniqueFileName: true
+      useUniqueFileName: true,
+      isPrivateFile: true
     })
 
-    console.log(`--- ImageKit: Upload successful! URL: ${response.url} ---`)
-    return response.url
+    console.log(`--- ImageKit: Upload successful: ${response.filePath} ---`)
+    return response.filePath
   } catch (error) {
     console.error('--- ImageKit Upload Error ---', error)
     return null
   }
 }
+
+/** How long a resume link works once handed out. */
+export const RESUME_LINK_SECONDS = 300
+
+/**
+ * A link that opens a stored resume for a few minutes. `file` is an ImageKit path; resumes uploaded
+ * before files were private are stored as their full public URL and are returned as they are.
+ */
+export const resumeLink = (file: string): string =>
+  /^https?:\/\//i.test(file) ? file : getImageKit().url({ path: file, signed: true, expireSeconds: RESUME_LINK_SECONDS })

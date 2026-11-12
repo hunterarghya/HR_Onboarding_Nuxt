@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { api, expectError } from './helpers/http'
 import { itRequiresLogin, userToken } from './helpers/auth'
-import { insertForm, insertJob, resetDb } from './helpers/db'
+import { db, insertForm, insertJob, resetDb } from './helpers/db'
 
 beforeAll(resetDb)
 
@@ -40,11 +40,11 @@ describe('POST /api/google-forms/create', () => {
     expectError(await api('POST', '/api/google-forms/create', { token: userToken(), body: { jobRoleId: job.id } }), 409)
   })
 
-  it('returns 500 with details when Google rejects the call', async () => {
+  it('returns 500 when Google rejects the call, without Google\'s own error text (SEC-09)', async () => {
     const job = await insertJob()
     const res = await api('POST', '/api/google-forms/create', { token: userToken(), body: { jobRoleId: job.id } })
     expectError(res, 500, 'Failed to create Google Form')
-    expect(res.body.data.details).toEqual(expect.any(String))
+    expect(res.body.data).toMatchObject({ code: 'GOOGLE_FORM_FAILED', details: null, requestId: expect.any(String) })
   })
 })
 
@@ -65,6 +65,16 @@ describe('DELETE /api/google-forms/:id', () => {
 
   it('returns 404 when nothing matches', async () => {
     expectError(await api('DELETE', '/api/google-forms/999999', { token: userToken() }), 404, 'Form not found')
+  })
+})
+
+describe('removing a form', () => {
+  it('also removes its scan record (BUG-12: it was left behind)', async () => {
+    const form = await insertForm()
+    await db().query(`INSERT INTO scan_timestamps (source_type, source_id, last_scanned_at) VALUES ('google_forms', $1, now())`, [form.form_id])
+    await api('DELETE', `/api/google-forms/${form.id}`, { token: userToken() })
+    const { rowCount } = await db().query('SELECT 1 FROM scan_timestamps WHERE source_id = $1', [form.form_id])
+    expect(rowCount).toBe(0)
   })
 })
 

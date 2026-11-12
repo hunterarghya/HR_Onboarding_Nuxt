@@ -152,14 +152,33 @@ describe('event candidate assignment', () => {
   })
 
   describe('POST /api/interviews/events/:id/candidates/manual', () => {
-    it('replaces the assignment and resets invite flags (BUG-04)', async () => {
+    it('replaces the assignment, keeping the invite state of people who stay (BUG-04: they were re-invited)', async () => {
       const evt = await insertEvent()
       await assignCandidate(evt.id, a.id, true)
+      await assignCandidate(evt.id, c.id, true)
       const res = await api('POST', `/api/interviews/events/${evt.id}/candidates/manual`, { body: { candidate_ids: [a.id, b.id] } })
       expect(res.status).toBe(200)
       expect(res.body).toEqual({ message: 'Candidates assigned successfully', count: 2 })
+      const { rows } = await db().query('SELECT candidate_id, invite_sent FROM interview_candidates WHERE event_id = $1 ORDER BY candidate_id', [evt.id])
+      expect(rows).toEqual([
+        { candidate_id: a.id, invite_sent: true }, // stayed: still invited
+        { candidate_id: b.id, invite_sent: false } // new
+      ]) // c was taken off
+    })
+
+    it('auto-assign keeps the invite state of people who stay too', async () => {
+      const evt = await insertEvent({ num_candidates: 2 })
+      await assignCandidate(evt.id, a.id, true)
+      await api('POST', `/api/interviews/events/${evt.id}/candidates/auto`)
       const { rows } = await db().query('SELECT invite_sent FROM interview_candidates WHERE event_id = $1 AND candidate_id = $2', [evt.id, a.id])
-      expect(rows[0].invite_sent).toBe(false)
+      expect(rows[0].invite_sent).toBe(true)
+    })
+
+    it('can empty the list', async () => {
+      const evt = await insertEvent()
+      await assignCandidate(evt.id, a.id)
+      await api('POST', `/api/interviews/events/${evt.id}/candidates/manual`, { body: { candidate_ids: [] } })
+      expect(await assignedIds(evt.id)).toEqual([])
     })
 
     it('requires a candidate_ids array (400)', async () => {
@@ -286,24 +305,46 @@ describe('event candidate assignment', () => {
 describe('POST /api/interviews/register-webhook', () => {
   itRequiresLogin('POST', '/api/interviews/register-webhook', {})
 
-  it('requires webhook_url (400)', async () => {
-    expectError(await api('POST', '/api/interviews/register-webhook', { token: userToken(), body: {} }), 400, 'Validation failed')
-  })
-
-  it.each(['not a url', 'http://example.com/hook', 'javascript:alert(1)'])('rejects %s (400: Google only calls https)', async (webhook_url) => {
-    expectError(await api('POST', '/api/interviews/register-webhook', { token: userToken(), body: { webhook_url } }), 400, 'Validation failed')
-  })
-
-  it('returns 500 when Google is unreachable', async () => {
-    const res = await api('POST', '/api/interviews/register-webhook', { token: userToken(), body: { webhook_url: 'https://example.com/hook' } })
-    expectError(res, 500, 'Failed to register webhook')
+  it('returns 500 when Google is unreachable, and stores no channel', async () => {
+    expectError(await api('POST', '/api/interviews/register-webhook', { token: userToken() }), 500, 'Failed to register webhook')
+    const { rowCount } = await db().query('SELECT 1 FROM calendar_channels')
+    expect(rowCount).toBe(0)
   })
 })
 
 describe('POST /api/interviews/webhook', () => {
-  it('acknowledges any push notification without a session', async () => {
-    const res = await api('POST', '/api/interviews/webhook', { body: {}, token: null })
+  const TOKEN = 'a'.repeat(64)
+  const notify = (headers: Record<string, string>) => api('POST', '/api/interviews/webhook', { token: null, headers })
+
+  beforeAll(async () => {
+    await resetDb()
+    const { rows: [user] } = await db().query(`SELECT id FROM users WHERE email = 'smoke.tester@example.com'`)
+    await db().query(
+      `INSERT INTO calendar_channels (user_id, channel_id, resource_id, token_hash, expires_at)
+       VALUES ($1, 'chan-1', 'res-1', encode(sha256($2::bytea), 'hex'), now() + interval '7 days')`,
+      [user.id, TOKEN]
+    )
+  })
+
+  it.each([
+    ['no channel headers (SEC-08: anything was accepted)', {}],
+    ['an unknown channel', { 'x-goog-channel-id': 'nope', 'x-goog-channel-token': TOKEN, 'x-goog-resource-state': 'exists' }],
+    ['a wrong token', { 'x-goog-channel-id': 'chan-1', 'x-goog-channel-token': 'b'.repeat(64), 'x-goog-resource-state': 'exists' }],
+    ['no token', { 'x-goog-channel-id': 'chan-1', 'x-goog-resource-state': 'exists' }]
+  ])('refuses %s (401)', async (_label, headers) => {
+    expectError(await notify(headers), 401, 'Unknown calendar channel')
+  })
+
+  it('confirms the channel on Google\'s first "sync" message without syncing', async () => {
+    const res = await notify({ 'x-goog-channel-id': 'chan-1', 'x-goog-channel-token': TOKEN, 'x-goog-resource-state': 'sync' })
     expect(res.status).toBe(200)
-    expect(res.body).toBe('OK')
+    expect(res.body).toEqual({ message: 'Channel confirmed' })
+  })
+
+  it('queues a calendar sync for the channel\'s HR when the calendar changed', async () => {
+    const res = await notify({ 'x-goog-channel-id': 'chan-1', 'x-goog-channel-token': TOKEN, 'x-goog-resource-state': 'exists' })
+    expect(res.status).toBe(200)
+    expect(['Calendar sync queued', 'Calendar sync already running']).toContain(res.body.message)
+    await waitForTask('calendar.sync') // fails without Google, which is fine here
   })
 })

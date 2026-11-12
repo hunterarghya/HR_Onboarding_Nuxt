@@ -1,3 +1,4 @@
+import { config } from '~~/server/config/env'
 import { NotFoundError, ValidationError } from '~~/server/core/errors/app-error'
 import { jobRolesRepository } from '../job-roles/job-roles.repository'
 import { deleteEvent, insertEvent } from '~~/server/integrations/google/calendar.client'
@@ -23,7 +24,7 @@ export const interviewEventsService = {
 
     if (sync_calendar) {
       try {
-        const { resource, conferenceDataVersion } = toCalendarEvent({ ...slot, venue_or_link: slot.venue_or_link ?? '' })
+        const { resource, conferenceDataVersion } = toCalendarEvent({ ...slot, venue_or_link: slot.venue_or_link ?? '' }, config.app.timeZone)
         googleEventId = await insertEvent(auth, resource, { conferenceDataVersion })
         console.log(`--- [Calendar] Created event: ${googleEventId} ---`)
       } catch (calErr) {

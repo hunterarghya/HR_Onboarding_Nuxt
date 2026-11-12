@@ -433,6 +433,7 @@ onMounted(() => {
                   <UButton
                     v-if="c.resume_url"
                     :to="c.resume_url"
+                    external
                     target="_blank"
                     size="xs"
                     color="neutral"

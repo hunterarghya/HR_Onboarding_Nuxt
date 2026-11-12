@@ -1,28 +1,16 @@
 import { extractInterviewEvent } from '~~/server/agents/calendar-event/calendar-event.agent'
-import { AppError } from '~~/server/core/errors/app-error'
+import { config } from '~~/server/config/env'
 import { enqueue } from '~~/server/core/tasks/queues'
 import type { TaskProgress } from '~~/server/core/tasks/task-status'
-import { listCalendars, listEvents, watchEvents } from '~~/server/integrations/google/calendar.client'
+import { listEvents } from '~~/server/integrations/google/calendar.client'
 import type { GoogleAuthClient } from '~~/server/integrations/google/oauth'
 import { googleAuthService } from '../auth/google-auth.service'
 import { jobRolesRepository } from '../job-roles/job-roles.repository'
+import { planCalendarSync } from './calendar-sync.plan'
 import { interviewEventsRepository } from './interview-events.repository'
 
-/**
- * Fetches recent calendar events (last 7 days to next 60 days).
- */
+/** Calendar events from the last 7 days to the next 60 (cancelled ones included). */
 const fetchRecentCalendarEvents = async (auth: GoogleAuthClient) => {
-  // Debug: List all calendars first to see what we have access to (BUG-14: extra call, kept for now)
-  try {
-    const calendars = await listCalendars(auth)
-    console.log(`[Calendar Fetch] Available Calendars for this user:`)
-    calendars.forEach((cal) => {
-      console.log(`[Calendar Fetch] - Name: "${cal.summary}" | ID: ${cal.id} | Primary: ${cal.primary || false} | Access: ${cal.accessRole}`)
-    })
-  } catch (err) {
-    console.error(`[Calendar Fetch] ❌ Could not fetch calendar list:`, (err as Error).message)
-  }
-
   const timeMin = new Date()
   timeMin.setDate(timeMin.getDate() - 7)
   const timeMax = new Date()
@@ -56,48 +44,28 @@ const runSync = async (auth: GoogleAuthClient, onProgress: (p: TaskProgress) => 
   })
 
   const existing = await interviewEventsRepository.findLinkedToGoogle()
-  const existingGoogleIds = new Set(existing.map(r => r.google_event_id))
-  console.log(`[Sync] Already imported event IDs in DB: [${[...existingGoogleIds].join(', ')}]`)
+  const { toDelete, toImport, alreadyImported } = planCalendarSync(existing, calendarEvents)
 
-  // BUG-01 (kept until the behaviour-fix phase): anything outside the fetched −7/+60 day window is deleted too
-  const calendarEventIds = new Set(calendarEvents.map(e => e.id))
-  let deletedCount = 0
-  for (const row of existing) {
-    if (!calendarEventIds.has(row.google_event_id)) {
-      await interviewEventsRepository.deleteById(row.id)
-      deletedCount++
-      console.log(`[Sync] 🗑️ DELETED from DB (removed from Google Calendar): ${row.google_event_id}`)
-    }
+  // only events Google reports as cancelled; anything outside the fetched window is kept (BUG-01)
+  for (const { id, googleEventId } of toDelete) {
+    await interviewEventsRepository.deleteById(id)
+    console.log(`[Sync] 🗑️ DELETED from DB (cancelled in Google Calendar): ${googleEventId}`)
   }
-  if (deletedCount > 0) console.log(`[Sync] Deleted ${deletedCount} stale events from DB.`)
 
   let imported = 0
-  let skippedDuplicate = 0
   let skippedAgent = 0
 
-  for (let idx = 0; idx < calendarEvents.length; idx++) {
-    await onProgress({ done: idx, total: calendarEvents.length, stage: 'reading calendar events' })
-    const calEvent = calendarEvents[idx]!
-    console.log(`\n[Sync] --- Processing event ${idx + 1}/${calendarEvents.length}: "${calEvent.summary}" (${calEvent.id}) ---`)
+  for (const [idx, calEvent] of toImport.entries()) {
+    await onProgress({ done: idx, total: toImport.length, stage: 'reading calendar events' })
+    console.log(`\n[Sync] --- Processing event ${idx + 1}/${toImport.length}: "${calEvent.summary}" (${calEvent.id}) ---`)
 
-    if (existingGoogleIds.has(calEvent.id!)) {
-      console.log(`[Sync] ⏭️ SKIPPED (already imported): ${calEvent.id}`)
-      skippedDuplicate++
-      continue
-    }
-
-    console.log(`[Sync] Sending to AI agent for parsing...`)
-    const parsed = await extractInterviewEvent(calEvent, activeRoles)
-
+    const parsed = await extractInterviewEvent(calEvent, activeRoles, config.app.timeZone)
     if (!parsed) {
       console.log(`[Sync] ⏭️ SKIPPED (agent returned null — not an interview or missing data)`)
       skippedAgent++
       continue
     }
 
-    console.log(`[Sync] Agent returned valid interview data:`, JSON.stringify(parsed))
-
-    console.log(`[Sync] Inserting into interview_events table...`)
     await interviewEventsRepository.insertImported({
       ...parsed,
       // the agent answers with one of activeRoles or "Open Role"
@@ -113,10 +81,11 @@ const runSync = async (auth: GoogleAuthClient, onProgress: (p: TaskProgress) => 
   console.log(`\n[Sync] ═══ SYNC COMPLETE ═══`)
   console.log(`[Sync] Total events from calendar: ${calendarEvents.length}`)
   console.log(`[Sync] Imported: ${imported}`)
-  console.log(`[Sync] Skipped (duplicate): ${skippedDuplicate}`)
+  console.log(`[Sync] Already imported: ${alreadyImported}`)
+  console.log(`[Sync] Deleted (cancelled in Google): ${toDelete.length}`)
   console.log(`[Sync] Skipped (not interview): ${skippedAgent}`)
 
-  return { message: `Calendar sync complete`, imported }
+  return { message: `Calendar sync complete`, imported, deleted: toDelete.length }
 }
 
 export const CALENDAR_SYNC_TASK_ID = 'calendar.sync'
@@ -143,19 +112,6 @@ export const calendarSyncService = {
       console.error('[Sync] ❌ FATAL ERROR during sync:', err)
       // the task fails with the reason, and is retried
       throw new Error(`Calendar sync failed: ${(err as Error).message}`, { cause: err })
-    }
-  },
-
-  /** Registers a webhook (watch) on the primary calendar for push notifications. */
-  async registerWebhook(auth: GoogleAuthClient, webhookUrl: string) {
-    try {
-      const channelId = `hr-interview-${Date.now()}`
-      const data = await watchEvents(auth, channelId, webhookUrl)
-      console.log(`--- [Calendar] Webhook registered: ${channelId} ---`)
-      return { message: 'Webhook registered', data }
-    } catch (err) {
-      console.error('Error registering webhook:', err)
-      throw new AppError(500, 'WEBHOOK_REGISTER_FAILED', 'Failed to register webhook')
     }
   }
 }

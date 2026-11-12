@@ -19,6 +19,19 @@ export function formatSalaryRange(min: number | null | undefined, max: number | 
   return ''
 }
 
+/** A datetime-local input value ("2030-05-01T17:30", local time) or an ISO instant → ISO instant in UTC; '' stays '' */
+export function toIsoInstant(value: string | null | undefined): string {
+  return value ? new Date(value).toISOString() : ''
+}
+
+/** An ISO instant → the value a datetime-local input shows, in the browser's own time zone; null → '' */
+export function toLocalInput(value: string | null | undefined): string {
+  if (!value) return ''
+  const d = new Date(value)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 /** 3 → "3+ years", null → '' */
 export function formatExperience(years: number | null | undefined): string {
   return years == null ? '' : `${years}+ years`

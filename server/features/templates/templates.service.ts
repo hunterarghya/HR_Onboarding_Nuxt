@@ -1,6 +1,6 @@
 import { ForbiddenError, NotFoundError } from '~~/server/core/errors/app-error'
 import type { PreviewRawTemplateInput, SaveTemplateInput } from './templates.dto'
-import { renderString } from './template-renderer'
+import { renderString, renderText } from './template-renderer'
 import { getDefaultSampleData } from './template-sample-data'
 import { templatesRepository, type TemplateFields } from './templates.repository'
 
@@ -43,7 +43,7 @@ export const templatesService = {
     const template = await getOrThrow(id)
     const data = sampleData || getDefaultSampleData(template.type, companyName)
     return {
-      subject: renderString(template.subject, data),
+      subject: renderText(template.subject, data),
       body: renderString(template.body, data),
       sampleData: data
     }
@@ -53,7 +53,7 @@ export const templatesService = {
   previewRaw(input: PreviewRawTemplateInput, companyName: string) {
     const data = input.sampleData || getDefaultSampleData(input.type, companyName)
     return {
-      subject: renderString(input.subject, data),
+      subject: renderText(input.subject, data),
       body: renderString(input.body, data),
       sampleData: data
     }

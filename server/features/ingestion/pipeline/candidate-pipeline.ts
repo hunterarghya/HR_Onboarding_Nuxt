@@ -61,7 +61,7 @@ export const processAttachments = async (
         const email = parsed.email ?? emailFromSender(attachment.sender)
         const name = parsed.name.substring(0, 250)
 
-        const ikUrl = await uploadResume(attachment.data, attachment.filename)
+        const resumeFile = await uploadResume(attachment.data, attachment.filename)
         const inserted = await candidatesRepository.saveFromResume({
           name,
           email,
@@ -72,7 +72,7 @@ export const processAttachments = async (
           score,
           experience_years: parsed.experience_years,
           status: finalStatus,
-          resume_url: ikUrl,
+          resume_file: resumeFile,
           applied_through: attachment.source,
           current_location: parsed.current_location?.substring(0, 250) ?? null,
           current_ctc: parsed.current_ctc

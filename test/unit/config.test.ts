@@ -25,6 +25,12 @@ describe('loadConfig', () => {
     expect(Object.isFrozen(config)).toBe(true)
   })
 
+  it('takes an IANA time zone for interview times, Asia/Kolkata by default', () => {
+    expect(loadConfig(validEnv).app.timeZone).toBe('Asia/Kolkata')
+    expect(loadConfig({ ...validEnv, TIME_ZONE: 'Europe/London' }).app.timeZone).toBe('Europe/London')
+    expect(() => loadConfig({ ...validEnv, TIME_ZONE: 'Mars/Olympus' })).toThrow(/TIME_ZONE/)
+  })
+
   it('treats empty values as unset', () => {
     const config = loadConfig({ ...validEnv, OLLAMA_MODEL: '', PUPPETEER_EXECUTABLE_PATH: '' })
     expect(config.llm.ollama.model).toBe('phi3')

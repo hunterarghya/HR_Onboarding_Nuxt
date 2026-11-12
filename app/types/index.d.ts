@@ -30,7 +30,8 @@ export interface Candidate {
   score: number
   experience_years: number | null
   status: CandidateStatus
-  resume_url: string
+  /** opens the resume (a signed-in route), or null */
+  resume_url: string | null
   applied_through: 'Gmail' | 'WhatsApp' | 'GoogleForms'
   current_location: string
   current_ctc: number | null

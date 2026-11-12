@@ -4,10 +4,26 @@ import { z } from 'zod'
 const list = (value: string | undefined) => (value ?? '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
 
 // Each key is added by the commit that first reads it, so this schema never lists unused settings.
+const isTimeZone = (name: string) => {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: name })
+    return true
+  } catch {
+    return false
+  }
+}
+
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   // all: web + task workers + WhatsApp in one process. web: HTTP only (enqueues). worker: workers + WhatsApp.
   APP_ROLE: z.enum(['all', 'web', 'worker']).default('all'),
+  // The https address this app is reachable on from the internet, e.g. https://hr.example.com (optional:
+  // only Google Calendar push notifications need it)
+  PUBLIC_BASE_URL: z.url({ protocol: /^https$/ }).optional(),
+  // Scales every request limit (sign-in, scans, mail…); 1 = the built-in limits
+  RATE_LIMIT_MULTIPLIER: z.coerce.number().positive().default(1),
+  // The time zone interview times are written in (an IANA name such as Asia/Kolkata or Europe/London)
+  TIME_ZONE: z.string().default('Asia/Kolkata').refine(isTimeZone, 'must be an IANA time zone, e.g. Asia/Kolkata'),
 
   DATABASE_URL: z.url(),
   // Background task queues (BullMQ). A path selects the Redis database, e.g. redis://localhost:6379/0
@@ -69,8 +85,9 @@ export const loadConfig = (source: Record<string, string | undefined>) => {
 
   return Object.freeze({
     env: env.NODE_ENV,
-    app: { role: env.APP_ROLE },
+    app: { role: env.APP_ROLE, timeZone: env.TIME_ZONE, publicBaseUrl: env.PUBLIC_BASE_URL?.replace(/\/+$/, '') },
     redis: { url: env.REDIS_URL },
+    rateLimit: { multiplier: env.RATE_LIMIT_MULTIPLIER },
     tasks: { retryDelayMs: env.TASK_RETRY_DELAY_MS },
     mail: { sendIntervalMs: env.MAIL_SEND_INTERVAL_MS },
     db: { url: env.DATABASE_URL },

@@ -40,6 +40,9 @@ export interface CandidateRow {
   score: number | null
   experience_years: number | null
   status: CandidateStatus
+  /** ImageKit path of the resume (or, for old uploads, its public URL); never sent as a link */
+  resume_file: string | null
+  /** GET route that opens the resume (computed by the database), or null */
   resume_url: string | null
   applied_through: string | null
   current_location: string | null

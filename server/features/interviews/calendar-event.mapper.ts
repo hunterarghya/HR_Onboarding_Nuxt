@@ -12,11 +12,11 @@ export interface InterviewEventForCalendar {
 }
 
 /**
- * Builds the Google Calendar event for an interview slot: title, description, IST times, colour,
+ * Builds the Google Calendar event for an interview slot: title, description, times in `timeZone`, colour,
  * and a Meet link request for online interviews without a link. conferenceDataVersion is set only
  * then, because Google needs it to create the Meet link.
  */
-export const toCalendarEvent = (eventData: InterviewEventForCalendar): { resource: CalendarEvent, conferenceDataVersion?: number } => {
+export const toCalendarEvent = (eventData: InterviewEventForCalendar, timeZone: string): { resource: CalendarEvent, conferenceDataVersion?: number } => {
   const startDateTime = `${eventData.event_date}T${eventData.start_time}:00`
   const endDateTime = `${eventData.event_date}T${eventData.end_time}:00`
 
@@ -43,11 +43,11 @@ export const toCalendarEvent = (eventData: InterviewEventForCalendar): { resourc
     description: descriptionParts.join('\n'),
     start: {
       dateTime: startDateTime,
-      timeZone: 'Asia/Kolkata'
+      timeZone
     },
     end: {
       dateTime: endDateTime,
-      timeZone: 'Asia/Kolkata'
+      timeZone
     },
     colorId: '9' // Blueberry
   }

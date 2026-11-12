@@ -2,8 +2,8 @@ import { z } from 'zod'
 import type { CalendarEvent } from '~~/server/integrations/google/calendar.client'
 import { llmFlag } from '../llm-json'
 
-// Deterministic clean-up of the model's extraction: role reconciliation, time fallback and the
-// UTC→IST shift, interview mode and venue. No LLM here, so it is unit-tested directly.
+// Deterministic clean-up of the model's extraction: role reconciliation, date and times (from Google's own
+// timestamps when the event has them), interview mode and venue. No LLM here, so it is unit-tested directly.
 
 /**
  * The JSON the model is asked to return (see calendar-event.prompt.ts). is_activity must be a yes/no;
@@ -34,15 +34,24 @@ export interface InterviewEventDraft {
   google_event_id: string
 }
 
-// BUG-02 (kept as-is in this move): always adds +5:30, even when Google already returned IST
-export const convertToIST = (timeStr: string): string => {
-  if (!timeStr || !timeStr.includes(':')) return timeStr
-  const [h = 0, m = 0] = timeStr.split(':').map(Number)
-  let totalMinutes = h * 60 + m + (5 * 60 + 30)
-  totalMinutes = totalMinutes % (24 * 60)
-  const newH = Math.floor(totalMinutes / 60)
-  const newM = totalMinutes % 60
-  return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`
+/**
+ * An instant as the date and wall-clock time in `timeZone`, whatever offset it was written with:
+ * "2030-01-15T22:30:00Z" in Asia/Kolkata → { date: "2030-01-16", time: "04:00" }. Null if unreadable.
+ */
+export const toLocalDateTime = (isoDateTime: string, timeZone: string): { date: string, time: string } | null => {
+  const instant = new Date(isoDateTime)
+  if (Number.isNaN(instant.getTime())) return null
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  }).formatToParts(instant).map(p => [p.type, p.value]))
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` }
+}
+
+/** "HH:MM" plus some minutes, kept within the same day (at most 23:59). */
+const addMinutesSameDay = (time: string, minutes: number) => {
+  const [h = 0, m = 0] = time.split(':').map(Number)
+  const total = Math.min(h * 60 + m + minutes, 23 * 60 + 59)
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 }
 
 export const sanitizeTime = (timeStr: string | undefined | null): string | null => {
@@ -54,12 +63,15 @@ export const sanitizeTime = (timeStr: string | undefined | null): string | null 
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
-/** Turns the model's checked answer (is_activity true, with a date) into an interview event, or null to skip. */
-export const normalizeCalendarExtraction = (calendarEvent: CalendarEvent, activeRoles: string[], result: CalendarExtraction & { date: string }): InterviewEventDraft | null => {
+/**
+ * Turns the model's checked answer (is_activity true) into an interview event in `timeZone`, or null to skip.
+ * A timed event's date and times come from Google's timestamps (BUG-02: the model's reading, plus a fixed
+ * +5:30, was wrong for any calendar not in UTC). An all-day event takes its times from the model, which
+ * reads them from the title or description.
+ */
+export const normalizeCalendarExtraction = (calendarEvent: CalendarEvent, activeRoles: string[], result: CalendarExtraction, timeZone: string): InterviewEventDraft | null => {
   const summary = calendarEvent.summary || ''
   const description = calendarEvent.description || ''
-  const startDateTime = calendarEvent.start?.dateTime || calendarEvent.start?.date || ''
-  const endDateTime = calendarEvent.end?.dateTime || calendarEvent.end?.date || ''
 
   let finalRole: string | null = null
   const matchedRole = result.matched_role
@@ -86,28 +98,35 @@ export const normalizeCalendarExtraction = (calendarEvent: CalendarEvent, active
     }
   }
 
-  let startTime = sanitizeTime(result.start_time)
-  let endTime = sanitizeTime(result.end_time)
+  const start = calendarEvent.start?.dateTime ? toLocalDateTime(calendarEvent.start.dateTime, timeZone) : null
+  const end = calendarEvent.end?.dateTime ? toLocalDateTime(calendarEvent.end.dateTime, timeZone) : null
 
-  if (!startTime && startDateTime.includes('T')) {
-    startTime = sanitizeTime(startDateTime.split('T')[1]?.substring(0, 5))
+  let eventDate: string | null | undefined
+  let startTime: string | null
+  let endTime: string | null
+  if (start) {
+    eventDate = start.date
+    startTime = start.time
+    // an event running past midnight ends at the default below instead
+    endTime = end && end.date === start.date ? end.time : null
+  } else {
+    eventDate = calendarEvent.start?.date ?? result.date
+    startTime = sanitizeTime(result.start_time)
+    endTime = sanitizeTime(result.end_time)
   }
-  if (!endTime && endDateTime.includes('T')) {
-    endTime = sanitizeTime(endDateTime.split('T')[1]?.substring(0, 5))
+
+  if (!eventDate) {
+    console.log(`[CalendarAgent] ❌ No date for the event. Skipping.`)
+    return null
   }
   if (!startTime) {
     console.log(`[CalendarAgent] ❌ Could not determine a valid start time. Skipping.`)
     return null
   }
-  if (!endTime) {
-    const [sh = 0, sm = 0] = startTime.split(':').map(Number)
-    const endMinutes = (sh * 60 + sm + 240) % (24 * 60)
-    endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`
-    console.log(`[CalendarAgent] End time missing/invalid. Defaulting to ${endTime} (start + 4h)`)
+  if (!endTime || endTime <= startTime) {
+    endTime = addMinutesSameDay(startTime, 240)
+    console.log(`[CalendarAgent] End time missing/invalid. Defaulting to ${endTime} (start + 4h, same day)`)
   }
-
-  const istStart = convertToIST(startTime)
-  const istEnd = convertToIST(endTime)
 
   const googleMeetLink = calendarEvent.hangoutLink || calendarEvent.conferenceData?.entryPoints?.find(e => e.entryPointType === 'video')?.uri || ''
   const calendarLocation = calendarEvent.location || ''
@@ -125,9 +144,9 @@ export const normalizeCalendarExtraction = (calendarEvent: CalendarEvent, active
 
   const finalResult: InterviewEventDraft = {
     role: finalRole,
-    event_date: result.date,
-    start_time: istStart,
-    end_time: istEnd,
+    event_date: eventDate,
+    start_time: startTime,
+    end_time: endTime,
     num_candidates: result.num_candidates ?? 5,
     extra_candidates: 0,
     interview_mode: interviewMode,
@@ -136,7 +155,7 @@ export const normalizeCalendarExtraction = (calendarEvent: CalendarEvent, active
   }
 
   console.log(`[CalendarAgent] ✅ SUCCESS: ${finalRole}`)
-  console.log(`[CalendarAgent] 🕒 Conversion: UTC ${startTime} -> IST ${istStart}`)
+  console.log(`[CalendarAgent] 🕒 ${eventDate} ${startTime}–${endTime} (${timeZone})`)
   console.log(`[CalendarAgent] 👥 Candidates: ${finalResult.num_candidates}`)
   console.log(`[CalendarAgent] 📍 Mode: ${interviewMode} | Venue/Link: ${venueOrLink || '(none)'}`)
   return finalResult

@@ -18,7 +18,7 @@ const resume = (over: Partial<ResumeCandidate> = {}): ResumeCandidate => ({
   score: 70,
   experience_years: null,
   status: 'applied',
-  resume_url: null,
+  resume_file: null,
   applied_through: 'Gmail',
   current_location: null,
   current_ctc: null,

@@ -3,6 +3,7 @@ import qrcode from 'qrcode'
 import fs from 'fs'
 import path from 'path'
 import { config } from '~~/server/config/env'
+import { fetchMessagesSince } from './fetch-back'
 
 const { Client, LocalAuth } = pkg
 
@@ -161,7 +162,8 @@ export const fetchPDFsFromGroup = async (groupId: string, sinceDate: Date | null
     const chat = await client!.getChatById(groupId)
     console.log(`--- WhatsApp: Fetching messages for ${chat.name} ---`)
 
-    const messages = await chat.fetchMessages({ limit: 100 })
+    // everything since the last scan, not just the last 100 messages
+    const messages = await fetchMessagesSince(limit => chat.fetchMessages({ limit }), sinceDate)
     console.log(`--- WhatsApp: Found ${messages.length} messages. Checking media... ---`)
 
     const attachments: WhatsAppPdf[] = []
