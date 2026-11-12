@@ -101,7 +101,7 @@ const handleCreateJob = async () => {
   if (submittingJob.value) return
   submittingJob.value = true
   try {
-    const createdJob = await apiFetch<Job>('/jobs', { method: 'POST', body: { ...newJob } })
+    const createdJob = await apiFetch<Job>('/jobs', { method: 'POST', body: { ...newJob, deadline: toIsoInstant(newJob.deadline) } })
     Object.assign(newJob, {
       role: '', salary_min: '', salary_max: '', qualification: '', skills: '', experience_min_years: '',
       location: '', shortlist_mode: 'manual', deadline: '', min_score: 60, criteria_weights: {}
@@ -146,7 +146,7 @@ const handleUpdateJob = async () => {
     const { id, role, salary_min, salary_max, qualification, skills, experience_min_years, location, shortlist_mode, deadline, min_score, criteria_weights } = editingJob.value
     await apiFetch(`/jobs/${id}`, {
       method: 'PATCH',
-      body: { role, salary_min, salary_max, qualification, skills, experience_min_years, location, shortlist_mode, deadline, min_score, criteria_weights }
+      body: { role, salary_min, salary_max, qualification, skills, experience_min_years, location, shortlist_mode, deadline: toIsoInstant(deadline), min_score, criteria_weights }
     })
     editOpen.value = false
     editingJob.value = null
@@ -670,7 +670,7 @@ onMounted(() => {
 
             <UFormField label="Application Deadline">
               <UInput
-                :model-value="editingJob.deadline ? new Date(editingJob.deadline).toISOString().slice(0, 16) : ''"
+                :model-value="toLocalInput(editingJob.deadline)"
                 type="datetime-local"
                 class="w-full"
                 @update:model-value="editingJob.deadline = $event"

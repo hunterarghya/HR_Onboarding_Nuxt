@@ -115,15 +115,13 @@ export const jobRolesService = {
     return { removed: jobId }
   },
 
-  /**
-   * The job's candidates and events stay, moved to Open. No existence check: deleting an unknown id
-   * succeeds (unchanged; 404s arrive with BUG-12).
-   */
+  /** The job's candidates and events stay, moved to Open. 404 for an unknown job (BUG-12). */
   async remove(id: number) {
-    await withTransaction(async (client) => {
+    const deleted = await withTransaction(async (client) => {
       await jobRolesRepository.releaseLinked(id, client)
-      await jobRolesRepository.delete(id, client)
+      return jobRolesRepository.delete(id, client)
     })
+    if (!deleted) throw new NotFoundError('Job role')
     try {
       await jobVectorsRepository.remove(id)
     } catch {

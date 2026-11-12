@@ -190,14 +190,17 @@ describe('GET /api/candidates/scan-status', () => {
     await db().query(`INSERT INTO scan_timestamps (source_type, source_id, last_scanned_at) VALUES
       ('gmail', 'default', '2030-01-01T00:00:00Z'),
       ('whatsapp', 'g1', '2030-01-02T00:00:00Z'),
-      ('whatsapp', 'g2', '2030-01-05T00:00:00Z')`)
+      ('whatsapp', 'g2', '2030-01-05T00:00:00Z'),
+      ('google_forms', 'f1', '2030-01-09T00:00:00Z'),
+      ('google_forms', 'f2', '2030-01-03T00:00:00Z')`)
     const res = await api('GET', '/api/candidates/scan-status', { token: userToken() })
     expect(res.status).toBe(200)
     expect(res.body).toEqual({
       gmail: { lastScannedAt: expect.any(String), running: false },
       whatsapp: { lastScannedAt: expect.any(String), running: false },
-      google_forms: { lastScannedAt: null, running: false }
+      google_forms: { lastScannedAt: expect.any(String), running: false }
     })
     expect(new Date(res.body.whatsapp.lastScannedAt).getUTCDate()).toBe(5)
+    expect(new Date(res.body.google_forms.lastScannedAt).getUTCDate()).toBe(9) // the newest form scan (BUG-23: it showed the oldest)
   })
 })

@@ -4,6 +4,7 @@ import type { GoogleAuthClient } from '~~/server/integrations/google/oauth'
 import type { GoogleFormRow, JobRoleRow } from '~~/server/database/types'
 import { jobRolesRepository } from '../job-roles/job-roles.repository'
 import { applicationFormTitle, buildQuestionRequests, mapQuestionIds } from './application-form.definition'
+import { scanStateRepository } from '../ingestion/scan-state.repository'
 import { googleFormsRepository } from './google-forms.repository'
 
 /**
@@ -30,9 +31,10 @@ const createAndSaveForm = async (auth: GoogleAuthClient, job: Pick<JobRoleRow, '
   return { formId, formUrl, formTitle: title, questionMap }
 }
 
-/** Reply for a deleted form record, or 404 if there was none. */
-const removed = (rows: GoogleFormRow[]) => {
+/** Reply for a deleted form record, or 404 if there was none. Its scan record goes too (BUG-12). */
+const removed = async (rows: GoogleFormRow[]) => {
   if (rows.length === 0) throw new NotFoundError('Form')
+  await scanStateRepository.removeWatermark('google_forms', rows[0]!.form_id)
   console.log(`--- [GoogleForms] Deleted form record: ${rows[0]!.form_id} ---`)
   return { message: 'Form removed', formId: rows[0]!.form_id }
 }

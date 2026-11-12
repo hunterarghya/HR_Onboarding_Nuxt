@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { api, expectError } from './helpers/http'
 import { itRequiresLogin, userToken } from './helpers/auth'
-import { insertForm, insertJob, resetDb } from './helpers/db'
+import { db, insertForm, insertJob, resetDb } from './helpers/db'
 
 beforeAll(resetDb)
 
@@ -65,6 +65,16 @@ describe('DELETE /api/google-forms/:id', () => {
 
   it('returns 404 when nothing matches', async () => {
     expectError(await api('DELETE', '/api/google-forms/999999', { token: userToken() }), 404, 'Form not found')
+  })
+})
+
+describe('removing a form', () => {
+  it('also removes its scan record (BUG-12: it was left behind)', async () => {
+    const form = await insertForm()
+    await db().query(`INSERT INTO scan_timestamps (source_type, source_id, last_scanned_at) VALUES ('google_forms', $1, now())`, [form.form_id])
+    await api('DELETE', `/api/google-forms/${form.id}`, { token: userToken() })
+    const { rowCount } = await db().query('SELECT 1 FROM scan_timestamps WHERE source_id = $1', [form.form_id])
+    expect(rowCount).toBe(0)
   })
 })
 

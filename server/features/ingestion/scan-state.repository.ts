@@ -23,6 +23,10 @@ export const scanStateRepository = {
     )
   },
 
+  async removeWatermark(sourceType: ScanSource, sourceId: string, db: Queryable = getPool()) {
+    await db.query('DELETE FROM scan_timestamps WHERE source_type = $1 AND source_id = $2', [sourceType, sourceId])
+  },
+
   /** All watermarks, newest first. */
   async findAll(db: Queryable = getPool()) {
     const { rows } = await db.query<Pick<ScanTimestampRow, 'source_type' | 'source_id' | 'last_scanned_at'>>(

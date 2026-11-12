@@ -134,9 +134,8 @@ describe('DELETE /api/jobs/:id', () => {
     expect(rowCount).toBe(0)
   })
 
-  it('also returns 200 for an unknown id (no existence check today)', async () => {
-    const res = await api('DELETE', '/api/jobs/999999')
-    expect(res.status).toBe(200)
+  it('returns 404 for an unknown id (BUG-12: it said "deleted")', async () => {
+    expectError(await api('DELETE', '/api/jobs/999999'), 404, 'Job role not found')
   })
 
   it('keeps the job\'s candidates and events, moved to Open', async () => {
