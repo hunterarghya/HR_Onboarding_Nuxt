@@ -152,14 +152,33 @@ describe('event candidate assignment', () => {
   })
 
   describe('POST /api/interviews/events/:id/candidates/manual', () => {
-    it('replaces the assignment and resets invite flags (BUG-04)', async () => {
+    it('replaces the assignment, keeping the invite state of people who stay (BUG-04: they were re-invited)', async () => {
       const evt = await insertEvent()
       await assignCandidate(evt.id, a.id, true)
+      await assignCandidate(evt.id, c.id, true)
       const res = await api('POST', `/api/interviews/events/${evt.id}/candidates/manual`, { body: { candidate_ids: [a.id, b.id] } })
       expect(res.status).toBe(200)
       expect(res.body).toEqual({ message: 'Candidates assigned successfully', count: 2 })
+      const { rows } = await db().query('SELECT candidate_id, invite_sent FROM interview_candidates WHERE event_id = $1 ORDER BY candidate_id', [evt.id])
+      expect(rows).toEqual([
+        { candidate_id: a.id, invite_sent: true }, // stayed: still invited
+        { candidate_id: b.id, invite_sent: false } // new
+      ]) // c was taken off
+    })
+
+    it('auto-assign keeps the invite state of people who stay too', async () => {
+      const evt = await insertEvent({ num_candidates: 2 })
+      await assignCandidate(evt.id, a.id, true)
+      await api('POST', `/api/interviews/events/${evt.id}/candidates/auto`)
       const { rows } = await db().query('SELECT invite_sent FROM interview_candidates WHERE event_id = $1 AND candidate_id = $2', [evt.id, a.id])
-      expect(rows[0].invite_sent).toBe(false)
+      expect(rows[0].invite_sent).toBe(true)
+    })
+
+    it('can empty the list', async () => {
+      const evt = await insertEvent()
+      await assignCandidate(evt.id, a.id)
+      await api('POST', `/api/interviews/events/${evt.id}/candidates/manual`, { body: { candidate_ids: [] } })
+      expect(await assignedIds(evt.id)).toEqual([])
     })
 
     it('requires a candidate_ids array (400)', async () => {
