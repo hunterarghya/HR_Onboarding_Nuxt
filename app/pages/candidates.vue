@@ -49,7 +49,7 @@ const selectionOpen = ref(false)
 const selectionModal = reactive({
   candidateId: null as number | null,
   candidateName: '',
-  form: { offered_role: '', offered_salary: '', offered_location: '', joining_date: '' }
+  form: { offered_role: '', offered_salary: '' as number | '', offered_location: '', joining_date: '' }
 })
 
 // Mail modal
@@ -130,7 +130,7 @@ const handleStatusChange = async (candidateId: number, newStatus: string) => {
     selectionModal.candidateName = candidate?.name || ''
     selectionModal.form = {
       offered_role: candidate?.role_applied || '',
-      offered_salary: '',
+      offered_salary: '' as number | '',
       offered_location: candidate?.current_location || '',
       joining_date: ''
     }
@@ -418,7 +418,7 @@ onMounted(() => {
                 </td>
                 <!-- <td class="py-3 px-3 text-sm">{{ c.current_location }}</td> -->
                 <!-- <td class="py-3 px-3 text-sm font-medium">{{ c.current_ctc }}</td> -->
-                <!-- <td class="py-3 px-3 text-sm">{{ c.experience_level }}</td> -->
+                <!-- <td class="py-3 px-3 text-sm">{{ formatExperience(c.experience_years) }}</td> -->
                 <td class="py-3 px-3">
                   <UBadge
                     :color="c.score >= 80 ? 'success' : 'warning'"
@@ -589,7 +589,7 @@ onMounted(() => {
                   {{ c.joining_date ? new Date(c.joining_date).toLocaleDateString() : '—' }}
                 </td>
                 <td class="py-3 px-3">
-                  {{ c.offered_salary }}
+                  {{ formatAmount(c.offered_salary) }}
                 </td>
                 <td class="py-3 px-3">
                   {{ c.offered_location }}
@@ -647,7 +647,13 @@ onMounted(() => {
               <UInput v-model="selectionModal.form.offered_role" placeholder="e.g. Senior Frontend Engineer" class="w-full" />
             </UFormField>
             <UFormField label="Salary Offered">
-              <UInput v-model="selectionModal.form.offered_salary" placeholder="e.g. ₹12,00,000 / year" class="w-full" />
+              <UInput
+                v-model.number="selectionModal.form.offered_salary"
+                type="number"
+                min="1"
+                placeholder="Salary offered (per year)"
+                class="w-full"
+              />
             </UFormField>
             <UFormField label="Location">
               <UInput v-model="selectionModal.form.offered_location" placeholder="e.g. Remote / Bangalore" class="w-full" />

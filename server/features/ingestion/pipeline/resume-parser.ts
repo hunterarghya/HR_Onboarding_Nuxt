@@ -56,7 +56,8 @@ const extractName = (text: string): string => {
   return 'Unknown'
 }
 
-const extractExperience = (text: string): string => {
+/** Years of experience, or null if the resume doesn't say. */
+const extractExperience = (text: string): number | null => {
   const patterns = [
     /(\d{1,2})\+?\s*(?:years?|yrs?)\s*(?:of\s*)?(?:experience|exp)/gi,
     /(?:experience|exp)[\s:]*(\d{1,2})\+?\s*(?:years?|yrs?)/gi,
@@ -68,11 +69,11 @@ const extractExperience = (text: string): string => {
     if (match && match[1]) {
       const years = parseInt(match[1])
       if (years > 0 && years < 50) {
-        return `${years} years`
+        return years
       }
     }
   }
-  return 'N/A'
+  return null
 }
 
 const extractLocation = (text: string): string => {
@@ -98,10 +99,11 @@ const extractLocation = (text: string): string => {
   return 'N/A'
 }
 
-const extractCTC = (text: string): string => {
+/** Current CTC as an annual amount (8 LPA → 800000, 1.2 cr → 12000000), or null. */
+const extractCTC = (text: string): number | null => {
   const patterns = [
-    /(?:current\s*)?(?:ctc|salary|compensation|package)[\s:]*(?:(?:INR|Rs\.?|₹)\s*)?(\d+(?:\.\d+)?)\s*(?:lpa|lakhs?|lacs?|L|cr|crore)/gi,
-    /(\d+(?:\.\d+)?)\s*(?:lpa|lakhs?|lacs?)\s*(?:ctc|salary|pa|per\s*annum)/gi
+    /(?:current\s*)?(?:ctc|salary|compensation|package)[\s:]*(?:(?:INR|Rs\.?|₹)\s*)?(\d+(?:\.\d+)?)\s*(lpa|lakhs?|lacs?|L|cr|crore)/gi,
+    /(\d+(?:\.\d+)?)\s*(lpa|lakhs?|lacs?)\s*(?:ctc|salary|pa|per\s*annum)/gi
   ]
 
   for (const pattern of patterns) {
@@ -109,11 +111,13 @@ const extractCTC = (text: string): string => {
     if (match && match[1]) {
       const amount = parseFloat(match[1])
       if (amount > 0 && amount < 500) {
-        return `${amount} LPA`
+        // the unit matters: crores used to be reported as lakhs
+        const perUnit = /^cr/i.test(match[2] ?? '') ? 10_000_000 : 100_000
+        return Math.round(amount * perUnit)
       }
     }
   }
-  return 'N/A'
+  return null
 }
 
 interface ResumeSections {
@@ -172,7 +176,7 @@ export const parseResume = (resumeText: string) => {
     name: extractName(resumeText),
     email: extractEmail(resumeText),
     phone: extractPhone(resumeText),
-    experience_level: extractExperience(resumeText),
+    experience_years: extractExperience(resumeText),
     current_location: extractLocation(resumeText),
     current_ctc: extractCTC(resumeText),
     sections: extractSections(resumeText)

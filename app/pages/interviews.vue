@@ -48,7 +48,7 @@ const selectionModal = reactive({
   candidateId: null as number | null,
   candidateName: '',
   eventId: null as number | null,
-  form: { offered_role: '', offered_salary: '', offered_location: '', joining_date: '' }
+  form: { offered_role: '', offered_salary: '' as number | '', offered_location: '', joining_date: '' }
 })
 
 // Modals
@@ -281,7 +281,7 @@ const handleStatusChange = async (candidateId: number, newStatus: string, eventI
     selectionModal.eventId = eventId
     selectionModal.form = {
       offered_role: candidate?.role_applied || '',
-      offered_salary: '',
+      offered_salary: '' as number | '',
       offered_location: candidate?.current_location || '',
       joining_date: ''
     }
@@ -319,7 +319,7 @@ const submitSelection = async () => {
     selectionModal.candidateId = null
     selectionModal.candidateName = ''
     selectionModal.eventId = null
-    selectionModal.form = { offered_role: '', offered_salary: '', offered_location: '', joining_date: '' }
+    selectionModal.form = { offered_role: '', offered_salary: '' as number | '', offered_location: '', joining_date: '' }
     if (eid) {
       await fetchAssignedCandidates(eid)
       if (selectionMode.value === 'manual') await fetchEligible(eid)
@@ -986,7 +986,7 @@ onMounted(() => {
                                 <div class="flex items-center gap-1"><UIcon name="i-lucide-map-pin" class="size-3 opacity-50" /> {{ c.current_location }}</div>
                               </td> -->
                               <!-- <td class="p-3 text-xs">{{ c.current_ctc }}</td> -->
-                              <!-- <td class="p-3 text-xs">{{ c.experience_level }}</td> -->
+                              <!-- <td class="p-3 text-xs">{{ formatExperience(c.experience_years) }}</td> -->
                               <td class="p-3">
                                 <UBadge
                                   size="xs"
@@ -1145,7 +1145,7 @@ onMounted(() => {
                               <div class="flex items-center gap-1"><UIcon name="i-lucide-map-pin" class="size-3 opacity-50" /> {{ c.current_location }}</div>
                             </td> -->
                             <!-- <td class="p-3 text-xs">{{ c.current_ctc }}</td> -->
-                            <!-- <td class="p-3 text-xs">{{ c.experience_level }}</td> -->
+                            <!-- <td class="p-3 text-xs">{{ formatExperience(c.experience_years) }}</td> -->
                             <td class="p-3">
                               <UBadge
                                 size="xs"
@@ -1247,7 +1247,13 @@ onMounted(() => {
               <UInput v-model="selectionModal.form.offered_role" placeholder="e.g. Senior Frontend Developer" class="w-full" />
             </UFormField>
             <UFormField label="Offered Salary/CTC" required>
-              <UInput v-model="selectionModal.form.offered_salary" placeholder="e.g. $120,000" class="w-full" />
+              <UInput
+                v-model.number="selectionModal.form.offered_salary"
+                type="number"
+                min="1"
+                placeholder="Salary offered (per year)"
+                class="w-full"
+              />
             </UFormField>
             <UFormField label="Offered Location" required>
               <UInput v-model="selectionModal.form.offered_location" placeholder="e.g. Remote" class="w-full" />

@@ -1,3 +1,5 @@
+import type { CandidateStatus } from '~~/server/database/types'
+
 // Whether a scored resume becomes a candidate, and with which status.
 
 export interface ShortlistTarget {
@@ -17,6 +19,6 @@ export const decide = (target: ShortlistTarget, score: number) => {
   const minScoreRequired = target.min_score
   const isAuto = target.shortlist_mode === 'auto'
   const accept = target.shortlist_mode === 'manual' || (isAuto && score >= minScoreRequired)
-  const status = target.shortlist_mode === 'manual' ? 'applied' : 'shortlisted'
+  const status: CandidateStatus = target.shortlist_mode === 'manual' ? 'applied' : 'shortlisted'
   return { accept, status, minScoreRequired }
 }

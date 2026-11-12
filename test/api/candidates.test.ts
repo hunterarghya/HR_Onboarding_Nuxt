@@ -54,15 +54,40 @@ describe('PATCH /api/candidates/:id/status', () => {
   it('stores the offer for "selected"', async () => {
     const c = await insertCandidate()
     const res = await api('PATCH', `/api/candidates/${c.id}/status`, {
-      body: { status: 'selected', offered_role: 'SDE', offered_salary: '1000000', offered_location: 'Pune', joining_date: '2030-03-01' }
+      body: { status: 'selected', offered_role: 'SDE', offered_salary: 1000000, offered_location: 'Pune', joining_date: '2030-03-01' }
     })
     expect(res.status).toBe(200)
     const { rows } = await db().query('SELECT status, offered_role FROM candidates WHERE id = $1', [c.id])
     expect(rows[0]).toEqual({ status: 'selected', offered_role: 'SDE' })
   })
 
-  it('accepts any status string and unknown ids (VAL: no validation yet)', async () => {
-    expect((await api('PATCH', '/api/candidates/999999/status', { body: { status: 'banana' } })).status).toBe(200)
+  it.each([
+    ['an unknown status', { status: 'banana' }],
+    ['a missing status', {}],
+    ['offer fields on a non-selected status', { status: 'hold', offered_role: 'SDE' }],
+    ['text as offered salary', { status: 'selected', offered_role: 'SDE', offered_salary: '12 LPA', offered_location: 'Pune', joining_date: '2030-03-01' }],
+    ['a malformed joining date', { status: 'selected', offered_role: 'SDE', offered_salary: 1000000, offered_location: 'Pune', joining_date: '1st March' }]
+  ])('rejects %s (400)', async (_label, body) => {
+    const c = await insertCandidate()
+    expectError(await api('PATCH', `/api/candidates/${c.id}/status`, { body }), 400)
+  })
+
+  it('returns 404 for an unknown candidate (it used to say "updated")', async () => {
+    expectError(await api('PATCH', '/api/candidates/999999/status', { body: { status: 'hold' } }), 404)
+  })
+
+  it('stores the offered salary as a number', async () => {
+    const c = await insertCandidate()
+    await api('PATCH', `/api/candidates/${c.id}/status`, {
+      body: { status: 'selected', offered_role: 'SDE', offered_salary: 1250000.5, offered_location: 'Pune', joining_date: '2030-03-01' }
+    })
+    const res = await api('GET', '/api/candidates/selected', { query: { offered_role: 'SDE', limit: 100 } })
+    expect(res.body.data.find((x: { id: number }) => x.id === c.id)?.offered_salary).toBe(1250000.5) // a number, not '1250000.50'
+  })
+
+  it('the database refuses an unknown status written around the API', async () => {
+    const c = await insertCandidate()
+    await expect(db().query('UPDATE candidates SET status = \'banana\' WHERE id = $1', [c.id])).rejects.toThrow(/candidates_status_check/)
   })
 })
 

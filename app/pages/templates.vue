@@ -73,7 +73,7 @@ const dummyData = {
   name: 'John Doe',
   role_applied: 'Senior Frontend Engineer',
   offered_role: 'Lead Frontend Engineer',
-  offered_salary: '$150,000 / year',
+  offered_salary: '15,00,000',
   offered_location: 'Remote',
   joining_date: '2024-07-01',
   interview_date: '2024-06-15',

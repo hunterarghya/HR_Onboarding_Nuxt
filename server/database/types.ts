@@ -24,6 +24,9 @@ export interface JobRoleWithFormRow extends JobRoleRow {
   google_form_db_id?: number | null
 }
 
+export const CANDIDATE_STATUSES = ['applied', 'shortlisted', 'hold', 'rejected', 'marked', 'selected'] as const
+export type CandidateStatus = typeof CANDIDATE_STATUSES[number]
+
 export interface CandidateRow {
   id: number
   name: string | null
@@ -33,14 +36,14 @@ export interface CandidateRow {
   date_applied: Date
   resume_content: string | null
   score: number | null
-  experience_level: string | null
-  status: string | null
+  experience_years: number | null
+  status: CandidateStatus
   resume_url: string | null
   applied_through: string | null
   current_location: string | null
-  current_ctc: string | null
+  current_ctc: number | null
   offered_role: string | null
-  offered_salary: string | null
+  offered_salary: number | null
   offered_location: string | null
   joining_date: Date | null
   offer_sent: boolean | null

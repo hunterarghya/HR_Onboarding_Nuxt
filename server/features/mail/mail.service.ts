@@ -30,6 +30,16 @@ const noProgress: ReportProgress = async () => {}
 
 const longDate = (d: Date) => new Date(d).toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
+/** 1500000 → "15,00,000" */
+const amount = (v: number | null | undefined) => v == null ? '' : v.toLocaleString('en-IN', { maximumFractionDigits: 2 })
+
+/** Numeric candidate fields as template text; {{experience_level}} keeps working for older templates. */
+const candidateText = (c: { current_ctc?: number | null, offered_salary?: number | null, experience_years?: number | null }) => ({
+  current_ctc: amount(c.current_ctc),
+  offered_salary: amount(c.offered_salary),
+  experience_level: c.experience_years == null ? '' : `${c.experience_years} years`
+})
+
 /** Spaces out sends to stay well inside Gmail's sending limits (MAIL_SEND_INTERVAL_MS). */
 const pause = () => new Promise(resolve => setTimeout(resolve, config.mail.sendIntervalMs))
 
@@ -80,6 +90,7 @@ const sendInvitesForEvent = async (auth: GoogleAuthClient, sender: Sender, event
     try {
       const data = {
         ...candidate,
+        ...candidateText(candidate),
         company_name: sender.companyName,
         interview_date: event.event_date ? longDate(event.event_date) : '',
         interview_start_time: event.start_time?.slice(0, 5) || '',
@@ -189,6 +200,7 @@ export const mailService = {
         try {
           const data = {
             ...candidate,
+            ...candidateText(candidate),
             company_name: sender.companyName,
             joining_date: candidate.joining_date ? longDate(candidate.joining_date) : ''
           }

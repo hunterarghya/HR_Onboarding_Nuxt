@@ -1,5 +1,5 @@
 import { getPool, type Queryable } from '~~/server/core/db/pool'
-import type { CandidateRow } from '~~/server/database/types'
+import type { CandidateRow, CandidateStatus } from '~~/server/database/types'
 import type { ListCandidatesFilters, ListSelectedFilters } from './candidates.dto'
 
 export type SelectedCandidateRow = Pick<CandidateRow,
@@ -10,8 +10,8 @@ export interface ResumeCandidateUpdate {
   resume_url: string | null
   applied_through: string
   current_location: string
-  current_ctc: string
-  status: string
+  current_ctc: number | null
+  status: CandidateStatus
 }
 
 export interface ResumeCandidateInsert extends ResumeCandidateUpdate {
@@ -20,14 +20,14 @@ export interface ResumeCandidateInsert extends ResumeCandidateUpdate {
   phone: string
   role_applied: string
   resume_content: string
-  experience_level: string
+  experience_years: number | null
 }
 
 export interface OfferFields {
-  offered_role: unknown
-  offered_salary: unknown
-  offered_location: unknown
-  joining_date: unknown
+  offered_role: string
+  offered_salary: number
+  offered_location: string
+  joining_date: string
 }
 
 export const candidatesRepository = {
@@ -249,9 +249,9 @@ export const candidatesRepository = {
 
   async insertFromResume(c: ResumeCandidateInsert, db: Queryable = getPool()) {
     await db.query(
-      `INSERT INTO candidates (name, email, phone, role_applied, resume_content, score, experience_level, status, resume_url, applied_through, current_location, current_ctc)
+      `INSERT INTO candidates (name, email, phone, role_applied, resume_content, score, experience_years, status, resume_url, applied_through, current_location, current_ctc)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-      [c.name, c.email, c.phone, c.role_applied, c.resume_content, c.score, c.experience_level, c.status, c.resume_url, c.applied_through, c.current_location, c.current_ctc]
+      [c.name, c.email, c.phone, c.role_applied, c.resume_content, c.score, c.experience_years, c.status, c.resume_url, c.applied_through, c.current_location, c.current_ctc]
     )
   },
 
@@ -272,14 +272,18 @@ export const candidatesRepository = {
     await db.query('UPDATE candidates SET offer_sent = true WHERE id = $1', [id])
   },
 
-  async updateStatus(id: number, status: unknown, db: Queryable = getPool()) {
-    await db.query('UPDATE candidates SET status = $1 WHERE id = $2', [status, id])
+  /** False if no such candidate. */
+  async updateStatus(id: number, status: CandidateStatus, db: Queryable = getPool()) {
+    const { rowCount } = await db.query('UPDATE candidates SET status = $1 WHERE id = $2', [status, id])
+    return rowCount === 1
   },
 
-  async updateStatusWithOffer(id: number, status: unknown, offer: OfferFields, db: Queryable = getPool()) {
-    await db.query(
+  /** False if no such candidate. */
+  async updateStatusWithOffer(id: number, status: CandidateStatus, offer: OfferFields, db: Queryable = getPool()) {
+    const { rowCount } = await db.query(
       'UPDATE candidates SET status = $1, offered_role = $2, offered_salary = $3, offered_location = $4, joining_date = $5 WHERE id = $6',
       [status, offer.offered_role, offer.offered_salary, offer.offered_location, offer.joining_date, id]
     )
+    return rowCount === 1
   }
 }

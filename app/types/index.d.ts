@@ -28,14 +28,14 @@ export interface Candidate {
   role_applied: string
   date_applied: string
   score: number
-  experience_level: string
+  experience_years: number | null
   status: CandidateStatus
   resume_url: string
   applied_through: 'Gmail' | 'WhatsApp' | 'GoogleForms'
   current_location: string
-  current_ctc: string
+  current_ctc: number | null
   offered_role?: string
-  offered_salary?: string
+  offered_salary?: number | null
   offered_location?: string
   joining_date?: string
   offer_sent?: boolean

@@ -1,5 +1,5 @@
-import { ValidationError } from '~~/server/core/errors/app-error'
-import { OFFER_FIELDS_MESSAGE, type ListCandidatesFilters, type ListSelectedFilters, type UpdateStatusInput } from './candidates.dto'
+import { NotFoundError } from '~~/server/core/errors/app-error'
+import type { ListCandidatesFilters, ListSelectedFilters, UpdateStatusInput } from './candidates.dto'
 import { candidatesRepository } from './candidates.repository'
 
 /** Splits the limit + 1 rows a repository returned into a page and whether more exist. */
@@ -30,14 +30,9 @@ export const candidatesService = {
 
   /** "selected" also records the offer, and needs every offer field. Unknown ids are a no-op (unchanged). */
   async updateStatus(id: number, input: UpdateStatusInput) {
-    const { status, offered_role, offered_salary, offered_location, joining_date } = input
-    if (status === 'selected') {
-      if (!offered_role || !offered_salary || !offered_location || !joining_date) {
-        throw new ValidationError(null, OFFER_FIELDS_MESSAGE)
-      }
-      await candidatesRepository.updateStatusWithOffer(id, status, { offered_role, offered_salary, offered_location, joining_date })
-    } else {
-      await candidatesRepository.updateStatus(id, status)
-    }
+    const updated = input.status === 'selected'
+      ? await candidatesRepository.updateStatusWithOffer(id, input.status, input)
+      : await candidatesRepository.updateStatus(id, input.status)
+    if (!updated) throw new NotFoundError('Candidate')
   }
 }

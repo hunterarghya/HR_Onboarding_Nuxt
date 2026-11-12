@@ -51,16 +51,14 @@ export const processAttachments = async (
 
         const safeName = (parsed.name || 'Unknown').substring(0, 250)
         const safePhone = (parsed.phone || 'N/A').substring(0, 45)
-        const safeExperience = (parsed.experience_level || 'N/A').substring(0, 95)
         const safeLocation = (parsed.current_location || 'N/A').substring(0, 250)
-        const safeCtc = (parsed.current_ctc || 'N/A').substring(0, 95)
 
         const existingId = await candidatesRepository.findIdByEmailAndRole(finalEmail, targetRole.role)
         const ikUrl = await uploadResume(attachment.data, attachment.filename)
 
         if (existingId !== null) {
           await candidatesRepository.updateFromResume(existingId, {
-            score, resume_url: ikUrl, applied_through: attachment.source, current_location: safeLocation, current_ctc: safeCtc, status: finalStatus
+            score, resume_url: ikUrl, applied_through: attachment.source, current_location: safeLocation, current_ctc: parsed.current_ctc, status: finalStatus
           })
           console.log(`--- [Database] Updated: ${safeName} under ${targetRole.role} ---`)
         } else {
@@ -71,12 +69,12 @@ export const processAttachments = async (
             role_applied: targetRole.role,
             resume_content: resumeText.substring(0, 2000),
             score,
-            experience_level: safeExperience,
+            experience_years: parsed.experience_years,
             status: finalStatus,
             resume_url: ikUrl,
             applied_through: attachment.source,
             current_location: safeLocation,
-            current_ctc: safeCtc
+            current_ctc: parsed.current_ctc
           })
           console.log(`--- [Database] Saved New: ${safeName} under ${targetRole.role} ---`)
         }
