@@ -5,6 +5,8 @@ export const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL
 
 export const TEST_JWT_SECRET = 'smoke-test-jwt-secret-not-for-real-use-0123456789'
 
+export const TEST_TOKEN_ENCRYPTION_KEY = '0f'.repeat(32)
+
 export const TEST_GOOGLE_CLIENT_ID = 'smoke-test-client-id.apps.googleusercontent.com'
 
 // Nothing listens here, so Qdrant and Ollama calls fail fast. Their callers already swallow those

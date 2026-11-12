@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import pg from 'pg'
 import type { TestProject } from 'vitest/node'
-import { TEST_DATABASE_URL, TEST_GOOGLE_CLIENT_ID, TEST_JWT_SECRET, UNREACHABLE_URL } from './test-env'
+import { TEST_DATABASE_URL, TEST_GOOGLE_CLIENT_ID, TEST_JWT_SECRET, TEST_TOKEN_ENCRYPTION_KEY, UNREACHABLE_URL } from './test-env'
 
 declare module 'vitest' {
   export interface ProvidedContext {
@@ -102,6 +102,7 @@ export default async function setup(project: TestProject) {
     PORT: String(port),
     DATABASE_URL: TEST_DATABASE_URL,
     JWT_SECRET: TEST_JWT_SECRET,
+    TOKEN_ENCRYPTION_KEY: TEST_TOKEN_ENCRYPTION_KEY,
     GOOGLE_CLIENT_ID: TEST_GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET: 'smoke-test-client-secret',
     GOOGLE_REDIRECT_URI: `${baseURL}/auth/google/callback`,

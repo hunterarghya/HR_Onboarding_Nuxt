@@ -17,6 +17,7 @@ export default defineConfig({
           env: {
             DATABASE_URL: 'postgresql://unit:unit@127.0.0.1:9/unit_test',
             JWT_SECRET: 'unit-test-secret-unit-test-secret-0123',
+            TOKEN_ENCRYPTION_KEY: '1e'.repeat(32),
             GOOGLE_CLIENT_ID: 'unit-client-id',
             GOOGLE_CLIENT_SECRET: 'unit-client-secret',
             GOOGLE_REDIRECT_URI: 'http://127.0.0.1:9/auth/google/callback',

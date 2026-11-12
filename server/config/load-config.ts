@@ -8,6 +8,8 @@ const EnvSchema = z.object({
   DATABASE_URL: z.url(),
 
   JWT_SECRET: z.string().min(32, 'must be at least 32 characters (e.g. `openssl rand -hex 32`)'),
+  // Encrypts Google tokens at rest. Changing it makes stored tokens unreadable (users sign in again).
+  TOKEN_ENCRYPTION_KEY: z.string().regex(/^[0-9a-fA-F]{64}$/, 'must be 64 hex characters (32 bytes, e.g. `openssl rand -hex 32`)'),
 
   GOOGLE_CLIENT_ID: z.string().min(1),
   GOOGLE_CLIENT_SECRET: z.string().min(1),
@@ -52,7 +54,7 @@ export const loadConfig = (source: Record<string, string | undefined>) => {
     env: env.NODE_ENV,
     app: { companyName: env.COMPANY_NAME },
     db: { url: env.DATABASE_URL },
-    auth: { jwtSecret: env.JWT_SECRET },
+    auth: { jwtSecret: env.JWT_SECRET, tokenEncryptionKey: env.TOKEN_ENCRYPTION_KEY },
     google: { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET, redirectUri: env.GOOGLE_REDIRECT_URI },
     llm: {
       provider: env.LLM_PROVIDER,
