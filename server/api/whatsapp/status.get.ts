@@ -1,5 +1,3 @@
-import { getWhatsAppStatus } from '~~/server/integrations/whatsapp/whatsapp.client'
+import { whatsappController } from '~~/server/modules/whatsapp/whatsapp.controller'
 
-export default defineEventHandler(() => {
-  return getWhatsAppStatus()
-})
+export default whatsappController.status

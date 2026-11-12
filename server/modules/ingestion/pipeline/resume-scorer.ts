@@ -42,7 +42,7 @@ export const matchResumeToJobs = async (
 
     console.log('--- [Vector] Top 3 Semantic Matches: ---')
     searchResult.forEach((res, i) => {
-      console.log(`      ${i + 1}. ${(res.payload as any).role} (Score: ${toScore(res.score)}%)`)
+      console.log(`      ${i + 1}. ${res.payload!.role as string} (Score: ${toScore(res.score)}%)`)
     })
 
     const topMatch = searchResult[0]!
@@ -53,7 +53,7 @@ export const matchResumeToJobs = async (
       return { target_role: 'Open', score: toScore(topScore) }
     }
 
-    const targetRole = (topMatch.payload as any).role
+    const targetRole = topMatch.payload!.role as string
     const jobId = topMatch.id as number
 
     console.log(`--- [Vector] Selected Candidate Role: ${targetRole} ---`)
@@ -124,8 +124,8 @@ export const matchResumeToJobs = async (
     }
 
     return { target_role: targetRole, score: finalScore }
-  } catch (err: any) {
-    console.error('--- [Vector] Error in matchResumeToJobs:', err.message)
+  } catch (err) {
+    console.error('--- [Vector] Error in matchResumeToJobs:', (err as Error).message)
     return { target_role: 'Open', score: 0 }
   }
 }

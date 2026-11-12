@@ -32,6 +32,16 @@ export const jobRolesService = {
     return (await jobRolesRepository.findByIdWithLatestForm(id)) ?? job
   },
 
+  /** Boot: makes sure the Qdrant collection exists and re-indexes every job (sequential, blocking boot until Phase 5). */
+  async resyncAllVectors() {
+    await jobVectorsRepository.ensureCollection()
+    const jobs = await jobRolesRepository.findAll()
+    for (const job of jobs) {
+      await jobVectorsRepository.upsert(job)
+    }
+    console.log(`--- [Vector] Synced ${jobs.length} jobs to Qdrant ---`)
+  },
+
   /** No existence check: deleting an unknown id succeeds (unchanged; 404s arrive with BUG-12). */
   async remove(id: number) {
     await jobRolesRepository.delete(id)

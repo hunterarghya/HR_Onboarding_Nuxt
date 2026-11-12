@@ -1,5 +1,5 @@
 // Row shapes as node-postgres returns them (TIMESTAMP and DATE columns arrive as Date, BIGINT counts as strings).
-// Mirrors the schema created in modules/system/schema.ts until versioned migrations replace it.
+// Mirrors the schema created in database/schema.ts until versioned migrations replace it.
 
 export interface JobRoleRow {
   id: number

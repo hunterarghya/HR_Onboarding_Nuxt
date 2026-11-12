@@ -17,3 +17,8 @@ export const closePool = async (): Promise<void> => {
   pool = null
   await closing.end()
 }
+
+/** Throws if the database can't answer a trivial query. */
+export const pingDatabase = async (): Promise<void> => {
+  await getPool().query('SELECT 1')
+}

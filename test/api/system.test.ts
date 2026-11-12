@@ -3,10 +3,11 @@ import { api } from './helpers/http'
 import { TEST_GOOGLE_CLIENT_ID } from './setup/test-env'
 
 describe('GET /api/health', () => {
-  it('reports ok', async () => {
+  it('reports ok while the database is up, and each dependency separately', async () => {
     const res = await api('GET', '/api/health')
     expect(res.status).toBe(200)
-    expect(res.body).toEqual({ status: 'ok' })
+    // Qdrant and the LLM are unreachable in the smoke environment: reported, but not fatal
+    expect(res.body).toEqual({ status: 'ok', checks: { database: 'ok', vectorStore: 'error', llm: 'error', llmProvider: 'ollama' } })
   })
 
   it('tags every response with a request id', async () => {

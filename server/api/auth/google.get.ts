@@ -1,5 +1,3 @@
-import { generateAuthUrl } from '~~/server/integrations/google/oauth'
+import { authController } from '~~/server/modules/auth/auth.controller'
 
-export default defineEventHandler(() => {
-  return { url: generateAuthUrl() }
-})
+export default authController.getGoogleAuthUrl

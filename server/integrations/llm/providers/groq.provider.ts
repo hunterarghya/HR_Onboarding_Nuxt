@@ -1,5 +1,5 @@
 import { LlmError, type GroqSettings, type LlmProvider } from '../llm.types'
-import { postJson } from './http'
+import { getJson, postJson } from './http'
 
 const GROQ_BASE_URL = 'https://api.groq.com/openai/v1'
 
@@ -13,7 +13,7 @@ export const createGroqProvider = (settings: Omit<GroqSettings, 'provider'>): Ll
   model: settings.model,
 
   async generateJson(prompt) {
-    const data = await postJson('groq', `${settings.baseUrl ?? GROQ_BASE_URL}/chat/completions`, {
+    const data = await postJson<{ choices?: Array<{ message?: { content?: unknown } }> } | null>('groq', `${settings.baseUrl ?? GROQ_BASE_URL}/chat/completions`, {
       model: settings.model,
       messages: [{ role: 'user', content: prompt }],
       response_format: { type: 'json_object' },
@@ -26,5 +26,12 @@ export const createGroqProvider = (settings: Omit<GroqSettings, 'provider'>): Ll
     const content = data?.choices?.[0]?.message?.content
     if (typeof content !== 'string') throw new LlmError('groq', 'response had no message content')
     return content
+  },
+
+  async ping(timeoutMs) {
+    await getJson('groq', `${settings.baseUrl ?? GROQ_BASE_URL}/models`, {
+      timeoutMs,
+      headers: { authorization: `Bearer ${settings.apiKey}` }
+    })
   }
 })

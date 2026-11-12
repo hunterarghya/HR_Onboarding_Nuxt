@@ -141,7 +141,7 @@ export default async function setup(project: TestProject) {
   try {
     await waitFor('the server to answer /api/health', async () => (await fetch(`${baseURL}/api/health`)).ok, 60_000)
 
-    // initDb runs in a Nitro plugin that is not awaited, so the schema can lag behind the first response.
+    // bootstrapSchema runs in a Nitro plugin that is not awaited, so the schema can lag behind the first response.
     const db = new pg.Client({ connectionString: TEST_DATABASE_URL })
     await db.connect()
     try {
