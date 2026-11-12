@@ -171,9 +171,10 @@ const submitSelection = async () => {
 
 const openMailModal = async () => {
   try {
-    const templates = await apiFetch<EmailTemplate[]>('/templates')
+    // offer letters go out with an offer template or a custom one
+    const templates = (await apiFetch<EmailTemplate[]>('/templates')).filter(t => t.type === 'offer' || t.type === 'custom')
     mailModal.templates = templates
-    mailModal.selectedTemplateId = templates[0]?.id?.toString() || ''
+    mailModal.selectedTemplateId = (templates.find(t => t.type === 'offer') ?? templates[0])?.id?.toString() || ''
     mailModal.sending = false
     mailOpen.value = true
   } catch (err) {

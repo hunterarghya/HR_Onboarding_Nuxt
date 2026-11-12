@@ -18,7 +18,7 @@ describe('POST /api/mail/interview-invites/:eventId', () => {
   itRequiresLogin('POST', '/api/mail/interview-invites/1', { templateId: 1 })
 
   it('requires templateId (400)', async () => {
-    expectError(await api('POST', '/api/mail/interview-invites/1', { token: userToken(), body: {} }), 400, 'templateId is required')
+    expectError(await api('POST', '/api/mail/interview-invites/1', { token: userToken(), body: {} }), 400, 'Validation failed')
   })
 
   it('rejects non-numeric ids (400, were 500s)', async () => {
@@ -49,7 +49,7 @@ describe('POST /api/mail/interview-invites-all', () => {
   itRequiresLogin('POST', '/api/mail/interview-invites-all', { templateId: 1 })
 
   it('requires templateId (400)', async () => {
-    expectError(await api('POST', '/api/mail/interview-invites-all', { token: userToken(), body: {} }), 400, 'templateId is required')
+    expectError(await api('POST', '/api/mail/interview-invites-all', { token: userToken(), body: {} }), 400, 'Validation failed')
   })
 
   it('processes every event with unsent invites', async () => {
@@ -77,7 +77,21 @@ describe('POST /api/mail/offer-letters', () => {
 
   it('requires templateId and candidateIds (400)', async () => {
     const res = await api('POST', '/api/mail/offer-letters', { token: userToken(), body: { templateId: 1, candidateIds: [] } })
-    expectError(res, 400, 'templateId and candidateIds are required')
+    expectError(res, 400, 'Validation failed')
+  })
+
+  it.each([
+    ['duplicate ids', [1, 1]],
+    ['text ids', ['1']],
+    ['more than 500 ids', Array.from({ length: 501 }, (_, i) => i + 1)]
+  ])('rejects %s (400)', async (_label, candidateIds) => {
+    expectError(await api('POST', '/api/mail/offer-letters', { token: userToken(), body: { templateId: 1, candidateIds } }), 400, 'Validation failed')
+  })
+
+  it('refuses a template that is not for offers (400)', async () => {
+    const c = await insertCandidate({ status: 'selected' })
+    const res = await api('POST', '/api/mail/offer-letters', { token: userToken(), body: { templateId: await templateId('invite'), candidateIds: [c.id] } })
+    expectError(res, 400, 'Wrong template type')
   })
 
   it('only mails selected candidates whose offer is unsent', async () => {

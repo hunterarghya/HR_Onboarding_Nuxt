@@ -27,7 +27,7 @@ describe('POST /api/google-forms/create', () => {
   itRequiresLogin('POST', '/api/google-forms/create', { jobRoleId: 1 })
 
   it('requires jobRoleId (400)', async () => {
-    expectError(await api('POST', '/api/google-forms/create', { token: userToken(), body: {} }), 400, 'jobRoleId is required')
+    expectError(await api('POST', '/api/google-forms/create', { token: userToken(), body: {} }), 400, 'Validation failed')
   })
 
   it('returns 404 for an unknown job role', async () => {
@@ -58,24 +58,33 @@ describe('DELETE /api/google-forms/:id', () => {
     expect(res.body).toEqual({ message: 'Form removed', formId: form.form_id })
   })
 
-  it('deletes by google form id', async () => {
+  it('takes only the database id (400 for a Google form id)', async () => {
     const form = await insertForm()
-    const res = await api('DELETE', `/api/google-forms/${form.form_id}`, { token: userToken() })
-    expect(res.body).toEqual({ message: 'Form removed', formId: form.form_id })
-  })
-
-  it('deletes by job id with ?type=job', async () => {
-    const job = await insertJob()
-    const form = await insertForm({ job_role_id: job.id })
-    const res = await api('DELETE', `/api/google-forms/${job.id}`, { token: userToken(), query: { type: 'job' } })
-    expect(res.body).toEqual({ message: 'Form removed', formId: form.form_id })
-  })
-
-  it('rejects a non-numeric job id with ?type=job (400, was a 500 crash)', async () => {
-    expectError(await api('DELETE', '/api/google-forms/abc', { query: { type: 'job' } }), 400)
+    expectError(await api('DELETE', `/api/google-forms/${form.form_id}`, { token: userToken() }), 400)
   })
 
   it('returns 404 when nothing matches', async () => {
-    expectError(await api('DELETE', '/api/google-forms/nope', { token: userToken() }), 404, 'Form not found')
+    expectError(await api('DELETE', '/api/google-forms/999999', { token: userToken() }), 404, 'Form not found')
+  })
+})
+
+describe('DELETE /api/jobs/:id/form', () => {
+  itRequiresLogin('DELETE', '/api/jobs/1/form')
+
+  it('forgets the form of a job (this replaces ?type=job)', async () => {
+    const job = await insertJob()
+    const form = await insertForm({ job_role_id: job.id })
+    const res = await api('DELETE', `/api/jobs/${job.id}/form`, { token: userToken() })
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ message: 'Form removed', formId: form.form_id })
+  })
+
+  it('rejects a non-numeric job id (400)', async () => {
+    expectError(await api('DELETE', '/api/jobs/abc/form', { token: userToken() }), 400)
+  })
+
+  it('returns 404 when the job has no form', async () => {
+    const job = await insertJob()
+    expectError(await api('DELETE', `/api/jobs/${job.id}/form`, { token: userToken() }), 404, 'Form not found')
   })
 })

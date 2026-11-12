@@ -57,9 +57,8 @@ export const googleFormsRepository = {
     return rows
   },
 
-  /** Matches either the database id or Google's form id. */
-  async deleteByIdOrFormId(id: string, db: Queryable = getPool()) {
-    const { rows } = await db.query<GoogleFormRow>('DELETE FROM google_forms WHERE id::text = $1 OR form_id = $1 RETURNING *', [id])
+  async deleteById(id: number, db: Queryable = getPool()) {
+    const { rows } = await db.query<GoogleFormRow>('DELETE FROM google_forms WHERE id = $1 RETURNING *', [id])
     return rows
   }
 }

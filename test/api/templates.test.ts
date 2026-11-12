@@ -32,7 +32,19 @@ describe('POST /api/templates', () => {
   })
 
   it('requires name and body (400)', async () => {
-    expectError(await api('POST', '/api/templates', { body: { name: 'x' } }), 400, 'name and body are required')
+    expectError(await api('POST', '/api/templates', { body: { name: 'x' } }), 400, 'Validation failed')
+  })
+
+  it.each([
+    ['an unknown type', { name: 'x', body: 'y', type: 'birthday' }],
+    ['a blank name', { name: '  ', body: 'y' }],
+    ['a blank body', { name: 'x', body: '   ' }],
+    ['a too-long subject', { name: 'x', body: 'y', subject: 's'.repeat(501) }],
+    ['broken template syntax in the body', { name: 'x', body: 'Hi {{#if name}}' }],
+    ['broken template syntax in the subject', { name: 'x', body: 'y', subject: 'Hi {{name' }],
+    ['an unknown field', { name: 'x', body: 'y', is_default: true }]
+  ])('rejects %s (400)', async (_label, body) => {
+    expectError(await api('POST', '/api/templates', { body }), 400, 'Validation failed')
   })
 })
 
@@ -63,7 +75,12 @@ describe('PUT /api/templates/:id', () => {
 
   it('requires name and body (400)', async () => {
     const tpl = await createTemplate()
-    expectError(await api('PUT', `/api/templates/${tpl.id}`, { body: { name: 'x' } }), 400, 'name and body are required')
+    expectError(await api('PUT', `/api/templates/${tpl.id}`, { body: { name: 'x' } }), 400, 'Validation failed')
+  })
+
+  it('refuses to change a default template (403)', async () => {
+    const { rows } = await db().query('SELECT id FROM email_templates WHERE is_default LIMIT 1')
+    expectError(await api('PUT', `/api/templates/${rows[0].id}`, { body: { name: 'x', body: 'y' } }), 403, 'Default templates cannot be changed or deleted')
   })
 
   it('returns 404 for an unknown id', async () => {
@@ -78,6 +95,10 @@ describe('DELETE /api/templates/:id', () => {
     expect(res.status).toBe(200)
     expect(res.body).toEqual({ message: 'Template deleted' })
     expectError(await api('DELETE', `/api/templates/${tpl.id}`), 404, 'Template not found')
+  })
+
+  it('refuses to delete a default template (403)', async () => {
+    expectError(await api('DELETE', `/api/templates/${await defaultTemplateId('rejection')}`), 403)
   })
 })
 
@@ -117,12 +138,12 @@ describe('POST /api/templates/preview-raw', () => {
   })
 
   it('requires body (400)', async () => {
-    expectError(await api('POST', '/api/templates/preview-raw', { body: { subject: 'x' } }), 400, 'body is required')
+    expectError(await api('POST', '/api/templates/preview-raw', { body: { subject: 'x' } }), 400, 'Validation failed')
   })
 
-  it('reports handlebars syntax errors as 500 with details', async () => {
+  it('reports template syntax errors as 400 with the reason (was a 500)', async () => {
     const res = await api('POST', '/api/templates/preview-raw', { body: { body: '{{#if}}' } })
-    expectError(res, 500, 'Template compilation error')
-    expect(res.body.data.details).toEqual(expect.any(String))
+    expectError(res, 400, 'Validation failed')
+    expect(JSON.stringify(res.body.data.details)).toContain('Template syntax error')
   })
 })

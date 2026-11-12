@@ -83,7 +83,7 @@ const handleDeleteForm = async (job: Job) => {
   if (deletingFormJobId.value) return
   deletingFormJobId.value = job.id
   try {
-    await apiFetch(`/google-forms/${job.id}?type=job`, { method: 'DELETE' })
+    await apiFetch(`/jobs/${job.id}/form`, { method: 'DELETE' })
     job.form_url = undefined
     job.google_form_id = undefined
     job.google_form_db_id = undefined

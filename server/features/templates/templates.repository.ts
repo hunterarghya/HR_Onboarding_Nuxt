@@ -1,11 +1,12 @@
 import { getPool, type Queryable } from '~~/server/core/db/pool'
 import type { EmailTemplateRow } from '~~/server/database/types'
+import type { TemplateType } from './templates.dto'
 
 export interface TemplateFields {
   name: string
   subject: string
   body: string
-  type: string
+  type: TemplateType
 }
 
 export const templatesRepository = {

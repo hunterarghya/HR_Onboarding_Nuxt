@@ -334,7 +334,8 @@ const submitSelection = async () => {
 const openMailModal = (eventId: number | null = null) => {
   mailModal.eventId = eventId
   const inviteTemplate = templates.value.find(t => t.type === 'invite')
-  mailModal.templateId = inviteTemplate ? String(inviteTemplate.id) : (templates.value[0] ? String(templates.value[0].id) : '')
+  const customTemplate = templates.value.find(t => t.type === 'custom')
+  mailModal.templateId = String((inviteTemplate ?? customTemplate)?.id ?? '')
   mailModal.sending = false
   mailOpen.value = true
 }
@@ -1210,7 +1211,7 @@ onMounted(() => {
           <UFormField label="Choose Template">
             <USelect
               v-model="mailModal.templateId"
-              :items="templates.filter(t => t.type === 'invite').map(t => ({ label: `${t.name} (Invite)`, value: String(t.id) }))"
+              :items="templates.filter(t => t.type === 'invite' || t.type === 'custom').map(t => ({ label: `${t.name} (${t.type === 'invite' ? 'Invite' : 'Custom'})`, value: String(t.id) }))"
               class="w-full"
             />
           </UFormField>

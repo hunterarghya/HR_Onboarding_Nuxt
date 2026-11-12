@@ -1,7 +1,7 @@
 import { AppError, ConflictError, NotFoundError } from '~~/server/core/errors/app-error'
 import { batchUpdateForm, createForm } from '~~/server/integrations/google/forms.client'
 import type { GoogleAuthClient } from '~~/server/integrations/google/oauth'
-import type { JobRoleRow } from '~~/server/database/types'
+import type { GoogleFormRow, JobRoleRow } from '~~/server/database/types'
 import { jobRolesRepository } from '../job-roles/job-roles.repository'
 import { applicationFormTitle, buildQuestionRequests, mapQuestionIds } from './application-form.definition'
 import { googleFormsRepository } from './google-forms.repository'
@@ -28,6 +28,13 @@ const createAndSaveForm = async (auth: GoogleAuthClient, job: Pick<JobRoleRow, '
   console.log(`--- [GoogleForms] Form saved to DB: ${formId} ---`)
 
   return { formId, formUrl, formTitle: title, questionMap }
+}
+
+/** Reply for a deleted form record, or 404 if there was none. */
+const removed = (rows: GoogleFormRow[]) => {
+  if (rows.length === 0) throw new NotFoundError('Form')
+  console.log(`--- [GoogleForms] Deleted form record: ${rows[0]!.form_id} ---`)
+  return { message: 'Form removed', formId: rows[0]!.form_id }
 }
 
 export const googleFormsService = {
@@ -59,14 +66,9 @@ export const googleFormsService = {
     }
   },
 
-  /** Deletes by database id / Google form id, or (byJob) the form of a job. */
-  async remove(id: string, byJob: boolean) {
-    const rows = byJob
-      ? await googleFormsRepository.deleteByJobId(Number(id))
-      : await googleFormsRepository.deleteByIdOrFormId(id)
-    if (rows.length === 0) throw new NotFoundError('Form')
+  /** Forgets a form (the form itself stays in the HR's Google Drive). */
+  remove: async (id: number) => removed(await googleFormsRepository.deleteById(id)),
 
-    console.log(`--- [GoogleForms] Deleted form record: ${rows[0]!.form_id} ---`)
-    return { message: 'Form removed', formId: rows[0]!.form_id }
-  }
+  /** Forgets the form of a job. */
+  removeForJob: async (jobRoleId: number) => removed(await googleFormsRepository.deleteByJobId(jobRoleId))
 }
