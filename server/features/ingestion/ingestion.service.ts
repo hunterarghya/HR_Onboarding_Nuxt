@@ -54,6 +54,9 @@ export const ingestionService = {
     const email = await userEmail(userId)
     console.log(`--- [WhatsApp Scanner] Starting scan for ${email} ---`)
     const allAttachments: RawAttachment[] = []
+    // Watermarks move to the scan's start, and only after processing succeeded (BUG-06)
+    const scanStartedAt = new Date()
+    const scannedGroups: string[] = []
 
     try {
       if (groupIds.length > 0) {
@@ -65,8 +68,7 @@ export const ingestionService = {
               console.log(`--- [WhatsApp] Group ${gid} last scan: ${waLastScan ? waLastScan.toISOString() : 'NEVER'} ---`)
 
               allAttachments.push(...await collectFromGroup(gid, waLastScan))
-
-              await scanStateRepository.setWatermark('whatsapp', gid)
+              scannedGroups.push(gid)
             } catch (waErr) {
               console.error(`--- [WhatsApp] Error (group ${gid}) ---`, waErr)
             }
@@ -77,6 +79,7 @@ export const ingestionService = {
       }
 
       const candidatesFound = await processAttachments(allAttachments, onProgress)
+      for (const gid of scannedGroups) await scanStateRepository.setWatermark('whatsapp', gid, scanStartedAt)
       return { message: 'WhatsApp scan complete', count: candidatesFound }
     } catch (err) {
       throw scanFailed('--- [WhatsApp Scanner] Fatal Error ---', 'WhatsApp scan failed', err)
@@ -85,7 +88,8 @@ export const ingestionService = {
 
   /**
    * Task scan.gmail: job applications in Gmail since the last scan (first scan: last 24 h).
-   * The watermark moves before processing (BUG-06, fixed next).
+   * The watermark moves to the scan's start time only once every resume was processed, so a crash
+   * or failed attempt re-reads the same emails on retry instead of skipping them (BUG-06).
    */
   async runGmailScan(userId: number, onProgress?: ReportProgress) {
     const email = await userEmail(userId)
@@ -93,6 +97,7 @@ export const ingestionService = {
 
     try {
       const auth = await googleAuthService.getAuthClientForUser(userId)
+      const scanStartedAt = new Date()
       let gmailLastScan = await scanStateRepository.getWatermark('gmail')
       if (!gmailLastScan) {
         gmailLastScan = new Date(Date.now() - 24 * 60 * 60 * 1000)
@@ -100,11 +105,10 @@ export const ingestionService = {
       console.log(`--- [Gmail] Scanning emails after: ${gmailLastScan.toISOString()} ---`)
 
       const allAttachments = await collectFromGmail(auth, gmailLastScan)
-
-      await scanStateRepository.setWatermark('gmail')
-      console.log('--- [Gmail] Timestamp updated ---')
-
       const candidatesFound = await processAttachments(allAttachments, onProgress)
+
+      await scanStateRepository.setWatermark('gmail', 'default', scanStartedAt)
+      console.log('--- [Gmail] Timestamp updated ---')
       return { message: 'Email scan complete', count: candidatesFound }
     } catch (err) {
       throw scanFailed('--- [Mail Scanner] Error ---', 'Email scan failed', err)
@@ -128,6 +132,9 @@ export const ingestionService = {
 
       console.log(`--- [Forms Scanner] Processing ${forms.length} form(s) (Selected filter: ${selectedFormIds.length > 0 ? selectedFormIds.join(', ') : 'ALL'}) ---`)
       const allAttachments: RawAttachment[] = []
+      // Watermarks move to the scan's start, and only after processing succeeded (BUG-06)
+      const scanStartedAt = new Date()
+      const scannedForms: string[] = []
 
       for (const form of forms) {
         try {
@@ -136,9 +143,7 @@ export const ingestionService = {
           console.log(`--- [Forms Scanner] Form ${form.form_id} (${form.form_title}) last scan: ${lastScan ? lastScan.toISOString() : 'NEVER'} ---`)
 
           allAttachments.push(...await collectFromForm(auth, form, lastScan))
-
-          // Update last scan timestamp for this form
-          await scanStateRepository.setWatermark('google_forms', form.form_id)
+          scannedForms.push(form.form_id)
         } catch (formErr) {
           console.error(`--- [Forms Scanner] Error scanning form ${form.form_id}: ${(formErr as Error).message} ---`)
         }
@@ -146,6 +151,7 @@ export const ingestionService = {
 
       // Process all collected attachments through the shared pipeline
       const candidatesFound = await processAttachments(allAttachments, onProgress)
+      for (const formId of scannedForms) await scanStateRepository.setWatermark('google_forms', formId, scanStartedAt)
       return { message: 'Google Forms scan complete', count: candidatesFound }
     } catch (err) {
       throw scanFailed('--- [Forms Scanner] Fatal Error ---', 'Google Forms scan failed', err)

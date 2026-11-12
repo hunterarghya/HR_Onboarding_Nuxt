@@ -6,7 +6,10 @@ const gmailFor = (auth: GoogleAuthClient) => google.gmail({ version: 'v1', auth 
 export type GmailMessage = gmail_v1.Schema$Message
 export type GmailMessagePart = gmail_v1.Schema$MessagePart
 
-/** Inbox messages with attachments, optionally only those after `sinceDate` (max 50, full payloads). */
+// Safety cap per scan; the next scan continues from where this one's watermark ends
+const MAX_MESSAGES = 500
+
+/** Inbox messages with attachments, optionally only those after `sinceDate` (all pages, up to 500; full payloads). */
 export const listMessagesSince = async (auth: GoogleAuthClient, sinceDate: Date | null = null): Promise<GmailMessage[]> => {
   const gmail = gmailFor(auth)
 
@@ -19,13 +22,14 @@ export const listMessagesSince = async (auth: GoogleAuthClient, sinceDate: Date 
 
   console.log(`--- [Gmail] Fetching emails with query: "${q}" ---`)
 
-  const response = await gmail.users.messages.list({
-    userId: 'me',
-    maxResults: 50,
-    q: q
-  })
-
-  const messages = response.data.messages || []
+  const messages: gmail_v1.Schema$Message[] = []
+  let pageToken: string | undefined
+  do {
+    const response = await gmail.users.messages.list({ userId: 'me', maxResults: 100, q, pageToken })
+    messages.push(...(response.data.messages || []))
+    pageToken = response.data.nextPageToken || undefined
+  } while (pageToken && messages.length < MAX_MESSAGES)
+  if (messages.length > MAX_MESSAGES) messages.length = MAX_MESSAGES
   console.log(`--- [Gmail] Found ${messages.length} matching emails ---`)
   const fullMessages = []
 
