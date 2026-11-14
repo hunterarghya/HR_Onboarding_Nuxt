@@ -1,6 +1,6 @@
 # HR Recruitment Dashboard
 
-> An AI-powered, end-to-end recruitment automation platform built with **Nuxt 4**, **PostgreSQL**, **Ollama (LLaMA 3)**, **Qdrant vector search**, and **Google Workspace APIs**. It automates every stage of hiring — from posting job descriptions to scanning resumes, shortlisting candidates, scheduling interviews, and dispatching offer/rejection emails.
+> An AI-powered, end-to-end recruitment automation platform built with **Nuxt 4**, **PostgreSQL**, **an LLM (Groq or a local Ollama)**, **Qdrant vector search**, and **Google Workspace APIs**. It automates every stage of hiring — from posting job descriptions to scanning resumes, shortlisting candidates, scheduling interviews, and dispatching offer/rejection emails.
 
 [![Nuxt UI](https://img.shields.io/badge/Made%20with-Nuxt%20UI-00DC82?logo=nuxt&labelColor=020420)](https://ui.nuxt.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
@@ -35,7 +35,7 @@ All application-specific code (server APIs, AI pipeline, database schema, UI pag
 
 ## Overview
 
-The HR Recruitment Dashboard is a self-hosted, AI-augmented hiring platform that replaces manual HR workflows. It connects to your Gmail inbox, scans attachments, uses a local LLM (via Ollama) and vector embeddings (via Qdrant) to parse and score resumes, and automates the full candidate lifecycle — shortlisting, interview scheduling, and email communications.
+The HR Recruitment Dashboard is a self-hosted, AI-augmented hiring platform that replaces manual HR workflows. It connects to your Gmail inbox, scans attachments, uses an LLM (Groq or a local Ollama) and vector embeddings (via Qdrant) to parse and score resumes, and automates the full candidate lifecycle — shortlisting, interview scheduling, and email communications.
 
 ---
 
@@ -182,7 +182,7 @@ Three primary email actions:
 ### AI & Vector Search
 | Technology | Purpose |
 |---|---|
-| **Ollama (LLaMA 3 / phi3)** | Local LLM for resume analysis and email classification |
+| **Groq or Ollama** (`LLM_PROVIDER`) | LLM for email classification and calendar event parsing |
 | **Qdrant** | Vector database for semantic JD ↔ resume matching |
 | **BAAI/bge-small-en-v1.5** | Embedding model (via `@xenova/transformers`) |
 
@@ -229,8 +229,8 @@ Three primary email actions:
     ┌───────────┼──────────────────────────────────┐
     │           │                                  │
     ▼           ▼                                  ▼
-PostgreSQL    Qdrant                           Ollama
-(candidates,  (job_descriptions                (llama3 / phi3:
+PostgreSQL    Qdrant                           Groq or Ollama
+(candidates,  (job_descriptions                (LLM_PROVIDER:
  job_roles,    collection —                    resume parse,
  events,       multi-vector:                   email analysis)
  templates)    full, skills,
@@ -366,156 +366,78 @@ email_templates     — Handlebars HTML templates (offer, invite, rejection)
 
 ## Prerequisites
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running
-- A **Google Cloud Project** with Gmail API and Google Calendar API enabled
-- OAuth 2.0 credentials (Client ID + Secret) configured for your Google account
-- (Optional) [ImageKit](https://imagekit.io/) account for resume CDN storage
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) with Compose v2
+- A **Google Cloud project** with the Gmail, Calendar, Forms and Drive APIs enabled, and an OAuth 2.0 client whose authorised redirect URI is `http://localhost:3001/auth/google/callback`
+- An [ImageKit](https://imagekit.io/) account (resumes are stored there as private files)
+- For the AI model, either a [Groq](https://console.groq.com/keys) API key, or a local Ollama (started by compose, see below)
 
 ---
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` and fill in your values:
+Copy `.env.example` to `.env` and fill it in; every setting is described there. The server checks them at start-up and refuses to start with a message naming any missing or invalid one.
 
-```bash
-cp .env.example .env
-```
-
-| Variable | Description |
+| Required | |
 |---|---|
-| `DATABASE_URL` | PostgreSQL connection string |
-| `GOOGLE_CLIENT_ID` | Google OAuth Client ID |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth Client Secret |
-| `GOOGLE_REDIRECT_URI` | OAuth redirect URI (e.g. `http://localhost:3001/api/auth/google/callback`) |
-| `JWT_SECRET` | Secret key for JWT session tokens |
-| `FRONTEND_URL` | Your app's base URL |
-| `OLLAMA_BASE_URL` | Ollama API URL (default: `http://ollama:11434` inside Docker) |
-| `OLLAMA_MODEL` | LLM model name (e.g. `llama3` or `phi3`) |
-| `IMAGEKIT_PUBLIC_KEY` | ImageKit public key |
-| `IMAGEKIT_PRIVATE_KEY` | ImageKit private key |
-| `IMAGEKIT_URL_ENDPOINT` | ImageKit CDN endpoint |
-| `QDRANT_URL` | Qdrant vector DB URL (default: `http://qdrant:6333` inside Docker) |
-| `PUPPETEER_EXECUTABLE_PATH` | Path to Chromium binary (set automatically in Docker) |
+| `JWT_SECRET`, `TOKEN_ENCRYPTION_KEY` | 64 random hex characters each: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `ALLOWED_EMAILS` and/or `ALLOWED_EMAIL_DOMAINS` | who may sign in |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | Google OAuth |
+| `IMAGEKIT_PUBLIC_KEY`, `IMAGEKIT_PRIVATE_KEY`, `IMAGEKIT_URL_ENDPOINT` | resume storage |
+| `LLM_PROVIDER` | `groq` (with `GROQ_API_KEY`, `GROQ_MODEL`) or `ollama` (with `OLLAMA_MODEL`, e.g. `phi3`) |
+
+The database, Redis, Qdrant and Ollama addresses in `.env.example` are for `pnpm dev` on your machine; `docker compose` replaces them with the in-network ones, so one `.env` serves both.
 
 ---
 
 ## Running the Project
 
-### 1. Clone the repository
-
 ```bash
-git clone <your-repo-url>
-cd dashboard
+docker compose up --build -d                 # with LLM_PROVIDER=groq
+docker compose --profile ollama up --build -d   # with LLM_PROVIDER=ollama: also starts Ollama and pulls OLLAMA_MODEL once
 ```
 
-### 2. Configure environment
+Then open **http://localhost:3001** and sign in with Google. On first start the app migrates the database, seeds the default email templates and starts its background workers; `docker compose ps` shows `hr-app` as healthy when it's ready.
 
-```bash
-cp .env.example .env
-# Edit .env with your Google OAuth credentials, JWT secret, etc.
-```
+| What | Address |
+|---|---|
+| The app | http://localhost:3001 |
+| Health (database, queue, vectors, AI model) | http://localhost:3001/api/health |
+| Background tasks (BullMQ queues) | http://localhost:3001/tasks |
+| Qdrant dashboard (job vectors) | http://localhost:6335/dashboard |
+| Postgres / Redis / Ollama | `localhost:5434` / `localhost:6380` / `localhost:11435` (this machine only) |
 
-### 3. Build and start all services
+**Switching the AI model:** change `LLM_PROVIDER` in `.env`, then `docker compose up -d --force-recreate dashboard` (add `--profile ollama` for Ollama).
 
-```bash
-docker compose up --build
-```
-
-This starts:
-- `hr-postgres` — PostgreSQL 15 on port `5432`
-- `hr-redis` — Redis on port `6379`
-- `hr-ollama` — Ollama LLM server on port `11434`
-- `hr-qdrant` — Qdrant vector DB on port `6333`
-- `nuxt-dashboard` — The Nuxt app on port `3001`
-
-### 4. Pull the LLM model into Ollama
-
-After the `hr-ollama` container is running, pull the model (only required once — data is persisted in a Docker volume):
-
-```bash
-# Recommended: LLaMA 3 (better accuracy)
-docker exec -it hr-ollama ollama pull llama3
-
-# Alternative: phi3 (faster / lower memory)
-docker exec -it hr-ollama ollama pull phi3
-```
-
-> ⚠️ LLaMA 3 requires ~5 GB of disk space. Make sure Docker has sufficient resources allocated.
-
-### 5. Open the app
-
-Visit [http://localhost:3001](http://localhost:3001) and log in with your Google account.
-
----
+**Workers in their own container (optional):** `APP_ROLE_DASHBOARD=web docker compose --profile split up -d`. Link WhatsApp before splitting: the QR code comes from the process running WhatsApp.
 
 ### Useful Docker Commands
 
 ```bash
-# Start in background (detached)
-docker compose up -d --build
-
-# View logs for the Nuxt app
-docker compose logs -f dashboard
-
-# View Ollama logs
-docker compose logs -f ollama
-
-# Stop all containers
-docker compose down
-
-# Stop and remove volumes (⚠️ deletes all data)
-docker compose down -v
-
-# Check running containers
-docker ps
-
-# Access PostgreSQL shell
-docker exec -it hr-postgres psql -U postgres -d hr_onboarding
-
-# List downloaded Ollama models
-docker exec -it hr-ollama ollama list
-
-# Remove and re-pull a model
-docker exec -it hr-ollama ollama rm llama3
-docker exec -it hr-ollama ollama pull llama3
+docker compose ps                       # status and health
+docker compose logs -f dashboard        # app log
+docker compose restart dashboard        # restart the app
+docker compose down                     # stop (data is kept in volumes)
+docker compose down -v                  # stop and delete all data
+docker compose exec postgres psql -U postgres -d hr_onboarding
 ```
 
 ---
 
 ## Development (Without Docker)
 
-If you want to run the Nuxt app in dev mode while keeping the infrastructure services in Docker:
+Keep the supporting services in Docker and run the app with hot reload:
 
 ```bash
-# Start only infrastructure services
-docker compose up postgres redis ollama qdrant -d
-
-# Pull a model if not already done
-docker exec -it hr-ollama ollama pull llama3
-
-# Install dependencies
+docker compose up -d postgres redis qdrant     # add: --profile ollama up -d ollama ollama-pull
 pnpm install
-
-# Start dev server (hot-reload)
-pnpm dev
+pnpm dev                                        # http://localhost:3001
 ```
 
-App runs on [http://localhost:3000](http://localhost:3000).
-
-Other development commands:
-
 ```bash
-# Type check
+pnpm lint            # ESLint, including the server layer rules
 pnpm typecheck
-
-# Lint
-pnpm lint
-
-# Build for production
-pnpm build
-
-# Preview production build locally
-pnpm preview
+pnpm test            # unit tests + API smoke suite (needs postgres and redis from compose)
+pnpm test:build      # the same against the production build
 ```
 
 ---
