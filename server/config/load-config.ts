@@ -22,6 +22,8 @@ const EnvSchema = z.object({
   PUBLIC_BASE_URL: z.url({ protocol: /^https$/ }).optional(),
   // Scales every request limit (sign-in, scans, mail…); 1 = the built-in limits
   RATE_LIMIT_MULTIPLIER: z.coerce.number().positive().default(1),
+  // Where the embedding model is downloaded to (default: inside node_modules). The Docker image uses a volume.
+  EMBEDDINGS_CACHE_DIR: z.string().optional(),
   // The time zone interview times are written in (an IANA name such as Asia/Kolkata or Europe/London)
   TIME_ZONE: z.string().default('Asia/Kolkata').refine(isTimeZone, 'must be an IANA time zone, e.g. Asia/Kolkata'),
 
@@ -104,6 +106,7 @@ export const loadConfig = (source: Record<string, string | undefined>) => {
       groq: { apiKey: env.GROQ_API_KEY, model: env.GROQ_MODEL }
     },
     qdrant: { url: env.QDRANT_URL, collection: 'job_descriptions', vectorSize: 384 },
+    embeddings: { cacheDir: env.EMBEDDINGS_CACHE_DIR },
     imagekit: { publicKey: env.IMAGEKIT_PUBLIC_KEY, privateKey: env.IMAGEKIT_PRIVATE_KEY, urlEndpoint: env.IMAGEKIT_URL_ENDPOINT },
     whatsapp: { executablePath: env.PUPPETEER_EXECUTABLE_PATH }
   })
