@@ -57,10 +57,9 @@ export const initWhatsApp = (): void => {
   client = new Client({
     authStrategy: new LocalAuth({ dataPath: AUTH_PATH }),
     authTimeoutMs: 60000,
-    webVersionCache: {
-      type: 'remote',
-      remotePath: 'https://raw.githubusercontent.com/wwebjs/web-nodejs/main/index.html'
-    },
+    // The current WhatsApp Web, cached next to the session (a volume in Docker). The remote copy this
+    // used to load from no longer exists (404), and WhatsApp couldn't start with it.
+    webVersionCache: { type: 'local', path: path.join(AUTH_PATH, '.wwebjs_cache') },
     puppeteer: {
       args: [
         '--no-sandbox',
@@ -78,6 +77,7 @@ export const initWhatsApp = (): void => {
   } as ClientOptions)
 
   client.on('qr', (qr: string) => {
+    if (status !== 'qr') console.log('--- WhatsApp: QR code ready; scan it on the Scanners page ---')
     status = 'qr'
     qrcode.toDataURL(qr, (_err: Error | null | undefined, url: string) => {
       qrCodeData = url

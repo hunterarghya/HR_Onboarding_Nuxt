@@ -1,77 +1,147 @@
-version: '3.8'
+# HR Onboarding: `docker compose up --build` starts the app on http://localhost:3001 with everything it needs.
+#
+# Optional extras (profiles):
+#   --profile ollama   a local Ollama server, and pulls OLLAMA_MODEL once (when LLM_PROVIDER=ollama)
+#   --profile split    background work in its own container (then set APP_ROLE_DASHBOARD=web)
+#
+# Host ports of the supporting services are bound to 127.0.0.1: reachable from this machine only.
+# Their numbers match .env.example, so `pnpm dev` on the host can use them too.
+
+# the project name keeps the existing volumes (database, vectors) in use
+name: hr_onboarding_nuxt
 
 services:
   postgres:
-    image: postgres:15-alpine
+    image: postgres:15.19-alpine
     container_name: hr-postgres
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
       POSTGRES_DB: ${DB_NAME:-hr_onboarding}
     ports:
-      - "5434:5432"
+      - "127.0.0.1:5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+    restart: unless-stopped
 
+  # Background task queues (BullMQ). Saved to disk, so queued work survives a restart.
   redis:
-    image: redis:alpine
+    image: redis:7.4-alpine
     container_name: hr-redis
+    command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "6380:6379"
-
-  ollama:
-    image: ollama/ollama:latest
-    container_name: hr-ollama
-    environment:
-      - OLLAMA_HOST=0.0.0.0
-      - OLLAMA_ORIGINS="*"
-    ports:
-      - "11435:11434"
+      - "127.0.0.1:6380:6379"
     volumes:
-      - ollama_data:/root/.ollama
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
 
+  # Job-description vectors for resume matching. Web UI: http://localhost:6335/dashboard
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.20.0
     container_name: hr-qdrant
     ports:
-      - "6335:6333"
+      - "127.0.0.1:6335:6333"
     volumes:
       - qdrant_data:/qdrant/storage
+    restart: unless-stopped
 
+  # Local AI model server, only with `--profile ollama` (not needed when LLM_PROVIDER=groq)
+  ollama:
+    image: ollama/ollama:0.12.6
+    container_name: hr-ollama
+    profiles: [ollama]
+    environment:
+      OLLAMA_HOST: 0.0.0.0
+    ports:
+      - "127.0.0.1:11435:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Downloads OLLAMA_MODEL into the ollama volume once, then exits (quick when it's already there)
+  ollama-pull:
+    image: ollama/ollama:0.12.6
+    container_name: hr-ollama-pull
+    profiles: [ollama]
+    environment:
+      OLLAMA_HOST: ollama:11434
+    entrypoint: ["ollama", "pull", "${OLLAMA_MODEL:-phi3}"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+
+  # The app: web pages, API and (by default) the background workers and WhatsApp. http://localhost:3001
   dashboard:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: nuxt-dashboard
+    build: .
+    image: hr-onboarding:local
+    container_name: hr-app
     env_file: .env
-    shm_size: '1gb'
+    environment: &app-environment
+      # .env holds host addresses for `pnpm dev`; inside compose the services are reached by name
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-hr_onboarding}
+      REDIS_URL: redis://redis:6379
+      QDRANT_URL: http://qdrant:6333
+      OLLAMA_BASE_URL: http://ollama:11434
+      APP_ROLE: ${APP_ROLE_DASHBOARD:-all}
+      # container settings that a host-oriented .env must not change
+      HOST: 0.0.0.0
+      PORT: "3000"
+      NODE_ENV: production
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
+      EMBEDDINGS_CACHE_DIR: /app/data/models
     ports:
       - "3001:3000"
     volumes:
       - whatsapp_auth:/app/whatsapp-auth
-    environment:
-      - PORT=3000
-      - HOST=0.0.0.0
-      - NODE_ENV=production
-      - REDIS_URL=redis://redis:6379
+      - models:/app/data/models
+    shm_size: 1gb # Chromium (WhatsApp) needs more shared memory than Docker's default
     depends_on:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_started
-      ollama:
-        condition: service_started
+        condition: service_healthy
       qdrant:
+        condition: service_started
+    restart: unless-stopped
+
+  # Background workers and WhatsApp on their own, only with `--profile split` (and APP_ROLE_DASHBOARD=web)
+  worker:
+    image: hr-onboarding:local
+    container_name: hr-worker
+    profiles: [split]
+    env_file: .env
+    environment:
+      <<: *app-environment
+      APP_ROLE: worker
+    volumes:
+      - whatsapp_auth:/app/whatsapp-auth
+      - models:/app/data/models
+    shm_size: 1gb
+    depends_on:
+      dashboard:
         condition: service_started
     restart: unless-stopped
 
 volumes:
   postgres_data:
-  ollama_data:
+  redis_data:
   qdrant_data:
+  ollama_data:
   whatsapp_auth:
+  models:

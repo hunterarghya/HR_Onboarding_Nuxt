@@ -1,3 +1,8 @@
+# Install scripts allowed to run (pnpm 10 skips all others). sharp downloads its native binary here;
+# @xenova/transformers loads it at startup, so without it resume matching and job indexing fail.
+onlyBuiltDependencies:
+  - sharp
+
 ignoredBuiltDependencies:
   - '@parcel/watcher'
   - '@tailwindcss/oxide'

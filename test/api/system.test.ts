@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { db } from './helpers/db'
 import { api, expectError } from './helpers/http'
 import { userToken } from './helpers/tokens'
+import { itRequiresLogin } from './helpers/auth'
+import { runTask } from './helpers/tasks'
 import { TEST_GOOGLE_CLIENT_ID } from './setup/test-env'
 
 describe('GET /api/health', () => {
@@ -59,6 +61,25 @@ describe('GET /api/whatsapp/groups', () => {
     const res = await api('GET', '/api/whatsapp/groups')
     expect(res.status).toBe(200)
     expect(res.body).toEqual([])
+  })
+})
+
+describe('GET /api/tasks', () => {
+  itRequiresLogin('GET', '/api/tasks')
+
+  it('lists every queue with its counts and latest tasks', async () => {
+    await runTask('POST', '/api/candidates/scan', {}) // a finished task to show
+    const res = await api('GET', '/api/tasks', { query: { limit: 5 } })
+    expect(res.status).toBe(200)
+    expect(res.body.map((q: { queue: string }) => q.queue)).toEqual(['scans', 'mail', 'background'])
+    const scans = res.body[0]
+    expect(scans.counts).toEqual({ queued: expect.any(Number), active: expect.any(Number), completed: expect.any(Number), failed: expect.any(Number) })
+    expect(scans.tasks.length).toBeLessThanOrEqual(5)
+    expect(scans.tasks.find((t: { id: string }) => t.id === 'scan.whatsapp')).toMatchObject({ name: 'scan.whatsapp', state: 'completed' })
+  })
+
+  it('rejects a silly limit (400)', async () => {
+    expectError(await api('GET', '/api/tasks', { query: { limit: 1000 } }), 400)
   })
 })
 

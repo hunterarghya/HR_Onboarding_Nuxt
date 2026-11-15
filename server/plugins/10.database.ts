@@ -1,4 +1,5 @@
 import { closePool, getPool } from '~~/server/core/db/pool'
+import { markDatabaseReady } from '~~/server/core/db/ready'
 import { loadMigrations } from '~~/server/database/migration-files'
 import { runMigrations } from '~~/server/database/migrator'
 import { seedDefaultTemplates } from '~~/server/database/seed'
@@ -17,5 +18,8 @@ export default defineNitroPlugin(async (nitroApp) => {
   } catch (err) {
     // The server keeps running so /api/health can report the database problem
     console.error('Error initializing database:', err)
+  } finally {
+    // the task workers start now, so they never run against a half-migrated schema
+    markDatabaseReady()
   }
 })

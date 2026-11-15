@@ -109,6 +109,25 @@ export const findTask = async (taskId: string): Promise<Job | null> => {
   return null
 }
 
+/** Per queue: how many tasks are in each state, and the most recent ones (newest first). */
+export const listRecentTasks = async (perQueue: number) => Promise.all(QUEUE_NAMES.map(async (name) => {
+  const queue = getQueue(name)
+  const [counts, jobs] = await Promise.all([
+    queue.getJobCounts('waiting', 'delayed', 'prioritized', 'active', 'completed', 'failed'),
+    queue.getJobs(['waiting', 'delayed', 'prioritized', 'active', 'completed', 'failed'], 0, perQueue - 1, false)
+  ])
+  return {
+    queue: name,
+    counts: {
+      queued: (counts.waiting ?? 0) + (counts.delayed ?? 0) + (counts.prioritized ?? 0),
+      active: counts.active ?? 0,
+      completed: counts.completed ?? 0,
+      failed: counts.failed ?? 0
+    },
+    jobs: jobs.filter(Boolean).sort((a, b) => b.timestamp - a.timestamp).slice(0, perQueue)
+  }
+}))
+
 export const isTaskRunning = async (taskId: string): Promise<boolean> => {
   const job = await findTask(taskId)
   return job ? RUNNING_STATES.has(await job.getState()) : false
