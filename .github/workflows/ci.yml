@@ -77,6 +77,15 @@ jobs:
       - name: Build the app image
         run: docker build -t hr-onboarding:ci .
 
+      # Google's libraries (gaxios → node-fetch) must read Google's gzip replies in the image's Node:
+      # an invalid code gets a 400/401 answer, not "Premature close" (which broke sign-in on Node 22.23.0)
+      - name: Call Google's token endpoint from the image
+        run: |
+          docker run --rm -w /app/.output/server/node_modules/gaxios hr-onboarding:ci node -e "
+            const { Gaxios } = require('./build/src/index.js')
+            new Gaxios().request({ url: 'https://oauth2.googleapis.com/token', method: 'POST', data: 'code=x&client_id=x&client_secret=x&redirect_uri=http://localhost&grant_type=authorization_code', headers: { 'content-type': 'application/x-www-form-urlencoded' }, validateStatus: () => true })
+              .then(r => { console.log('Google answered', r.status); process.exit(r.status >= 400 && r.status < 500 ? 0 : 1) }, e => { console.error(e.message); process.exit(1) })"
+
       - name: Check the compose file
         run: |
           touch .env

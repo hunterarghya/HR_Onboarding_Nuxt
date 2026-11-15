@@ -1,7 +1,9 @@
 # One image for the web app and the background workers (APP_ROLE picks what a container runs).
 
 # ---- build: install exactly what pnpm-lock.yaml says, then build the Nuxt server bundle
-FROM node:22.23.0-bookworm-slim AS builder
+# Node 22.23.4 or later: 22.23.0 breaks gzip responses for node-fetch (used by Google's libraries), so
+# signing in with Google failed with "Premature close" at the token exchange
+FROM node:22.23.4-bookworm-slim AS builder
 WORKDIR /app
 
 # pnpm comes from package.json's "packageManager" via corepack; WhatsApp uses the system Chromium
@@ -20,7 +22,7 @@ COPY . .
 RUN NODE_OPTIONS=--max-old-space-size=4096 pnpm build
 
 # ---- run: the built bundle, Chromium for WhatsApp, and a non-root user
-FROM node:22.23.0-bookworm-slim AS runner
+FROM node:22.23.4-bookworm-slim AS runner
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
