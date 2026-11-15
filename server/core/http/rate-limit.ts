@@ -36,9 +36,17 @@ export const rateRuleFor = (method: string, path: string): RateRule | null => {
   return null
 }
 
+/**
+ * The limiter's Redis connection. Commands sent before it has connected wait for it (they used to fail,
+ * so the first requests after a start or a reconnect weren't counted), but never longer than a second,
+ * so a Redis outage can't hold requests up.
+ */
+export const createRateLimitClient = (url: string) =>
+  new Redis(url, { maxRetriesPerRequest: 1, connectTimeout: 2_000, commandTimeout: 1_000 })
+
 let client: Redis | null = null
 const redis = () => {
-  client ??= new Redis(config.redis.url, { maxRetriesPerRequest: 1, enableOfflineQueue: false, lazyConnect: false })
+  client ??= createRateLimitClient(config.redis.url)
   return client
 }
 

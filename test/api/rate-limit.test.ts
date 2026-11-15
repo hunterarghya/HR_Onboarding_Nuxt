@@ -1,6 +1,6 @@
 import { Redis } from 'ioredis'
 import { afterAll, describe, expect, it, vi } from 'vitest'
-import { hitRateLimit, rateRuleFor, TooManyRequestsError, type RateRule } from '../../server/core/http/rate-limit'
+import { createRateLimitClient, hitRateLimit, rateRuleFor, TooManyRequestsError, type RateRule } from '../../server/core/http/rate-limit'
 import { api } from './helpers/http'
 import { userToken } from './helpers/auth'
 import { TEST_REDIS_URL } from './setup/test-env'
@@ -42,6 +42,23 @@ describe('hitRateLimit', () => {
 
   it('counts each user (or address) separately', async () => {
     await expect(hitRateLimit(rule, 'user-2', redis)).resolves.toBeUndefined()
+  })
+
+  it('counts the very first request on a new connection (it used to be let through uncounted)', async () => {
+    const fresh = createRateLimitClient(TEST_REDIS_URL)
+    try {
+      await expect(hitRateLimit({ ...rule, name: `first-${Date.now()}`, limit: 0 }, 'user-4', fresh)).rejects.toBeInstanceOf(TooManyRequestsError)
+    } finally {
+      await fresh.quit()
+    }
+  })
+
+  it('lets requests through when Redis is down, within about a second', async () => {
+    const down = createRateLimitClient('redis://127.0.0.1:9')
+    const started = Date.now()
+    await expect(hitRateLimit({ ...rule, limit: 0 }, 'user-5', down)).resolves.toBeUndefined()
+    expect(Date.now() - started).toBeLessThan(3_000)
+    down.disconnect()
   })
 
   it('lets requests through when Redis is down', async () => {
