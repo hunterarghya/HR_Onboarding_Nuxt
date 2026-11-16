@@ -73,7 +73,7 @@ describe('GET /api/tasks', () => {
     expect(res.status).toBe(200)
     expect(res.body.map((q: { queue: string }) => q.queue)).toEqual(['scans', 'mail', 'background'])
     const scans = res.body[0]
-    expect(scans.counts).toEqual({ queued: expect.any(Number), active: expect.any(Number), completed: expect.any(Number), failed: expect.any(Number) })
+    expect(scans.counts).toEqual({ queued: expect.any(Number), scheduled: expect.any(Number), active: expect.any(Number), completed: expect.any(Number), failed: expect.any(Number) })
     expect(scans.tasks.length).toBeLessThanOrEqual(5)
     expect(scans.tasks.find((t: { id: string }) => t.id === 'scan.whatsapp')).toMatchObject({ name: 'scan.whatsapp', state: 'completed' })
   })

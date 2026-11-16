@@ -119,7 +119,9 @@ export const listRecentTasks = async (perQueue: number) => Promise.all(QUEUE_NAM
   return {
     queue: name,
     counts: {
-      queued: (counts.waiting ?? 0) + (counts.delayed ?? 0) + (counts.prioritized ?? 0),
+      queued: (counts.waiting ?? 0) + (counts.prioritized ?? 0),
+      // waiting on a timer: a retry delay or a scheduled (e.g. daily) task
+      scheduled: counts.delayed ?? 0,
       active: counts.active ?? 0,
       completed: counts.completed ?? 0,
       failed: counts.failed ?? 0

@@ -10,11 +10,13 @@ interface TaskStatus {
   error: string | null
   attempts: number
   createdAt: string
+  startedAt: string | null
+  scheduledFor: string | null
   finishedAt: string | null
 }
 interface QueueSummary {
   queue: string
-  counts: { queued: number, active: number, completed: number, failed: number }
+  counts: { queued: number, scheduled: number, active: number, completed: number, failed: number }
   tasks: TaskStatus[]
 }
 
@@ -44,8 +46,11 @@ onUnmounted(() => {
   if (timer) clearInterval(timer)
 })
 
-const stateColor = (state: TaskStatus['state']) =>
-  ({ queued: 'neutral', active: 'info', completed: 'success', failed: 'error' } as const)[state]
+/** "scheduled" for a task waiting on a timer (a daily job, a retry), else BullMQ's state as the API gives it */
+const stateLabel = (t: TaskStatus) => (t.state === 'queued' && t.scheduledFor ? 'scheduled' : t.state)
+
+const stateColor = (t: TaskStatus) =>
+  ({ queued: 'neutral', scheduled: 'neutral', active: 'info', completed: 'success', failed: 'error' } as const)[stateLabel(t)]
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : '—')
 
@@ -54,8 +59,11 @@ const outcome = (t: TaskStatus) => {
   if (t.state === 'active' && t.progress) return `${t.progress.stage ?? 'working'}: ${t.progress.done} / ${t.progress.total}`
   if (t.state === 'completed' && t.result && typeof t.result === 'object') {
     const r = t.result as Record<string, unknown>
-    return typeof r.message === 'string' ? `${r.message}${typeof r.count === 'number' ? ` (${r.count})` : ''}` : JSON.stringify(r)
+    if (typeof r.message === 'string') return `${r.message}${typeof r.count === 'number' ? ` (${r.count})` : ''}`
+    // e.g. { renewed: 0, failed: 0 } → "renewed 0 · failed 0"
+    return Object.entries(r).map(([k, v]) => `${k} ${typeof v === 'object' ? JSON.stringify(v) : v}`).join(' · ')
   }
+  if (t.scheduledFor) return `runs ${when(t.scheduledFor)}`
   return ''
 }
 </script>
@@ -97,6 +105,9 @@ const outcome = (t: TaskStatus) => {
               <div class="flex gap-2 text-sm">
                 <UBadge color="neutral" variant="subtle">
                   {{ q.counts.queued }} queued
+                </UBadge>
+                <UBadge v-if="q.counts.scheduled" color="neutral" variant="outline">
+                  {{ q.counts.scheduled }} scheduled
                 </UBadge>
                 <UBadge color="info" variant="subtle">
                   {{ q.counts.active }} running
@@ -144,13 +155,13 @@ const outcome = (t: TaskStatus) => {
                     <p class="font-medium">
                       {{ t.name }}
                     </p>
-                    <p class="text-xs text-muted">
+                    <p v-if="t.id !== t.name" class="text-xs text-muted">
                       {{ t.id }}
                     </p>
                   </td>
                   <td class="py-2 pr-3">
-                    <UBadge :color="stateColor(t.state)" variant="subtle">
-                      {{ t.state }}
+                    <UBadge :color="stateColor(t)" variant="subtle">
+                      {{ stateLabel(t) }}
                     </UBadge>
                   </td>
                   <td class="py-2 pr-3 max-w-md break-words">
@@ -160,7 +171,7 @@ const outcome = (t: TaskStatus) => {
                     {{ t.attempts }}
                   </td>
                   <td class="py-2 pr-3 whitespace-nowrap">
-                    {{ when(t.createdAt) }}
+                    {{ when(t.startedAt) }}
                   </td>
                   <td class="py-2 whitespace-nowrap">
                     {{ when(t.finishedAt) }}
