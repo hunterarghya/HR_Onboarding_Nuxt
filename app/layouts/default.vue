@@ -47,6 +47,14 @@ const links = [[{
   onSelect: () => {
     open.value = false
   }
+}], [{
+  // your own AI keys (Groq / Gemini) live here
+  label: 'Settings',
+  icon: 'i-lucide-settings',
+  to: '/settings',
+  onSelect: () => {
+    open.value = false
+  }
 }]] satisfies NavigationMenuItem[][]
 
 const groups = computed(() => [{
@@ -79,6 +87,14 @@ const groups = computed(() => [{
           orientation="vertical"
           tooltip
           popover
+        />
+
+        <UNavigationMenu
+          :collapsed="collapsed"
+          :items="links[1]"
+          orientation="vertical"
+          tooltip
+          class="mt-auto"
         />
       </template>
 
