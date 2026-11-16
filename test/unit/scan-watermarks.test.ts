@@ -13,6 +13,7 @@ vi.mock('~~/server/features/ingestion/sources/gmail.source', () => ({ collectFro
 vi.mock('~~/server/features/ingestion/sources/google-forms.source', () => ({ collectFromForm }))
 vi.mock('~~/server/features/ingestion/sources/whatsapp.source', () => ({ collectFromGroup: vi.fn(), isWhatsAppReady: () => false, whatsAppStatus: () => 'qr' }))
 vi.mock('~~/server/features/ingestion/pipeline/candidate-pipeline', () => ({ processAttachments }))
+vi.mock('~~/server/features/ai-settings/ai-settings.service', () => ({ aiSettingsService: { llmFor: async () => ({ name: 'groq', model: 'fake' }) } }))
 vi.mock('~~/server/features/google-forms/google-forms.repository', () => ({
   googleFormsRepository: { findForScan: async () => [{ form_id: 'f1', form_title: 'A', question_map: {} }, { form_id: 'f2', form_title: 'B', question_map: {} }] }
 }))

@@ -1,12 +1,13 @@
 import type { CalendarEvent } from '~~/server/integrations/google/calendar.client'
-import { getLlm, type LlmProvider } from '~~/server/integrations/llm'
+import { getLlm, LlmError, type LlmProvider } from '~~/server/integrations/llm'
 import { parseLlmJson } from '../llm-json'
 import { CalendarExtractionSchema, normalizeCalendarExtraction, type InterviewEventDraft } from './calendar-event.normalizer'
 import { buildCalendarEventPrompt } from './calendar-event.prompt'
 
 /**
  * Asks the LLM whether a calendar event is an interview and, if so, returns it as an interview event
- * draft with times in `timeZone`. Returns null for non-interviews and on any model or parsing failure.
+ * draft with times in `timeZone`. Returns null for non-interviews and on a model or parsing failure;
+ * a refused or exhausted API key is thrown (LlmError, needsNewKey) so the sync stops and says so.
  */
 export const extractInterviewEvent = async (calendarEvent: CalendarEvent, activeRoles: string[], timeZone: string, llm: LlmProvider = getLlm()): Promise<InterviewEventDraft | null> => {
   const summary = calendarEvent.summary || ''
@@ -41,6 +42,7 @@ export const extractInterviewEvent = async (calendarEvent: CalendarEvent, active
     }
     return normalizeCalendarExtraction(calendarEvent, activeRoles, result, timeZone)
   } catch (err) {
+    if (err instanceof LlmError && err.needsNewKey) throw err
     console.error(`[CalendarAgent] ❌ Error calling ${llm.name}:`, (err as Error).message)
     return null
   }
