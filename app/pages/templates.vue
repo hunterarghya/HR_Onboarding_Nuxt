@@ -269,10 +269,9 @@ const groupedTemplates = computed(() => {
       <div class="flex flex-col lg:flex-row gap-6 h-full min-h-[calc(100vh-140px)]">
         <!-- Sidebar: Template List -->
         <div class="w-full lg:w-64 shrink-0 flex flex-col gap-4">
-          <UButton
+          <ActionButton
             icon="i-lucide-plus"
             label="New Template"
-            color="primary"
             block
             @click="createNewTemplate"
           />
@@ -288,7 +287,7 @@ const groupedTemplates = computed(() => {
                     v-for="t in groupTemplates"
                     :key="t.id"
                     class="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors"
-                    :class="selectedTemplateId === t.id ? 'bg-[var(--ui-color-primary)]/10 text-[var(--ui-color-primary)] font-medium' : 'hover:bg-elevated'"
+                    :class="selectedTemplateId === t.id ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-elevated'"
                     @click="selectTemplate(t)"
                   >
                     <div class="flex items-center justify-between">
@@ -309,14 +308,14 @@ const groupedTemplates = computed(() => {
               <div class="flex gap-2">
                 <UButton
                   :color="!previewMode ? 'primary' : 'neutral'"
-                  :variant="!previewMode ? 'solid' : 'ghost'"
+                  :variant="!previewMode ? 'soft' : 'ghost'"
                   label="Edit"
                   icon="i-lucide-edit-3"
                   @click="previewMode = false"
                 />
                 <UButton
                   :color="previewMode ? 'primary' : 'neutral'"
-                  :variant="previewMode ? 'solid' : 'ghost'"
+                  :variant="previewMode ? 'soft' : 'ghost'"
                   label="Preview"
                   icon="i-lucide-eye"
                   @click="previewMode = true"
@@ -330,10 +329,9 @@ const groupedTemplates = computed(() => {
                   icon="i-lucide-trash-2"
                   @click="handleDelete"
                 />
-                <UButton
-                  color="primary"
+                <ActionButton
                   icon="i-lucide-save"
-                  label="Save"
+                  label="Save Template"
                   @click="handleSave"
                 />
               </div>

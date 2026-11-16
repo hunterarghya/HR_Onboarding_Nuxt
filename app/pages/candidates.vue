@@ -284,11 +284,11 @@ onMounted(() => {
     </template>
 
     <template #body>
-      <!-- Shortlisted Candidates Section -->
+      <!-- All Candidates Section -->
       <div class="space-y-4 mb-8">
         <h3 class="font-semibold flex items-center gap-2">
-          <UIcon name="i-lucide-search" class="size-5" />
-          Shortlisted Candidates
+          <UIcon name="i-lucide-users" class="size-5 text-primary" />
+          All Candidates
         </h3>
 
         <!-- Filter Bar -->
@@ -312,7 +312,7 @@ onMounted(() => {
             />
             <USelect
               v-model="filters.source"
-              :items="[{ label: 'All Sources', value: 'all' }, { label: 'Gmail', value: 'Gmail' }, { label: 'WhatsApp', value: 'WhatsApp' }]"
+              :items="[{ label: 'All Sources', value: 'all' }, { label: 'Gmail', value: 'Gmail' }, { label: 'WhatsApp', value: 'WhatsApp' }, { label: 'Google Forms', value: 'GoogleForms' }]"
               class="min-w-[150px]"
             />
             <USelect
@@ -402,14 +402,7 @@ onMounted(() => {
                   </p>
                 </td>
                 <td class="py-3 px-3">
-                  <div class="flex items-center gap-1.5">
-                    <UIcon
-                      :name="c.applied_through === 'WhatsApp' ? 'i-lucide-message-circle' : 'i-lucide-mail'"
-                      :class="c.applied_through === 'WhatsApp' ? 'text-[var(--ui-color-success)]' : 'text-[var(--ui-color-error)]'"
-                      class="size-4"
-                    />
-                    <span class="text-xs">{{ c.applied_through }}</span>
-                  </div>
+                  <SourceBadge :source="c.applied_through" />
                 </td>
                 <td class="py-3 px-3">
                   {{ c.role_applied }}
@@ -489,15 +482,14 @@ onMounted(() => {
       <!-- Selected Candidates Section -->
       <div class="space-y-4">
         <div class="flex items-center justify-between flex-wrap gap-3">
-          <h3 class="font-semibold flex items-center gap-2 text-[var(--ui-color-primary)]">
-            <UIcon name="i-lucide-users" class="size-5" />
+          <h3 class="font-semibold flex items-center gap-2">
+            <UIcon name="i-lucide-user-check" class="size-5 text-primary" />
             Selected Candidates
           </h3>
           <div class="flex gap-2">
-            <UButton
+            <ActionButton
               icon="i-lucide-mail"
               label="Send Offer Letters"
-              color="primary"
               @click="openMailModal"
             />
             <UButton
@@ -584,7 +576,7 @@ onMounted(() => {
                 <td class="py-3 px-3">
                   {{ c.phone }}
                 </td>
-                <td class="py-3 px-3 font-semibold text-[var(--ui-color-primary)]">
+                <td class="py-3 px-3 font-semibold text-primary">
                   {{ c.offered_role }}
                 </td>
                 <td class="py-3 px-3">
