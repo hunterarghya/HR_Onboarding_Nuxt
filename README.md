@@ -383,7 +383,9 @@ Copy `.env.example` to `.env` and fill it in; every setting is described there. 
 | `ALLOWED_EMAILS` and/or `ALLOWED_EMAIL_DOMAINS` | who may sign in |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | Google OAuth |
 | `IMAGEKIT_PUBLIC_KEY`, `IMAGEKIT_PRIVATE_KEY`, `IMAGEKIT_URL_ENDPOINT` | resume storage |
-| `LLM_PROVIDER` | `groq` (with `GROQ_API_KEY`, `GROQ_MODEL`) or `ollama` (with `OLLAMA_MODEL`, e.g. `phi3`) |
+| `LLM_PROVIDER` | the server's default AI: `groq` (`GROQ_API_KEY`, `GROQ_MODEL`), `gemini` (`GEMINI_API_KEY`, `GEMINI_MODEL`) or `ollama` (`OLLAMA_MODEL`, e.g. `phi3`) |
+
+Each HR can also plug in **their own Groq or Gemini API key** in the app (**Settings → AI model**). Their scans and calendar syncs then use it, and when it reaches its limit they paste in a new one. Keys are checked with the provider before saving, stored encrypted, and never shown again (only their last four characters).
 
 The database, Redis, Qdrant and Ollama addresses in `.env.example` are for `pnpm dev` on your machine; `docker compose` replaces them with the in-network ones, so one `.env` serves both.
 
