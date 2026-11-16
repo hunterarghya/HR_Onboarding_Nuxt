@@ -19,6 +19,7 @@ import pg from 'pg'
 import { encrypt } from '../../../server/core/crypto'
 import type { TestProject } from 'vitest/node'
 import { Queue } from 'bullmq'
+import { startFakeLlm } from './fake-llm'
 import { TEST_DATABASE_URL, TEST_GOOGLE_CLIENT_ID, TEST_JWT_SECRET, TEST_REDIS_URL, TEST_TOKEN_ENCRYPTION_KEY, UNREACHABLE_URL } from './test-env'
 
 declare module 'vitest' {
@@ -106,6 +107,9 @@ export default async function setup(project: TestProject) {
   await recreateDatabase()
   await resetQueues()
 
+  // Groq and Gemini stand-ins, for the AI-key settings
+  const fakeLlm = await startFakeLlm()
+
   const port = await getFreePort()
   const baseURL = `http://127.0.0.1:${port}`
   const workDir = mkdtempSync(join(tmpdir(), 'hr-smoke-'))
@@ -133,6 +137,8 @@ export default async function setup(project: TestProject) {
     GOOGLE_REDIRECT_URI: `${baseURL}/auth/google/callback`,
     QDRANT_URL: UNREACHABLE_URL,
     OLLAMA_BASE_URL: UNREACHABLE_URL,
+    GROQ_BASE_URL: fakeLlm.groqBaseUrl,
+    GEMINI_BASE_URL: fakeLlm.geminiBaseUrl,
     // Required by the config module; uploads never happen in the smoke suite.
     IMAGEKIT_PUBLIC_KEY: 'smoke-test-public-key',
     IMAGEKIT_PRIVATE_KEY: 'smoke-test-private-key',
@@ -193,6 +199,7 @@ export default async function setup(project: TestProject) {
     }
   } catch (err) {
     await stop()
+    await fakeLlm.stop()
     console.error(logs.join(''))
     throw err
   }
@@ -202,6 +209,7 @@ export default async function setup(project: TestProject) {
 
   return async () => {
     await stop()
+    await fakeLlm.stop()
     if (process.env.SMOKE_SERVER_LOGS) console.log(logs.join(''))
     rmSync(workDir, { recursive: true, force: true })
   }

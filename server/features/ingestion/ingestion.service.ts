@@ -1,3 +1,5 @@
+import { LlmError } from '~~/server/integrations/llm'
+import { aiSettingsService } from '../ai-settings/ai-settings.service'
 import { NotFoundError } from '~~/server/core/errors/app-error'
 import { enqueue, isTaskRunning } from '~~/server/core/tasks/queues'
 import type { TaskProgress } from '~~/server/core/tasks/task-status'
@@ -22,10 +24,13 @@ export const SCAN_TASK_IDS: Record<ScanSource, string> = {
 
 type ReportProgress = (progress: TaskProgress) => Promise<void>
 
-/** The task fails with the reason; BullMQ retries it (TASK_RETRY_DELAY_MS apart) before giving up. */
+/**
+ * The task fails with the reason; BullMQ retries it (TASK_RETRY_DELAY_MS apart) before giving up.
+ * An AI key problem gets advice the HR can act on ("swap the key in Settings → AI model").
+ */
 const scanFailed = (label: string, message: string, err: unknown) => {
   console.error(label, err)
-  return new Error(`${message}: ${(err as Error).message}`, { cause: err })
+  return new Error(`${message}: ${err instanceof LlmError ? err.advice : (err as Error).message}`, { cause: err })
 }
 
 const userEmail = async (userId: number) => {
@@ -104,7 +109,7 @@ export const ingestionService = {
       }
       console.log(`--- [Gmail] Scanning emails after: ${gmailLastScan.toISOString()} ---`)
 
-      const allAttachments = await collectFromGmail(auth, gmailLastScan)
+      const allAttachments = await collectFromGmail(auth, gmailLastScan, await aiSettingsService.llmFor(userId))
       const candidatesFound = await processAttachments(allAttachments, onProgress)
 
       await scanStateRepository.setWatermark('gmail', 'default', scanStartedAt)

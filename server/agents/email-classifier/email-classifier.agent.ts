@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { getLlm, type LlmProvider } from '~~/server/integrations/llm'
+import { getLlm, LlmError, type LlmProvider } from '~~/server/integrations/llm'
 import { llmFlag, parseLlmJson } from '../llm-json'
 import { buildEmailClassifierPrompt } from './email-classifier.prompt'
 
@@ -15,7 +15,9 @@ const NOT_AN_APPLICATION: EmailClassification = { isApplication: false, position
 
 /**
  * Identifies if an email is a job application and contains a resume.
- * Never throws: any model or parsing failure means "not an application".
+ * A model or parsing failure means "not an application", except a refused or exhausted API key: that is
+ * thrown (LlmError, needsNewKey), so the scan stops and the HR can swap the key instead of every email
+ * silently counting as "not an application".
  */
 export const classifyEmail = async (emailSubject: string, emailBody: string, llm: LlmProvider = getLlm()): Promise<EmailClassification> => {
   console.log('Analyzing email content...')
@@ -28,6 +30,7 @@ export const classifyEmail = async (emailSubject: string, emailBody: string, llm
     console.log(`Raw AI Response (Email Analysis):`, raw)
     return parseLlmJson(raw, EmailClassificationSchema, 'EmailClassifier') ?? NOT_AN_APPLICATION
   } catch (err) {
+    if (err instanceof LlmError && err.needsNewKey) throw err
     console.error('Error in email analysis:', err)
     return NOT_AN_APPLICATION
   }

@@ -12,6 +12,7 @@ const fakeLlm = (reply: string | Error): LlmProvider & { prompts: string[] } => 
     model: 'fake',
     prompts,
     ping: vi.fn(async () => {}),
+    listModels: vi.fn(async () => []),
     generateJson: vi.fn(async (prompt: string) => {
       prompts.push(prompt)
       if (reply instanceof Error) throw reply

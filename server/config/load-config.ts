@@ -48,12 +48,18 @@ const EnvSchema = z.object({
   GOOGLE_REDIRECT_URI: z.url(),
 
   // Which LLM the agents use (ADR-12). Only the selected provider's settings are required.
-  LLM_PROVIDER: z.enum(['ollama', 'groq']).default('ollama'),
+  // (Each HR can also plug in their own Groq or Gemini key in Settings; this is the default for everyone else.)
+  LLM_PROVIDER: z.enum(['ollama', 'groq', 'gemini']).default('ollama'),
   LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
   OLLAMA_BASE_URL: z.url().default('http://localhost:11434'),
   OLLAMA_MODEL: z.string().default('phi3'),
   GROQ_API_KEY: z.string().optional(),
   GROQ_MODEL: z.string().optional(),
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default('gemini-2.5-flash'),
+  // API addresses, only for proxies and tests (default: the providers' public APIs)
+  GROQ_BASE_URL: z.url().optional(),
+  GEMINI_BASE_URL: z.url().optional(),
 
   QDRANT_URL: z.url().default('http://localhost:6333'),
 
@@ -69,6 +75,9 @@ const EnvSchema = z.object({
   if (env.LLM_PROVIDER === 'groq') {
     if (!env.GROQ_API_KEY) ctx.addIssue({ code: 'custom', path: ['GROQ_API_KEY'], message: 'required when LLM_PROVIDER=groq' })
     if (!env.GROQ_MODEL) ctx.addIssue({ code: 'custom', path: ['GROQ_MODEL'], message: 'required when LLM_PROVIDER=groq' })
+  }
+  if (env.LLM_PROVIDER === 'gemini' && !env.GEMINI_API_KEY) {
+    ctx.addIssue({ code: 'custom', path: ['GEMINI_API_KEY'], message: 'required when LLM_PROVIDER=gemini' })
   }
 })
 
@@ -103,7 +112,8 @@ export const loadConfig = (source: Record<string, string | undefined>) => {
       provider: env.LLM_PROVIDER,
       timeoutMs: env.LLM_TIMEOUT_MS,
       ollama: { baseUrl: env.OLLAMA_BASE_URL, model: env.OLLAMA_MODEL },
-      groq: { apiKey: env.GROQ_API_KEY, model: env.GROQ_MODEL }
+      groq: { apiKey: env.GROQ_API_KEY, model: env.GROQ_MODEL, baseUrl: env.GROQ_BASE_URL },
+      gemini: { apiKey: env.GEMINI_API_KEY, model: env.GEMINI_MODEL, baseUrl: env.GEMINI_BASE_URL }
     },
     qdrant: { url: env.QDRANT_URL, collection: 'job_descriptions', vectorSize: 384 },
     embeddings: { cacheDir: env.EMBEDDINGS_CACHE_DIR },

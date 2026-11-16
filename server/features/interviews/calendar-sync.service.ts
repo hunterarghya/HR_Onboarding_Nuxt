@@ -4,6 +4,8 @@ import { enqueue } from '~~/server/core/tasks/queues'
 import type { TaskProgress } from '~~/server/core/tasks/task-status'
 import { listEvents } from '~~/server/integrations/google/calendar.client'
 import type { GoogleAuthClient } from '~~/server/integrations/google/oauth'
+import { LlmError, type LlmProvider } from '~~/server/integrations/llm'
+import { aiSettingsService } from '../ai-settings/ai-settings.service'
 import { googleAuthService } from '../auth/google-auth.service'
 import { jobRolesRepository } from '../job-roles/job-roles.repository'
 import { planCalendarSync } from './calendar-sync.plan'
@@ -25,7 +27,7 @@ const fetchRecentCalendarEvents = async (auth: GoogleAuthClient) => {
   return items
 }
 
-const runSync = async (auth: GoogleAuthClient, onProgress: (p: TaskProgress) => Promise<void>) => {
+const runSync = async (auth: GoogleAuthClient, llm: LlmProvider, onProgress: (p: TaskProgress) => Promise<void>) => {
   const jobs = await jobRolesRepository.findAll()
   const activeRoles = jobs.map(j => j.role)
   console.log(`[Sync] Active roles from DB (${activeRoles.length}):`, activeRoles)
@@ -59,7 +61,7 @@ const runSync = async (auth: GoogleAuthClient, onProgress: (p: TaskProgress) => 
     await onProgress({ done: idx, total: toImport.length, stage: 'reading calendar events' })
     console.log(`\n[Sync] --- Processing event ${idx + 1}/${toImport.length}: "${calEvent.summary}" (${calEvent.id}) ---`)
 
-    const parsed = await extractInterviewEvent(calEvent, activeRoles, config.app.timeZone)
+    const parsed = await extractInterviewEvent(calEvent, activeRoles, config.app.timeZone, llm)
     if (!parsed) {
       console.log(`[Sync] ⏭️ SKIPPED (agent returned null — not an interview or missing data)`)
       skippedAgent++
@@ -107,11 +109,11 @@ export const calendarSyncService = {
     console.log(`╚══════════════════════════════════════════════════════╝`)
 
     try {
-      return await runSync(await googleAuthService.getAuthClientForUser(userId), onProgress)
+      return await runSync(await googleAuthService.getAuthClientForUser(userId), await aiSettingsService.llmFor(userId), onProgress)
     } catch (err) {
       console.error('[Sync] ❌ FATAL ERROR during sync:', err)
       // the task fails with the reason, and is retried
-      throw new Error(`Calendar sync failed: ${(err as Error).message}`, { cause: err })
+      throw new Error(`Calendar sync failed: ${err instanceof LlmError ? err.advice : (err as Error).message}`, { cause: err })
     }
   }
 }

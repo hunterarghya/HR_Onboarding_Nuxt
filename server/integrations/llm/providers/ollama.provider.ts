@@ -14,11 +14,16 @@ export const createOllamaProvider = (settings: Omit<OllamaSettings, 'provider'>)
       format: 'json'
     }, { timeoutMs: settings.timeoutMs })
 
-    if (typeof data?.response !== 'string') throw new LlmError('ollama', 'response had no text')
+    if (typeof data?.response !== 'string') throw new LlmError('ollama', 'response had no text', undefined, { kind: 'bad_response' })
     return data.response
   },
 
   async ping(timeoutMs) {
     await getJson('ollama', `${settings.baseUrl}/api/tags`, { timeoutMs })
+  },
+
+  async listModels(timeoutMs) {
+    const data = await getJson<{ models?: Array<{ name: string }> }>('ollama', `${settings.baseUrl}/api/tags`, { timeoutMs })
+    return (data.models ?? []).map(m => m.name).sort()
   }
 })

@@ -24,7 +24,7 @@ export const createGroqProvider = (settings: Omit<GroqSettings, 'provider'>): Ll
     })
 
     const content = data?.choices?.[0]?.message?.content
-    if (typeof content !== 'string') throw new LlmError('groq', 'response had no message content')
+    if (typeof content !== 'string') throw new LlmError('groq', 'response had no message content', undefined, { kind: 'bad_response' })
     return content
   },
 
@@ -33,5 +33,14 @@ export const createGroqProvider = (settings: Omit<GroqSettings, 'provider'>): Ll
       timeoutMs,
       headers: { authorization: `Bearer ${settings.apiKey}` }
     })
+  },
+
+  async listModels(timeoutMs) {
+    const data = await getJson<{ data?: Array<{ id: string, active?: boolean }> }>('groq', `${settings.baseUrl ?? GROQ_BASE_URL}/models`, {
+      timeoutMs,
+      headers: { authorization: `Bearer ${settings.apiKey}` }
+    })
+    // speech and guard models can't answer the agents' prompts
+    return (data.data ?? []).filter(m => m.active !== false && !/whisper|tts|guard|playai/i.test(m.id)).map(m => m.id).sort()
   }
 })

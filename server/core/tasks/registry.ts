@@ -1,4 +1,4 @@
-import { Worker } from 'bullmq'
+import { UnrecoverableError, Worker } from 'bullmq'
 import { logger } from '../logger'
 import { redisConnection } from './connection'
 import { QUEUE_NAMES, type QueueName, type TaskName, type TaskPayloads } from './queues'
@@ -20,6 +20,17 @@ export type TaskProcessors = { [K in TaskName]?: TaskProcessor<K> }
 const CONCURRENCY: Record<QueueName, number> = { scans: 1, mail: 1, background: 2 }
 
 const log = logger.withTag('tasks')
+
+/**
+ * If anything in the error's cause chain says retrying can't help (an API key the provider refused),
+ * the task fails at once with that error's advice instead of being retried.
+ */
+const finalReason = (err: unknown): string | null => {
+  for (let e = err as { needsNewKey?: unknown, kind?: unknown, advice?: unknown, cause?: unknown } | undefined, depth = 0; e && depth < 5; e = e.cause as typeof e, depth++) {
+    if (e.needsNewKey === true && e.kind === 'auth' && typeof e.advice === 'string') return e.advice
+  }
+  return null
+}
 const workers: Worker[] = []
 
 /** Starts one worker per queue. Each job is routed to the processor registered for its name. */
@@ -28,10 +39,15 @@ export const startWorkers = (processors: TaskProcessors) => {
     const worker = new Worker(queueName, async (job) => {
       const processor = processors[job.name as TaskName] as TaskProcessor<TaskName> | undefined
       if (!processor) throw new Error(`No processor registered for task "${job.name}"`)
-      return processor(job.data, {
-        reportProgress: progress => job.updateProgress(progress),
-        attempt: job.attemptsMade + 1
-      })
+      try {
+        return await processor(job.data, {
+          reportProgress: progress => job.updateProgress(progress),
+          attempt: job.attemptsMade + 1
+        })
+      } catch (err) {
+        const final = finalReason(err)
+        throw final ? new UnrecoverableError(final) : err
+      }
     }, { connection: redisConnection(), concurrency: CONCURRENCY[queueName] })
 
     worker.on('active', job => log.info(`${job.name} (${job.id}) started`))

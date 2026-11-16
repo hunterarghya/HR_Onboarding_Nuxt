@@ -19,7 +19,13 @@ describe('loadConfig', () => {
     const config = loadConfig(validEnv)
     expect(config.auth.jwtSecret).toBe('x'.repeat(32))
     expect(config.google.redirectUri).toBe(validEnv.GOOGLE_REDIRECT_URI)
-    expect(config.llm).toEqual({ provider: 'ollama', timeoutMs: 120_000, ollama: { baseUrl: 'http://localhost:11434', model: 'phi3' }, groq: { apiKey: undefined, model: undefined } })
+    expect(config.llm).toEqual({
+      provider: 'ollama',
+      timeoutMs: 120_000,
+      ollama: { baseUrl: 'http://localhost:11434', model: 'phi3' },
+      groq: { apiKey: undefined, model: undefined, baseUrl: undefined },
+      gemini: { apiKey: undefined, model: 'gemini-2.5-flash', baseUrl: undefined }
+    })
     expect(config.qdrant.url).toBe('http://localhost:6333')
     expect(config.whatsapp.executablePath).toBeUndefined()
     expect(Object.isFrozen(config)).toBe(true)
@@ -51,6 +57,12 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ ...validEnv, LLM_PROVIDER: 'groq' })).toThrow(/GROQ_API_KEY[\s\S]*GROQ_MODEL|GROQ_MODEL[\s\S]*GROQ_API_KEY/)
     const config = loadConfig({ ...validEnv, LLM_PROVIDER: 'groq', GROQ_API_KEY: 'gsk_test', GROQ_MODEL: 'llama-3.3-70b-versatile', LLM_TIMEOUT_MS: '5000' })
     expect(config.llm).toMatchObject({ provider: 'groq', timeoutMs: 5000, groq: { apiKey: 'gsk_test', model: 'llama-3.3-70b-versatile' } })
+  })
+
+  it('needs a Gemini key only when Gemini is the server default', () => {
+    expect(() => loadConfig({ ...validEnv, LLM_PROVIDER: 'gemini' })).toThrow(/GEMINI_API_KEY/)
+    expect(loadConfig({ ...validEnv, LLM_PROVIDER: 'gemini', GEMINI_API_KEY: 'AIza-test' }).llm)
+      .toMatchObject({ provider: 'gemini', gemini: { apiKey: 'AIza-test', model: 'gemini-2.5-flash' } })
     expect(loadConfig({ ...validEnv, GROQ_API_KEY: '' }).llm.provider).toBe('ollama')
   })
 
