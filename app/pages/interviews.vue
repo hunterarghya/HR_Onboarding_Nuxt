@@ -578,41 +578,15 @@ onMounted(() => {
 
           <!-- Sync Google Calendar Button -->
           <div>
-            <UButton
+            <ActionButton
               id="sync-google-calendar-btn"
-              icon="i-lucide-refresh-cw"
-              color="primary"
-              variant="solid"
-              block
+              label="Sync Google Calendar"
+              icon="i-lucide-calendar-sync"
               :loading="syncingCalendar"
-              :disabled="syncingCalendar"
+              loading-label="Syncing…"
+              block
               @click="handleSyncCalendar"
-            >
-              <template #leading>
-                <svg
-                  v-if="!syncingCalendar"
-                  class="size-4"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M22 12C22 6.477 17.523 2 12 2S2 6.477 2 12s4.477 10 10 10"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                  />
-                  <path
-                    d="M8 12h8m-4-4v8"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
-              </template>
-              {{ syncingCalendar ? 'Syncing...' : 'Sync Google Calendar' }}
-            </UButton>
+            />
             <p v-if="lastSyncTime" class="text-xs text-muted text-center mt-2">
               Last synced: {{ lastSyncTime }}
             </p>
@@ -639,7 +613,7 @@ onMounted(() => {
                   :key="ev.id"
                   class="w-full flex items-start gap-3 p-2.5 rounded-lg transition-all duration-200 text-left group"
                   :class="{
-                    'bg-[var(--ui-color-primary)]/10 ring-1 ring-[var(--ui-color-primary)]/30': ev.event_date === format(selectedDate, 'yyyy-MM-dd'),
+                    'bg-primary/10 ring-1 ring-primary/30': ev.event_date === format(selectedDate, 'yyyy-MM-dd'),
                     'hover:bg-elevated/50': ev.event_date !== format(selectedDate, 'yyyy-MM-dd')
                   }"
                   @click="selectDate(new Date(ev.event_date + 'T00:00:00'))"
@@ -738,7 +712,7 @@ onMounted(() => {
           <UCard>
             <template #header>
               <div class="flex items-center gap-2">
-                <UIcon name="i-lucide-calendar-plus" class="size-5 text-[var(--ui-color-primary)]" />
+                <UIcon name="i-lucide-calendar-plus" class="size-5 text-primary" />
                 <span class="font-semibold">Schedule Interview for {{ format(selectedDate, 'MMM d, yyyy') }}</span>
               </div>
             </template>
@@ -749,6 +723,7 @@ onMounted(() => {
                   <USelect
                     v-model="createForm.role"
                     :items="jobs.map(j => ({ label: j.role, value: j.role }))"
+                    placeholder="Select a job role"
                     class="w-full"
                   />
                 </UFormField>
@@ -769,7 +744,7 @@ onMounted(() => {
                 <UFormField label="End Time">
                   <UInput v-model="createForm.end_time" type="time" class="w-full" />
                 </UFormField>
-                <UFormField label="Base Candidates">
+                <UFormField label="Max Candidates">
                   <UInput
                     v-model.number="createForm.num_candidates"
                     type="number"
@@ -801,9 +776,8 @@ onMounted(() => {
               </div>
 
               <div class="flex justify-end pt-2">
-                <UButton
+                <ActionButton
                   type="submit"
-                  color="primary"
                   label="Create Event"
                   icon="i-lucide-plus"
                 />
@@ -823,7 +797,7 @@ onMounted(() => {
                 v-for="event in filteredEvents"
                 :key="event.id"
                 class="transition-all"
-                :class="expandedEvent === event.id ? 'ring-2 ring-[var(--ui-color-primary)]' : ''"
+                :class="expandedEvent === event.id ? 'ring-2 ring-primary' : ''"
               >
                 <!-- Event Header (Always Visible) -->
                 <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 cursor-pointer" @click="toggleEventExpand(event.id)">
@@ -954,7 +928,7 @@ onMounted(() => {
                               v-for="c in eligibleCandidates"
                               :key="c.id"
                               class="border-b border-default last:border-0 hover:bg-elevated/50 transition-colors"
-                              :class="{ 'bg-[var(--ui-color-primary)]/5': selectedCandidateIds.has(c.id) }"
+                              :class="{ 'bg-primary/5': selectedCandidateIds.has(c.id) }"
                             >
                               <td class="p-3 text-center">
                                 <UCheckbox
@@ -963,11 +937,7 @@ onMounted(() => {
                                 />
                               </td>
                               <td class="p-3">
-                                <div class="flex items-center gap-1.5 text-xs">
-                                  <UIcon v-if="c.applied_through === 'WhatsApp'" name="i-lucide-message-circle" class="size-4 text-emerald-500" />
-                                  <UIcon v-else name="i-lucide-mail" class="size-4 text-red-500" />
-                                  {{ c.applied_through }}
-                                </div>
+                                <SourceBadge :source="c.applied_through" />
                               </td>
                               <td class="p-3 font-semibold">
                                 {{ c.name }}
@@ -1004,7 +974,7 @@ onMounted(() => {
                                   :href="c.resume_url"
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  class="text-[var(--ui-color-primary)] hover:text-[var(--ui-color-primary-600)] transition-colors"
+                                  class="text-primary hover:text-[var(--ui-color-primary-600)] transition-colors"
                                 >
                                   <UIcon name="i-lucide-file-text" class="size-4" />
                                 </a>
@@ -1055,7 +1025,7 @@ onMounted(() => {
                   <!-- Assigned Candidates Display -->
                   <div v-if="selectionMode !== 'manual' && ((eventCandidates[event.id]?.length ?? 0) > 0)">
                     <div class="flex justify-between items-center mb-4">
-                      <h4 class="font-semibold text-lg text-[var(--ui-color-primary)] flex items-center gap-2">
+                      <h4 class="font-semibold text-lg text-primary flex items-center gap-2">
                         Candidates Chosen for Interview
                         <UBadge size="xs" variant="subtle">
                           {{ eventCandidates[event.id]?.length }}
@@ -1122,11 +1092,7 @@ onMounted(() => {
                             class="border-b border-default last:border-0 hover:bg-elevated/50 transition-colors"
                           >
                             <td class="p-3">
-                              <div class="flex items-center gap-1.5 text-xs">
-                                <UIcon v-if="c.applied_through === 'WhatsApp'" name="i-lucide-message-circle" class="size-4 text-emerald-500" />
-                                <UIcon v-else name="i-lucide-mail" class="size-4 text-red-500" />
-                                {{ c.applied_through }}
-                              </div>
+                              <SourceBadge :source="c.applied_through" />
                             </td>
                             <td class="p-3 font-semibold">
                               {{ c.name }}
@@ -1163,7 +1129,7 @@ onMounted(() => {
                                 :href="c.resume_url"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                class="text-[var(--ui-color-primary)] hover:text-[var(--ui-color-primary-600)] transition-colors inline-flex items-center gap-1"
+                                class="text-primary hover:text-[var(--ui-color-primary-600)] transition-colors inline-flex items-center gap-1"
                               >
                                 <UIcon name="i-lucide-file-text" class="size-4" />
                                 <UIcon name="i-lucide-external-link" class="size-3 opacity-70" />

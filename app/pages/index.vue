@@ -313,7 +313,7 @@ onMounted(() => {
                 type="range"
                 min="0"
                 max="100"
-                class="w-full accent-[var(--ui-color-primary)]"
+                class="w-full accent-primary"
               >
             </UFormField>
 
@@ -339,7 +339,7 @@ onMounted(() => {
                 type="range"
                 min="0"
                 max="10"
-                class="w-full accent-[var(--ui-color-primary)]"
+                class="w-full accent-primary"
                 @input="(e: Event) => {
                   const v = parseInt((e.target as HTMLInputElement).value); if (v === 0) { delete newJob.criteria_weights[key]; }
                   else { newJob.criteria_weights[key] = v; }
@@ -347,23 +347,22 @@ onMounted(() => {
               >
             </div>
 
-            <UButton
+            <ActionButton
               type="submit"
+              label="Post Job Description"
+              icon="i-lucide-send"
               :loading="submittingJob"
+              loading-label="Posting…"
               block
-              color="primary"
-              size="lg"
               class="mt-4"
-            >
-              {{ submittingJob ? 'Posting Job...' : 'Post Job Description' }}
-            </UButton>
+            />
           </form>
         </UCard>
 
         <!-- Active Jobs List -->
         <UCard>
           <template #header>
-            <span class="font-semibold">Active Job Roles</span>
+            <span class="font-semibold">Job Roles</span>
           </template>
 
           <div class="space-y-3">
@@ -689,7 +688,7 @@ onMounted(() => {
                 type="range"
                 min="0"
                 max="100"
-                class="w-full accent-[var(--ui-color-primary)]"
+                class="w-full accent-primary"
               >
             </UFormField>
 
@@ -709,7 +708,7 @@ onMounted(() => {
                 type="range"
                 min="0"
                 max="10"
-                class="w-full accent-[var(--ui-color-primary)]"
+                class="w-full accent-primary"
                 @input="(e: Event) => {
                   if (!editingJob) return; const v = parseInt((e.target as HTMLInputElement).value); if (!editingJob.criteria_weights) editingJob.criteria_weights = {}; if (v === 0) { delete editingJob.criteria_weights[key]; }
                   else { editingJob.criteria_weights[key] = v; }

@@ -12,6 +12,7 @@ const setMailProgress = (p: TaskProgress) => {
   mailProgress.value = p
 }
 const mailLastScanned = ref<string | null>(null)
+const waLastScanned = ref<string | null>(null)
 
 // --- WhatsApp State ---
 const scanningWA = ref(false)
@@ -41,6 +42,7 @@ const fetchScanStatus = async () => {
   try {
     const status = await apiFetch<Record<string, { lastScannedAt: string | null, running: boolean }>>('/candidates/scan-status')
     mailLastScanned.value = status.gmail?.lastScannedAt || null
+    waLastScanned.value = status.whatsapp?.lastScannedAt || null
     formsLastScanned.value = status.google_forms?.lastScannedAt || null
     // A scan started earlier (another tab, before a reload) is still running: follow it
     if (status.gmail?.running && !scanningMail.value) followMailScan()
@@ -120,6 +122,16 @@ const getStatusColor = computed(() => {
     default: return 'neutral' as const
   }
 })
+
+/** The WhatsApp client's state in plain words */
+const statusText = computed(() => ({
+  ready: 'Connected',
+  authenticated: 'Connecting…',
+  qr: 'Waiting for you to scan the QR code',
+  initializing: 'Starting…',
+  error: 'Something went wrong; reconnect',
+  disconnected: 'Disconnected'
+} as Record<string, string>)[waStatus.value.status] ?? 'Not connected')
 
 const isWAScanDisabled = computed(() => {
   return scanningWA.value || (selectedGroups.value.length > 0 && waStatus.value.status !== 'ready')
@@ -236,8 +248,8 @@ onUnmounted(() => {
           <div class="space-y-4">
             <div class="flex items-center justify-between flex-wrap gap-4">
               <div class="flex items-center gap-4">
-                <div class="size-12 rounded-xl bg-[var(--ui-color-primary)]/10 flex items-center justify-center">
-                  <UIcon name="i-lucide-mail" class="size-6 text-[var(--ui-color-primary)]" />
+                <div class="size-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <UIcon name="i-lucide-mail" class="size-6 text-primary" />
                 </div>
                 <div>
                   <p class="font-semibold text-lg">
@@ -249,16 +261,13 @@ onUnmounted(() => {
                 </div>
               </div>
 
-              <UButton
+              <ActionButton
+                label="Scan Emails"
+                icon="i-lucide-mail-search"
                 :loading="scanningMail"
-                :disabled="scanningMail"
-                color="primary"
-                size="lg"
+                :loading-label="`Scanning… ${formatTaskProgress(mailProgress)}`"
                 @click="handleMailScan"
-              >
-                <UIcon v-if="!scanningMail" name="i-lucide-mail-search" class="size-5" />
-                {{ scanningMail ? `Scanning Emails... ${formatTaskProgress(mailProgress)}` : 'Scan Emails' }}
-              </UButton>
+              />
             </div>
 
             <UAlert
@@ -275,8 +284,8 @@ onUnmounted(() => {
         <UCard>
           <div class="flex items-center justify-between flex-wrap gap-4">
             <div class="flex items-center gap-4">
-              <div class="size-12 rounded-xl bg-[var(--ui-color-success)]/10 flex items-center justify-center">
-                <UIcon name="i-lucide-message-circle" class="size-6 text-[var(--ui-color-success)]" />
+              <div class="size-12 rounded-xl bg-success/10 flex items-center justify-center">
+                <UIcon name="i-lucide-message-circle" class="size-6 text-success" />
               </div>
               <div>
                 <p class="font-semibold text-lg">
@@ -284,24 +293,37 @@ onUnmounted(() => {
                 </p>
                 <div class="flex items-center gap-2 mt-0.5">
                   <UChip :color="getStatusColor" standalone size="sm" />
-                  <span class="text-sm text-muted">Status: {{ waStatus.status }}</span>
+                  <span class="text-sm text-muted">{{ statusText }}</span>
                 </div>
               </div>
             </div>
 
-            <UButton
+            <ActionButton
               v-if="waStatus.status !== 'ready' && waStatus.status !== 'authenticated'"
-              color="primary"
+              :label="waStatus.status === 'qr' ? 'View QR Code' : 'Connect WhatsApp'"
+              icon="i-lucide-qr-code"
               @click="showQR = true"
-            >
-              {{ waStatus.status === 'qr' ? 'View QR Code' : 'Connect WhatsApp' }}
-            </UButton>
+            />
           </div>
         </UCard>
 
         <!-- WhatsApp Group Selector & Scan -->
         <UCard>
           <div class="space-y-4">
+            <div class="flex items-center gap-4">
+              <div class="size-12 rounded-xl bg-success/10 flex items-center justify-center">
+                <UIcon name="i-lucide-users" class="size-6 text-success" />
+              </div>
+              <div>
+                <p class="font-semibold text-lg">
+                  WhatsApp Groups
+                </p>
+                <p class="text-sm text-muted">
+                  Last scanned: {{ formatLastScanned(waLastScanned) }}
+                </p>
+              </div>
+            </div>
+
             <div class="flex items-end gap-3 flex-wrap">
               <div class="flex-1 min-w-[300px]">
                 <UFormField label="WhatsApp Groups to Scan">
@@ -325,16 +347,14 @@ onUnmounted(() => {
                 @click="fetchWAGroups"
               />
 
-              <UButton
+              <ActionButton
+                label="Scan WhatsApp"
+                icon="i-lucide-search"
                 :loading="scanningWA"
+                :loading-label="`Scanning… ${formatTaskProgress(waProgress)}`"
                 :disabled="isWAScanDisabled"
-                color="primary"
-                size="lg"
                 @click="handleWAScan"
-              >
-                <UIcon v-if="!scanningWA" name="i-lucide-search" class="size-5" />
-                {{ scanningWA ? `Scanning... ${formatTaskProgress(waProgress)}` : 'Scan WhatsApp' }}
-              </UButton>
+              />
             </div>
 
             <UAlert
@@ -352,8 +372,8 @@ onUnmounted(() => {
           <div class="space-y-4">
             <div class="flex items-center justify-between flex-wrap gap-4">
               <div class="flex items-center gap-4">
-                <div class="size-12 rounded-xl bg-[var(--ui-color-warning)]/10 flex items-center justify-center">
-                  <UIcon name="i-lucide-file-text" class="size-6 text-[var(--ui-color-warning)]" />
+                <div class="size-12 rounded-xl bg-warning/10 flex items-center justify-center">
+                  <UIcon name="i-lucide-file-text" class="size-6 text-warning" />
                 </div>
                 <div>
                   <p class="font-semibold text-lg">
@@ -365,16 +385,14 @@ onUnmounted(() => {
                 </div>
               </div>
 
-              <UButton
+              <ActionButton
+                :label="selectedFormIds.size > 0 ? `Scan ${selectedFormIds.size} Form${selectedFormIds.size > 1 ? 's' : ''}` : 'Scan All Forms'"
+                icon="i-lucide-file-search"
                 :loading="scanningForms"
-                :disabled="scanningForms || googleForms.length === 0"
-                color="primary"
-                size="lg"
+                :loading-label="`Scanning… ${formatTaskProgress(formsProgress)}`"
+                :disabled="googleForms.length === 0"
                 @click="handleFormsScan"
-              >
-                <UIcon v-if="!scanningForms" name="i-lucide-file-search" class="size-5" />
-                {{ scanningForms ? `Scanning Forms... ${formatTaskProgress(formsProgress)}` : (selectedFormIds.size > 0 ? `Scan ${selectedFormIds.size} Form(s)` : 'Scan All Forms') }}
-              </UButton>
+              />
             </div>
 
             <!-- Forms List with Toggle Selection -->
@@ -391,13 +409,13 @@ onUnmounted(() => {
                 v-for="form in googleForms"
                 :key="form.id"
                 class="flex items-center justify-between gap-3 p-3 rounded-lg border transition-colors"
-                :class="isFormSelected(form.form_id) ? 'bg-[var(--ui-color-primary)]/5 border-[var(--ui-color-primary)]/20' : 'bg-[var(--ui-bg-elevated)] border-[var(--ui-border)]'"
+                :class="isFormSelected(form.form_id) ? 'bg-primary/5 border-primary/20' : 'bg-[var(--ui-bg-elevated)] border-[var(--ui-border)]'"
               >
                 <div class="flex items-center gap-3 flex-1 min-w-0">
                   <button
                     type="button"
                     class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-                    :class="isFormSelected(form.form_id) ? 'bg-[var(--ui-color-primary)]' : 'bg-[var(--ui-border)]'"
+                    :class="isFormSelected(form.form_id) ? 'bg-primary' : 'bg-[var(--ui-border)]'"
                     role="switch"
                     :aria-checked="isFormSelected(form.form_id)"
                     @click="toggleFormSelection(form.form_id)"
