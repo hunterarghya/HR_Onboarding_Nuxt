@@ -20,6 +20,8 @@ let client: WAClient | null = null
 let qrCodeData: string | null = null
 let status = 'initializing'
 let initialized = false
+/** Failed starts in a row; reset once WhatsApp gets as far as a QR code or a login */
+let startFailures = 0
 
 const AUTH_PATH = './whatsapp-auth'
 
@@ -79,6 +81,7 @@ export const initWhatsApp = (): void => {
   client.on('qr', (qr: string) => {
     if (status !== 'qr') console.log('--- WhatsApp: QR code ready; scan it on the Scanners page ---')
     status = 'qr'
+    startFailures = 0
     qrcode.toDataURL(qr, (_err: Error | null | undefined, url: string) => {
       qrCodeData = url
     })
@@ -86,6 +89,7 @@ export const initWhatsApp = (): void => {
 
   client.on('ready', () => {
     status = 'ready'
+    startFailures = 0
     console.log('--- WhatsApp: Client is READY ---')
   })
 
@@ -120,10 +124,33 @@ export const initWhatsApp = (): void => {
     setTimeout(() => initWhatsApp(), 5000)
   })
 
-  client.initialize().catch((err: unknown) => {
+  client.initialize().catch(async (err: unknown) => {
     console.error('--- WhatsApp Init Error ---', err)
     status = 'error'
+    startFailures++
+    try {
+      await client?.destroy()
+    } catch {
+      // the browser may already be gone
+    }
+    // A saved login that can't be used any more (e.g. logged out from the phone) stalls every start.
+    // One failure may just be a slow start; after two in a row, drop it so the next start shows a QR code.
+    if (startFailures >= 2) clearSavedLogin()
+    initialized = false
+    const retryInMs = Math.min(startFailures, 6) * 10000
+    console.log(`--- WhatsApp: Retrying start in ${retryInMs / 1000}s ---`)
+    setTimeout(() => initWhatsApp(), retryInMs)
   })
+}
+
+/** Deletes the stored WhatsApp login (LocalAuth's session folder); the next start asks for a new QR scan. */
+const clearSavedLogin = (): void => {
+  console.log('--- WhatsApp: Clearing the saved login; a new QR code will be needed ---')
+  try {
+    fs.rmSync(path.join(AUTH_PATH, 'session'), { recursive: true, force: true })
+  } catch (err) {
+    console.error('--- WhatsApp: Could not clear the saved login ---', err)
+  }
 }
 
 export const getWhatsAppStatus = () => ({ status, qrCodeData })
