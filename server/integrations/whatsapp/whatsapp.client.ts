@@ -134,24 +134,20 @@ export const getGroups = async () => {
     return []
   }
 
-  try {
-    console.log('--- WhatsApp: Fetching groups... ---')
-    let chats = await client!.getChats()
-    let groups = chats.filter(chat => chat.isGroup)
+  // A failure is thrown, not turned into [] — an empty list reads as "you're in no groups"
+  console.log('--- WhatsApp: Fetching groups... ---')
+  let chats = await client!.getChats()
+  let groups = chats.filter(chat => chat.isGroup)
 
-    if (groups.length === 0) {
-      console.log('--- WhatsApp: No groups in memory, waiting 3s to retry... ---')
-      await new Promise(r => setTimeout(r, 3000))
-      chats = await client!.getChats()
-      groups = chats.filter(chat => chat.isGroup)
-    }
-
-    console.log(`--- WhatsApp: Found ${groups.length} groups ---`)
-    return groups.map(chat => ({ id: chat.id._serialized, name: chat.name }))
-  } catch (err) {
-    console.error('--- WhatsApp Error Fetching Groups ---', err)
-    return []
+  if (groups.length === 0) {
+    console.log('--- WhatsApp: No groups in memory, waiting 3s to retry... ---')
+    await new Promise(r => setTimeout(r, 3000))
+    chats = await client!.getChats()
+    groups = chats.filter(chat => chat.isGroup)
   }
+
+  console.log(`--- WhatsApp: Found ${groups.length} groups ---`)
+  return groups.map(chat => ({ id: chat.id._serialized, name: chat.name }))
 }
 
 export const fetchPDFsFromGroup = async (groupId: string, sinceDate: Date | null = null) => {

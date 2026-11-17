@@ -91,6 +91,7 @@ const fetchWAGroups = async () => {
     waGroups.value = await apiFetch<WAGroup[]>('/whatsapp/groups')
   } catch (err) {
     console.error('Error fetching WA groups:', err)
+    toast.add({ title: 'Couldn\'t load WhatsApp groups', description: 'Try Refresh in a moment, or check the app logs.', color: 'error' })
   }
 }
 
