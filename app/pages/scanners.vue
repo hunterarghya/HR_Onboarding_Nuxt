@@ -130,7 +130,7 @@ const statusText = computed(() => ({
   authenticated: 'Connecting…',
   qr: 'Waiting for you to scan the QR code',
   initializing: 'Starting…',
-  error: 'Something went wrong; reconnect',
+  error: 'Couldn\'t start; retrying shortly…',
   disconnected: 'Disconnected'
 } as Record<string, string>)[waStatus.value.status] ?? 'Not connected')
 
