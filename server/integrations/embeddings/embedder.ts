@@ -5,16 +5,25 @@ import { config } from '~~/server/config/env'
 
 type EmbedPipeline = (text: string, opts: { pooling: 'mean', normalize: boolean }) => Promise<{ data: ArrayLike<number> }>
 
-let pipeline: EmbedPipeline | null = null
+// The load in progress, not just its result: calls made while it loads (a job embeds three texts at
+// once) share one load instead of each starting their own
+let loading: Promise<EmbedPipeline> | null = null
 
-const getEmbeddingPipeline = async () => {
-  if (pipeline) return pipeline
+const loadPipeline = async (): Promise<EmbedPipeline> => {
   console.log('--- [Vector] Loading embedding model: BAAI/bge-small-en-v1.5 ---')
   const { pipeline: createPipeline, env } = await import('@xenova/transformers')
   if (config.embeddings.cacheDir) env.cacheDir = config.embeddings.cacheDir
-  pipeline = await createPipeline('feature-extraction', 'Xenova/bge-small-en-v1.5') as unknown as EmbedPipeline
+  const pipeline = await createPipeline('feature-extraction', 'Xenova/bge-small-en-v1.5') as unknown as EmbedPipeline
   console.log('--- [Vector] Embedding model loaded ---')
-  return pipeline!
+  return pipeline
+}
+
+const getEmbeddingPipeline = (): Promise<EmbedPipeline> => {
+  loading ??= loadPipeline().catch((err) => {
+    loading = null // a failed load (e.g. no network for the first download) is tried again next time
+    throw err
+  })
+  return loading
 }
 
 /** Normalised mean-pooled embedding of the first 8000 characters of `text`. */
