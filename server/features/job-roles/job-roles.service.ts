@@ -8,25 +8,20 @@ import { jobRolesRepository, UPDATABLE_FIELDS } from './job-roles.repository'
 import { jobVectorsRepository } from './job-vectors.repository'
 
 /**
- * Queues a background retry. Already queued is fine (409 swallowed); if even Redis is down the
- * problem is logged, and the next boot's full resync repairs the index.
+ * Queues index maintenance for one job. Already queued is fine (409 swallowed); if even Redis is
+ * down the problem is logged, and the next boot's full resync repairs the index.
  */
-const queueRetry = async (task: 'vectors.syncJob' | 'vectors.removeJob', jobId: number) => {
+const queueVectorTask = async (task: 'vectors.syncJob' | 'vectors.removeJob', job: { id: number, role: string }) => {
   try {
-    await enqueue(task, { jobId }, { taskId: `${task === 'vectors.syncJob' ? 'vectors.job' : 'vectors.remove'}.${jobId}` })
+    await enqueue(task, { jobId: job.id, role: job.role }, { taskId: `${task === 'vectors.syncJob' ? 'vectors.job' : 'vectors.remove'}.${job.id}` })
   } catch (err) {
-    if (!(err instanceof ConflictError)) console.error(`--- [Vector] Could not queue ${task} for job ${jobId}:`, (err as Error).message)
+    if (!(err instanceof ConflictError)) console.error(`--- [Vector] Could not queue ${task} for job ${job.id}:`, (err as Error).message)
   }
 }
 
-/** Indexes the job now; if Qdrant or the embedding model fails, a retry task takes over (BUG-11). */
-const syncVector = async (job: Parameters<typeof jobVectorsRepository.upsert>[0]) => {
-  try {
-    await jobVectorsRepository.upsert(job)
-  } catch {
-    await queueRetry('vectors.syncJob', job.id)
-  }
-}
+/** Fields that feed the job's vectors; an edit that changes none of them leaves the index as it is */
+const indexedText = (job: Parameters<typeof jobVectorsRepository.upsert>[0]) =>
+  JSON.stringify([job.role, job.skills, job.qualification, job.experience_min_years, job.location, job.shortlist_mode, job.min_score, job.criteria_weights])
 
 /** 409 if another job already has this name. */
 const assertNameFree = async (role: string, exceptId?: number) => {
@@ -40,14 +35,16 @@ export const jobRolesService = {
   list: () => jobRolesRepository.findAllWithLatestForm(),
 
   /**
-   * Saves the job, indexes its description for resume matching, and (when the user is signed in
-   * with Google) creates its application form. Indexing and form failures don't fail the request:
-   * indexing is retried in the background, a missing form can be generated from the job card.
+   * Saves the job, queues indexing its description for resume matching, and (when the user is
+   * signed in with Google) creates its application form. Indexing runs in the background (the
+   * embedding model can take a while to load), so posting never waits on it; the Tasks page shows
+   * when the job is ready to match. A form failure doesn't fail the request either: a missing form
+   * can be generated from the job card.
    */
   async create(input: CreateJobRoleInput, googleAuth: GoogleAuthClient | null) {
     await assertNameFree(input.role)
     const job = await jobRolesRepository.insert(input)
-    await syncVector(job)
+    await queueVectorTask('vectors.syncJob', job)
 
     const form = googleAuth ? await googleFormsService.tryCreateForJob(googleAuth, job) : null
     return form ? { ...job, form_url: form.formUrl, google_form_id: form.formId } : job
@@ -67,8 +64,8 @@ export const jobRolesService = {
     })
     if (!job) throw new NotFoundError('Job role')
 
-    // Re-embed the updated description
-    await syncVector(job)
+    // Re-embed the updated description, in the background like a new job
+    await queueVectorTask('vectors.syncJob', job)
     return (await jobRolesRepository.findByIdWithLatestForm(id)) ?? job
   },
 
@@ -101,12 +98,20 @@ export const jobRolesService = {
     return { indexed: jobs.length }
   },
 
-  /** Task vectors.syncJob: re-index one job (skipped if it was deleted meanwhile). */
+  /** Task vectors.syncJob: (re-)index one job (skipped if it was deleted meanwhile). */
   async syncJobVector(jobId: number) {
-    const job = await jobRolesRepository.findById(jobId)
+    let job = await jobRolesRepository.findById(jobId)
     if (!job) return { skipped: 'job no longer exists' }
-    await jobVectorsRepository.upsert(job)
-    return { indexed: jobId }
+    // An edit saved while this runs can't queue its own run (same task id, refused as a duplicate),
+    // so index again until what was indexed is what's saved
+    for (let pass = 0; pass < 3; pass++) {
+      await jobVectorsRepository.upsert(job)
+      const saved = await jobRolesRepository.findById(jobId)
+      if (!saved) return { skipped: 'job no longer exists' }
+      if (indexedText(saved) === indexedText(job)) break
+      job = saved
+    }
+    return { indexed: jobId, role: job.role }
   },
 
   /** Task vectors.removeJob: drop a deleted job from the index, so resumes can't match it. */
@@ -125,7 +130,7 @@ export const jobRolesService = {
     try {
       await jobVectorsRepository.remove(id)
     } catch {
-      await queueRetry('vectors.removeJob', id)
+      await queueVectorTask('vectors.removeJob', deleted)
     }
   }
 }

@@ -60,11 +60,17 @@ describe('POST /api/jobs', () => {
 
 describe('job description indexing when Qdrant is down (BUG-11)', () => {
   // The smoke environment has no Qdrant, so every index attempt fails
-  it('still creates the job and retries the indexing as a background task', async () => {
+  it('still creates the job and indexes it as a background task, which retries', async () => {
     const res = await api('POST', '/api/jobs', { body: { role: 'Indexing Probe' } })
     expect(res.status).toBe(201)
     const outcome = await waitForTask(`vectors.job.${res.body.id}`)
-    expect(outcome).toMatchObject({ state: 'failed', attempts: 3 })
+    expect(outcome).toMatchObject({ state: 'failed', attempts: 3, title: 'Prepare “Indexing Probe” for resume matching' })
+  })
+
+  it('re-indexes an edited job in the background too', async () => {
+    const job = await insertJob({ role: 'Edit Probe' })
+    expect((await api('PATCH', `/api/jobs/${job.id}`, { body: { skills: 'Go' } })).status).toBe(200)
+    expect((await waitForTask(`vectors.job.${job.id}`)).state).toBe('failed')
   })
 
   it('retries removing a deleted job from the index', async () => {

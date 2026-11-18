@@ -1,9 +1,14 @@
 import type { Job } from 'bullmq'
+import { taskSummary, taskTitle } from './task-labels'
 
 /** What the UI polls: GET /api/tasks/:id. */
 export interface TaskStatus {
   id: string
   name: string
+  /** In plain words, for people: "Sync Google Calendar" */
+  title: string
+  /** A finished task's result in one sentence: "3 new candidates found" */
+  summary: string
   state: 'queued' | 'active' | 'completed' | 'failed'
   progress: TaskProgress | null
   result: unknown
@@ -47,6 +52,8 @@ export const toTaskStatus = async (fetched: Job, refetch: () => Promise<Job | nu
   return {
     id: job.id!,
     name: job.name,
+    title: taskTitle(job.name, job.data),
+    summary: state === 'completed' ? taskSummary(job.name, job.returnvalue) : '',
     state,
     progress,
     result: state === 'completed' ? job.returnvalue : null,

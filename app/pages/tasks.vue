@@ -4,6 +4,10 @@
 interface TaskStatus {
   id: string
   name: string
+  /** Plain-words name ("Sync Google Calendar"); `name` is the internal one */
+  title: string
+  /** A finished task's result in one sentence */
+  summary: string
   state: 'queued' | 'active' | 'completed' | 'failed'
   progress: { done: number, total: number, stage?: string } | null
   result: unknown
@@ -16,6 +20,7 @@ interface TaskStatus {
 }
 interface QueueSummary {
   queue: string
+  title: string
   counts: { queued: number, scheduled: number, active: number, completed: number, failed: number }
   tasks: TaskStatus[]
 }
@@ -46,25 +51,25 @@ onUnmounted(() => {
   if (timer) clearInterval(timer)
 })
 
-/** "scheduled" for a task waiting on a timer (a daily job, a retry), else BullMQ's state as the API gives it */
-const stateLabel = (t: TaskStatus) => (t.state === 'queued' && t.scheduledFor ? 'scheduled' : t.state)
+/** "scheduled" for a task waiting on a timer (a daily job, a retry), else the API's state */
+const stateKey = (t: TaskStatus) => (t.state === 'queued' && t.scheduledFor ? 'scheduled' : t.state)
 
-const stateColor = (t: TaskStatus) =>
-  ({ queued: 'neutral', scheduled: 'neutral', active: 'info', completed: 'success', failed: 'error' } as const)[stateLabel(t)]
+const STATE_BADGES = {
+  queued: { label: 'waiting', color: 'neutral' },
+  scheduled: { label: 'scheduled', color: 'neutral' },
+  active: { label: 'running', color: 'info' },
+  completed: { label: 'done', color: 'success' },
+  failed: { label: 'failed', color: 'error' }
+} as const
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : '—')
 
 const outcome = (t: TaskStatus) => {
   if (t.state === 'failed') return t.error
-  if (t.state === 'active' && t.progress) return `${t.progress.stage ?? 'working'}: ${t.progress.done} / ${t.progress.total}`
-  if (t.state === 'completed' && t.result && typeof t.result === 'object') {
-    const r = t.result as Record<string, unknown>
-    if (typeof r.message === 'string') return `${r.message}${typeof r.count === 'number' ? ` (${r.count})` : ''}`
-    // e.g. { renewed: 0, failed: 0 } → "renewed 0 · failed 0"
-    return Object.entries(r).map(([k, v]) => `${k} ${typeof v === 'object' ? JSON.stringify(v) : v}`).join(' · ')
-  }
-  if (t.scheduledFor) return `runs ${when(t.scheduledFor)}`
-  return ''
+  if (t.state === 'active') return t.progress ? `${t.progress.stage ?? 'Working'}: ${t.progress.done} / ${t.progress.total}` : 'Working…'
+  if (t.state === 'completed') return t.summary
+  if (t.scheduledFor) return `Runs ${when(t.scheduledFor)}`
+  return 'Waiting to start'
 }
 </script>
 
@@ -99,12 +104,12 @@ const outcome = (t: TaskStatus) => {
         <UCard v-for="q in queues" :key="q.queue">
           <template #header>
             <div class="flex items-center justify-between flex-wrap gap-2">
-              <p class="font-semibold capitalize">
-                {{ q.queue }}
+              <p class="font-semibold">
+                {{ q.title }}
               </p>
-              <div class="flex gap-2 text-sm">
+              <div class="flex flex-wrap gap-2 text-sm whitespace-nowrap">
                 <UBadge color="neutral" variant="subtle">
-                  {{ q.counts.queued }} queued
+                  {{ q.counts.queued }} waiting
                 </UBadge>
                 <UBadge v-if="q.counts.scheduled" color="neutral" variant="outline">
                   {{ q.counts.scheduled }} scheduled
@@ -153,15 +158,12 @@ const outcome = (t: TaskStatus) => {
                 <tr v-for="t in q.tasks" :key="t.id" class="border-t border-default align-top">
                   <td class="py-2 pr-3">
                     <p class="font-medium">
-                      {{ t.name }}
-                    </p>
-                    <p v-if="t.id !== t.name" class="text-xs text-muted">
-                      {{ t.id }}
+                      {{ t.title }}
                     </p>
                   </td>
                   <td class="py-2 pr-3">
-                    <UBadge :color="stateColor(t)" variant="subtle">
-                      {{ stateLabel(t) }}
+                    <UBadge :color="STATE_BADGES[stateKey(t)].color" variant="subtle">
+                      {{ STATE_BADGES[stateKey(t)].label }}
                     </UBadge>
                   </td>
                   <td class="py-2 pr-3 max-w-md break-words">

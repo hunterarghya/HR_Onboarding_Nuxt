@@ -106,7 +106,13 @@ const handleCreateJob = async () => {
       role: '', salary_min: '', salary_max: '', qualification: '', skills: '', experience_min_years: '',
       location: '', shortlist_mode: 'manual', deadline: '', min_score: 60, criteria_weights: {}
     })
-    toast.add({ title: 'Job posted successfully', color: 'success' })
+    // matching needs the description indexed, which now finishes in the background
+    toast.add({
+      title: 'Job posted successfully',
+      description: 'It will be ready to match resumes in a few moments; the Tasks page shows when.',
+      color: 'success',
+      actions: [{ label: 'View tasks', to: '/tasks', color: 'neutral', variant: 'outline' }]
+    })
 
     // Auto-generate Google Form if backend didn't already create it
     if (createdJob?.id && !createdJob.form_url) {

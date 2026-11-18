@@ -4,7 +4,7 @@ import { embed } from '~~/server/integrations/embeddings/embedder'
 import { getQdrant } from '~~/server/integrations/qdrant/qdrant.client'
 
 // Job descriptions in Qdrant: one point per job (id = job id) with three named vectors.
-// Failures are logged and thrown; job-roles.service turns them into retry tasks (BUG-11).
+// Failures are logged and thrown; indexing runs as background tasks, which retry (BUG-11).
 
 const COLLECTION_NAME = config.qdrant.collection
 const VECTOR_SIZE = config.qdrant.vectorSize

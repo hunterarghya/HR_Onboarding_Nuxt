@@ -3,6 +3,7 @@ import { NotFoundError } from '~~/server/core/errors/app-error'
 import { defineApiHandler } from '~~/server/core/http/define-api-handler'
 import { parseParams, parseQuery } from '~~/server/core/http/validate'
 import { findTask, listRecentTasks } from '~~/server/core/tasks/queues'
+import { QUEUE_TITLES } from '~~/server/core/tasks/task-labels'
 import { toTaskStatus } from '~~/server/core/tasks/task-status'
 
 const TaskIdParams = z.object({ id: z.string().min(1).max(200) })
@@ -15,6 +16,7 @@ export const tasksController = {
     const queues = await listRecentTasks(limit)
     return Promise.all(queues.map(async q => ({
       queue: q.queue,
+      title: QUEUE_TITLES[q.queue],
       counts: q.counts,
       tasks: await Promise.all(q.jobs.map(job => toTaskStatus(job, () => findTask(job.id!))))
     })))

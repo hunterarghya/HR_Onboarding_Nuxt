@@ -72,10 +72,16 @@ describe('GET /api/tasks', () => {
     const res = await api('GET', '/api/tasks', { query: { limit: 5 } })
     expect(res.status).toBe(200)
     expect(res.body.map((q: { queue: string }) => q.queue)).toEqual(['scans', 'mail', 'background'])
+    expect(res.body.map((q: { title: string }) => q.title)).toEqual(['Resume scans', 'Emails', 'Calendar and job matching'])
     const scans = res.body[0]
     expect(scans.counts).toEqual({ queued: expect.any(Number), scheduled: expect.any(Number), active: expect.any(Number), completed: expect.any(Number), failed: expect.any(Number) })
     expect(scans.tasks.length).toBeLessThanOrEqual(5)
-    expect(scans.tasks.find((t: { id: string }) => t.id === 'scan.whatsapp')).toMatchObject({ name: 'scan.whatsapp', state: 'completed' })
+    expect(scans.tasks.find((t: { id: string }) => t.id === 'scan.whatsapp')).toMatchObject({
+      name: 'scan.whatsapp',
+      title: 'Scan WhatsApp groups for resumes',
+      state: 'completed',
+      summary: expect.stringMatching(/\S/)
+    })
   })
 
   it('rejects a silly limit (400)', async () => {
