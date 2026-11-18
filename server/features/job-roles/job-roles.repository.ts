@@ -106,9 +106,9 @@ export const jobRolesRepository = {
     return rows[0] ?? null
   },
 
-  /** False if there was no such job. */
+  /** The deleted job's id and name; null if there was no such job. */
   async delete(id: number, db: Queryable = getPool()) {
-    const { rowCount } = await db.query('DELETE FROM job_roles WHERE id = $1', [id])
-    return rowCount === 1
+    const { rows } = await db.query<{ id: number, role: string }>('DELETE FROM job_roles WHERE id = $1 RETURNING id, role', [id])
+    return rows[0] ?? null
   }
 }

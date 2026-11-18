@@ -14,8 +14,9 @@ export interface TaskPayloads {
   'mail.invites': { userId: number, eventId: number, templateId: number }
   'mail.invitesAll': { userId: number, templateId: number }
   'mail.offers': { userId: number, templateId: number, candidateIds: number[] }
-  'vectors.syncJob': { jobId: number }
-  'vectors.removeJob': { jobId: number }
+  // role: only for the task's title on the Tasks page; the worker reads the job itself
+  'vectors.syncJob': { jobId: number, role?: string }
+  'vectors.removeJob': { jobId: number, role?: string }
   'vectors.resyncAll': Record<string, never>
 }
 export type TaskName = keyof TaskPayloads
